@@ -3632,8 +3632,9 @@ function _rdIntakeHtml(d) {
     <div style="max-width:900px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div><div style="font-size:15px;font-weight:700">Intake Form</div><div style="font-size:12px;color:var(--text-3)">Complete with the hiring manager during your intake meeting</div></div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${intake?.hm_confirmed?`<span class="tag tag-green">✓ HM Confirmed</span>`:`<button class="btn btn-outline btn-sm" onclick="_intakeConfirmHm('${roleId}')">Mark HM Confirmed</button>`}
+          <button class="btn btn-outline btn-sm" style="color:var(--brand)" onclick="_openTranscriptModal('${roleId}')">📋 Paste Transcript</button>
           <button class="btn btn-primary btn-sm" onclick="saveRoleIntake('${roleId}')">Save</button>
         </div>
       </div>
@@ -3890,6 +3891,132 @@ async function _intakeConfirmHm(roleId) {
   _rdData.intake={...ex,hm_confirmed:true};
   toast('HM confirmation recorded ✓');
   _rdSwitchTab('intake');
+}
+
+// ── TRANSCRIPT → INTAKE EXTRACTION ────────────
+function _openTranscriptModal(roleId) {
+  document.getElementById('transcript-role-id').value = roleId;
+  document.getElementById('transcript-input').value = '';
+  document.getElementById('transcript-status').innerHTML = '';
+  openModal('modal-transcript-intake');
+}
+
+async function _extractIntakeFromTranscript() {
+  const roleId = document.getElementById('transcript-role-id').value;
+  const transcript = document.getElementById('transcript-input').value.trim();
+  const statusEl = document.getElementById('transcript-status');
+  const btn = document.getElementById('transcript-extract-btn');
+
+  if (!transcript) { toast('Paste a transcript first', 'err'); return; }
+
+  const claudeKey = localStorage.getItem('hiro_claude_key');
+  if (!claudeKey) {
+    statusEl.innerHTML = '<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚠️ No Claude API key set. Add one in Settings → General to enable AI extraction.</div>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Extracting...';
+  statusEl.innerHTML = '<div style="color:var(--text-3);font-size:13px">Analysing transcript with Claude...</div>';
+
+  const prompt = `You are a recruitment assistant. Extract structured intake information from this meeting transcript. Return ONLY a valid JSON object with these exact keys (use null for anything not mentioned):
+
+{
+  "confirmed_title": string,
+  "urgency_level": "immediate"|"standard"|"future_pipeline"|null,
+  "headcount_confirmed": number|null,
+  "target_start_confirmed": "YYYY-MM-DD"|null,
+  "budget_confirmed": boolean,
+  "remote_policy": string|null,
+  "notice_period_tolerance": "immediate"|"1_month"|"2_months"|"flexible"|null,
+  "key_selling_points": string|null,
+  "must_haves": string|null,
+  "nice_to_haves": string|null,
+  "red_flags": string|null,
+  "target_titles": string|null,
+  "target_companies": string|null,
+  "interview_rounds": number|null,
+  "interview_format": "video"|"onsite"|"hybrid"|null,
+  "interviewers": string|null,
+  "assessment_required": boolean,
+  "assessment_type": "EPP"|"technical"|"case_study"|null,
+  "time_to_offer_days": number|null,
+  "reports_to": string|null,
+  "team_size": number|null,
+  "team_structure": string|null,
+  "key_stakeholders": string|null,
+  "career_path": string|null,
+  "growth_opportunities": string|null,
+  "promotion_timeline": string|null,
+  "intake_notes": string|null
+}
+
+For "intake_notes": write a clean 3-5 sentence summary of the key discussion points from the meeting.
+For "must_haves", "nice_to_haves", "key_selling_points" etc: use bullet points separated by newlines.
+
+TRANSCRIPT:
+${transcript.slice(0, 12000)}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': claudeKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const json = await res.json();
+    const raw = json.content?.[0]?.text || '';
+
+    // Strip markdown code fences if present
+    const jsonStr = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+    let extracted;
+    try { extracted = JSON.parse(jsonStr); }
+    catch(e) {
+      // Try extracting JSON from within the text
+      const match = jsonStr.match(/\{[\s\S]*\}/);
+      if (match) extracted = JSON.parse(match[0]);
+      else throw new Error('Could not parse response as JSON');
+    }
+
+    // Populate form fields
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (!el || val === null || val === undefined) return;
+      if (el.type === 'checkbox') el.checked = !!val;
+      else el.value = val;
+    };
+
+    Object.keys(extracted).forEach(key => {
+      set('ri-' + key, extracted[key]);
+    });
+
+    // Count filled fields for feedback
+    const filled = Object.values(extracted).filter(v => v !== null && v !== '' && v !== false).length;
+
+    statusEl.innerHTML = `<div style="color:var(--green-text);background:var(--green-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">✓ ${filled} fields extracted — review and save the form</div>`;
+
+    // Close modal after short delay and switch to intake tab
+    setTimeout(() => {
+      closeModal('modal-transcript-intake');
+      _rdSwitchTab('intake');
+      toast('Intake fields populated from transcript ✓');
+    }, 1200);
+
+  } catch(e) {
+    statusEl.innerHTML = `<div style="color:var(--red-text);background:var(--red-bg,#fee2e2);padding:10px 12px;border-radius:var(--r);font-size:13px">✕ Extraction failed: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Extract & Fill Form';
+  }
 }
 
 // ── WORKFLOW STEP ACTIONS ─────────────────────
@@ -11476,6 +11603,34 @@ initApp();
         <div id="settings-approval-chains-content"><div class="text-muted" style="font-size:13px">Loading...</div></div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- TRANSCRIPT INTAKE MODAL -->
+<div class="modal-overlay" id="modal-transcript-intake" style="display:none" onclick="if(event.target===this)closeModal('modal-transcript-intake')">
+  <div class="modal" style="max-width:640px;width:92%;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">📋 Paste Meeting Transcript</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px">Claude will extract intake fields automatically — you review and save</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-transcript-intake')">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px">
+      <input type="hidden" id="transcript-role-id">
+      <div style="background:var(--brand-light);border:1px solid var(--brand);border-radius:var(--r);padding:12px;font-size:13px;color:var(--brand-dark)">
+        <strong>How to get your Teams transcript:</strong> After the call ends, go to the Teams chat thread → find the meeting → click <em>Transcript</em> → copy all text and paste below.
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px">Transcript</label>
+        <textarea id="transcript-input" rows="14" placeholder="Paste your Teams transcript here...&#10;&#10;e.g.&#10;Anna Sidorska: So what's the urgency on this one?&#10;John Smith: We need someone in within 6 weeks ideally, it's quite urgent&#10;Anna Sidorska: And what are the absolute must-haves?&#10;John Smith: Strong Python, at least 5 years experience, and ideally someone who's worked in SaaS..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;resize:vertical;font-family:inherit;line-height:1.5;box-sizing:border-box"></textarea>
+      </div>
+      <div id="transcript-status"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-transcript-intake')">Cancel</button>
+      <button id="transcript-extract-btn" class="btn btn-primary" onclick="_extractIntakeFromTranscript()">Extract &amp; Fill Form</button>
     </div>
   </div>
 </div>
