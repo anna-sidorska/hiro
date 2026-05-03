@@ -3385,14 +3385,24 @@ async function viewRoleDetail(roleId) {
   const t=role.title.replace(/'/g,"\\'");
   document.getElementById('topbar-actions').innerHTML=`
     <button class="btn btn-outline btn-sm" onclick="openEditRoleModal('${role.id}')">Edit Role</button>
-    ${roleJd?`<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 Edit JD</button>`:`<button class="btn btn-outline btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
-    <button class="btn btn-outline btn-sm" onclick="openSourceModal('${role.id}')">🔍 Source</button>
-    <button class="btn btn-outline btn-sm" onclick="openRediscoveryModal('${role.id}','${t}')">🔄 Past Candidates</button>
-    ${role.status==='open'?`<button class="btn btn-outline btn-sm" style="color:var(--amber)" onclick="setRoleStatus('${role.id}','on_hold');viewRoleDetail('${role.id}')">On Hold</button>`:''}
-    ${(role.status==='open'||role.status==='on_hold')?`<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="setRoleStatus('${role.id}','filled');viewRoleDetail('${role.id}')">✓ Filled</button>`:''}
-    ${role.status!=='closed'?`<button class="btn btn-outline btn-sm" style="color:var(--red-text)" onclick="confirmCloseRole('${role.id}')">✕ Close</button>`:''}
-    ${role.status!=='open'?`<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="setRoleStatus('${role.id}','open');viewRoleDetail('${role.id}')">↺ Reopen</button>`:''}
+    ${roleJd?`<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 JD</button>`:`<button class="btn btn-outline btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
+    <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${role.id}')">+ Candidate</button>
+    <div style="position:relative;display:inline-block">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('role-more-menu-${role.id}').style.display=document.getElementById('role-more-menu-${role.id}').style.display==='block'?'none':'block';event.stopPropagation()" style="padding:5px 10px;font-size:16px;line-height:1">···</button>
+      <div id="role-more-menu-${role.id}" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;min-width:160px;padding:4px 0" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="openSourceModal('${role.id}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔍 Source Candidates</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="openRediscoveryModal('${role.id}','${t}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔄 Past Candidates</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="_rdActivityPanel();document.getElementById('role-more-menu-${role.id}').style.display='none'">📋 Activity Log</button>
+        <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+        ${role.status==='open'?`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px;color:var(--amber)" onclick="setRoleStatus('${role.id}','on_hold');viewRoleDetail('${role.id}')">⏸ Put On Hold</button>`:''}
+        ${(role.status==='open'||role.status==='on_hold')?`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px;color:var(--green-text)" onclick="setRoleStatus('${role.id}','filled');viewRoleDetail('${role.id}')">✓ Mark Filled</button>`:''}
+        ${role.status!=='open'?`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px;color:var(--green-text)" onclick="setRoleStatus('${role.id}','open');viewRoleDetail('${role.id}')">↺ Reopen Role</button>`:''}
+        ${role.status!=='closed'?`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px;color:var(--red-text)" onclick="confirmCloseRole('${role.id}');document.getElementById('role-more-menu-${role.id}').style.display='none'">✕ Close Role</button>`:''}
+      </div>
+    </div>
   `;
+  // close more menu on outside click
+  document.addEventListener('click',function _closeMore(){document.querySelectorAll('[id^="role-more-menu-"]').forEach(m=>m.style.display='none');document.removeEventListener('click',_closeMore);});
 
   const fmtSal=r=>{if(!r.salary_min&&!r.salary_max)return'Not set';const c=r.salary_currency||'USD';const f=n=>n>=1000?(n/1000).toFixed(n%1000===0?0:1)+'k':n;return`${c} ${r.salary_min?f(r.salary_min):'?'}${r.salary_max?' – '+f(r.salary_max):'+'}`;};
   const daysOpen=daysSince(role.created_at);
@@ -3401,30 +3411,16 @@ async function viewRoleDetail(roleId) {
   const statusStyle=role.status==='open'?'color:var(--green)':role.status==='on_hold'?'color:var(--amber)':role.status==='filled'?'color:var(--green-text)':'color:var(--text-3)';
 
   document.getElementById('content').innerHTML=`
-    <!-- ROLE HEADER -->
-    <div class="card" style="margin-bottom:16px;padding:16px 24px;border-top:4px solid var(--brand)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div>
-          <div style="font-size:18px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px">${role.title}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:4px">
-            ${role.department?`<span class="text-muted">${role.department}</span>`:''}
-            ${role.region?`<span class="tag tag-blue">${role.region}</span>`:''}
-            ${role.work_type?`<span class="tag" style="background:var(--purple-bg);color:var(--purple)">${role.work_type}</span>`:''}
-            <span style="font-size:12px;font-weight:600;${statusStyle}">${role.status==='open'?'● Open':role.status==='on_hold'?'⏸ On Hold':role.status==='filled'?'✓ Filled':'✕ '+role.status}</span>
-          </div>
-          <div style="font-size:12px;color:var(--text-2);display:flex;gap:14px;flex-wrap:wrap">
-            <span>💰 ${fmtSal(role)}</span>
-            <span>📅 ${daysOpen}d open</span>
-            ${role.profiles?.full_name?`<span>👤 HM: ${role.profiles.full_name}</span>`:''}
-            <span>👥 HC: ${role.headcount||1}</span>
-            <span style="color:var(--brand)">👤 ${activeApps.length} active · ${hiredApps.length} hired</span>
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_rdActivityPanel()">📋 Activity</button>
-          <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Candidate</button>
-        </div>
-      </div>
+    <!-- ROLE HEADER — compact strip -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 4px;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;font-weight:600;${statusStyle}">${role.status==='open'?'● Open':role.status==='on_hold'?'⏸ On Hold':role.status==='filled'?'✓ Filled':'✕ Closed'}</span>
+      ${role.department?`<span style="font-size:12px;color:var(--text-2)">${role.department}</span><span style="color:var(--border)">·</span>`:''}
+      ${role.region?`<span class="tag tag-blue" style="font-size:11px">${role.region}</span>`:''}
+      ${role.work_type?`<span class="tag" style="background:var(--purple-bg);color:var(--purple);font-size:11px">${role.work_type}</span>`:''}
+      <span style="font-size:12px;color:var(--text-2)">HC: ${role.headcount||1}</span>
+      <span style="font-size:12px;color:var(--text-2)">${daysOpen}d open</span>
+      ${role.profiles?.full_name?`<span style="font-size:12px;color:var(--text-2)">HM: ${role.profiles.full_name}</span>`:''}
+      <span style="font-size:12px;color:var(--brand);font-weight:600;margin-left:auto">${activeApps.length} active · ${hiredApps.length} hired</span>
     </div>
 
     <!-- TIMELINE + CONTENT -->
@@ -3458,8 +3454,7 @@ function _rdStageStatus(stageKey) {
   if(stageKey==='s3'){
     const steps=['direct_search','applications_open','comms_active'];
     const n=steps.filter(done).length;
-    const apps=(d.apps||[]).filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
-    return n===steps.length||apps.length>0?'active':'pending';
+    return n===steps.length?'done':n>0?'active':'pending';
   }
   if(stageKey==='s4'){
     return (d.interviews||[]).length>0?'active':'pending';
@@ -3580,7 +3575,7 @@ function _rdS1Html(d) {
     <div class="card" style="margin-bottom:12px;${done('intake_meeting')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">1a · Schedule Intake Meeting</div>
+          <div class="card-title">Schedule Intake Meeting</div>
           ${done('intake_meeting')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Done</span>':''}
         </div>
         <div style="display:flex;gap:6px">
@@ -3626,7 +3621,7 @@ function _rdS1Html(d) {
     <div class="card" style="margin-bottom:12px;${done('intake_form')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">1b · Intake Form</div>
+          <div class="card-title">Intake Form</div>
           ${done('intake_form')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Done</span>':''}
           ${intake?.hm_confirmed?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">HM Confirmed</span>':''}
         </div>
@@ -3756,7 +3751,7 @@ function _rdS2Html(d) {
     <div class="card" style="margin-bottom:12px;${done('req_approved')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">2a · Requisition Approval</div>
+          <div class="card-title">Requisition Approval</div>
           ${done('req_approved')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Approved</span>':'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Pending</span>'}
         </div>
         ${done('req_approved')
@@ -3771,7 +3766,7 @@ function _rdS2Html(d) {
     <!-- Job Boards -->
     <div class="card" style="margin-bottom:12px">
       <div class="card-header">
-        <div class="card-title">2b · Post to Job Boards</div>
+        <div class="card-title">Post to Job Boards</div>
         ${done('job_posted')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
       </div>
       <div class="card-body" style="display:grid;gap:8px">
@@ -3793,7 +3788,7 @@ function _rdS2Html(d) {
     <div class="card" style="${done('linkedin_post')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">2c · LinkedIn Post</div>
+          <div class="card-title">LinkedIn Post</div>
           ${done('linkedin_post')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
         </div>
         <div style="display:flex;gap:6px">
