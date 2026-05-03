@@ -4186,12 +4186,99 @@ JSON:`;
     }, 1200);
 
   } catch(e) {
-    statusEl.innerHTML = `<div style="color:var(--red-text);background:var(--red-bg,#fee2e2);padding:10px 12px;border-radius:var(--r);font-size:13px">✕ Extraction failed: ${e.message}</div>`;
+    // Fallback: rule-based extraction
+    try {
+      const extracted = _ruleBasedExtract(transcript);
+      const filled = Object.values(extracted).filter(v => v !== null && v !== '').length;
+      if (filled > 0) {
+        const set = (id, val) => { const el=document.getElementById(id); if(!el||val===null||val===undefined)return; if(el.type==='checkbox')el.checked=!!val; else el.value=val; };
+        Object.keys(extracted).forEach(k => set('ri-'+k, extracted[k]));
+        statusEl.innerHTML = `<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚡ ${filled} fields extracted via smart parser (AI quota exceeded — try AI again tomorrow)</div>`;
+        setTimeout(() => { closeModal('modal-transcript-intake'); _rdSwitchTab('intake'); toast('Intake fields populated ✓'); }, 1400);
+        return;
+      }
+    } catch(e2) {}
+    statusEl.innerHTML = `<div style="color:var(--red-text);background:var(--red-bg,#fee2e2);padding:10px 12px;border-radius:var(--r);font-size:13px">✕ ${e.message}</div>`;
   } finally {
     btn.disabled = false;
     btn.textContent = 'Extract & Fill Form';
   }
 }
+
+function _ruleBasedExtract(t) {
+  const lines = t.split('
+');
+  const dialogBlock = (triggerRe, stopRe) => {
+    let out=[],capturing=false;
+    for(let i=0;i<lines.length;i++){
+      const stripped=lines[i].replace(/^[A-Z][a-z]+:\s*/,'').trim();
+      if(!capturing&&triggerRe.test(lines[i].toLowerCase())){capturing=true;continue;}
+      if(capturing){
+        if(stopRe&&stopRe.test(lines[i].toLowerCase()))break;
+        if(stripped){stripped.split(/(?<=\.)\s+|,\s+(?=[A-Z])/g).filter(s=>s.trim().length>3).forEach(s=>out.push('- '+s.trim()));if(out.length>=8)break;}
+      }
+    }
+    return out.length?out.join('
+'):null;
+  };
+  let confirmed_title=null;
+  for(let i=0;i<lines.length;i++){
+    if(/title|go with/i.test(lines[i])){
+      for(let j=i+1;j<Math.min(i+4,lines.length);j++){
+        const stripped=lines[j].replace(/^[A-Z][a-z]+:\s*/,'').trim();
+        const m=stripped.match(/(?:full title[:\s]+|let'?s?\s+go\s+with\s+)([A-Z][^,\.
+]{3,60})/i)||stripped.match(/([A-Z][A-Za-z\s\-,]+(?:Representative|Manager|Analyst|Engineer|Director|Lead|Specialist|Developer|Consultant|Coordinator|Executive|Associate|Officer)[^,\.
+]*)/);
+        if(m){confirmed_title=m[1].trim().replace(/[,\.]+$/,'');break;}
+      }
+      if(confirmed_title)break;
+    }
+  }
+  const urgency_level=/immediate|ASAP/i.test(t)?'immediate':/future pipeline/i.test(t)?'future_pipeline':'standard';
+  let headcount_confirmed=null;
+  const hcM=t.match(/(\d+)\s+confirmed\s+hire|headcount[^\d
+]*(\d+)/i);
+  if(hcM)headcount_confirmed=parseInt(hcM[1]||hcM[2]);
+  else if(/yes[,.]?\s+one|one\s+confirmed\s+hire/i.test(t))headcount_confirmed=1;
+  let notice_period_tolerance=null;
+  const noticeIdx=lines.findIndex(l=>/notice period|notice tolerance/i.test(l));
+  const noticeCtx=noticeIdx>=0?lines.slice(noticeIdx,noticeIdx+4).join(' '):t;
+  if(/up\s+to\s+(?:a\s+)?(?:one|1)\s+month|one\s+month|1\s+month/i.test(noticeCtx))notice_period_tolerance='1_month';
+  else if(/up\s+to\s+two\s+months?|2\s+months/i.test(noticeCtx))notice_period_tolerance='2_months';
+  else if(/immediate|no notice/i.test(noticeCtx))notice_period_tolerance='immediate';
+  else if(/flexible|negotiate/i.test(noticeCtx))notice_period_tolerance='flexible';
+  const interview_format=/all video|fully video|video only/i.test(t)?'video':/on.?site|in person/i.test(t)?'onsite':/hybrid/i.test(t)?'hybrid':null;
+  const rM=t.match(/(\d+|one|two|three)\s+rounds?/i);
+  const rMap={one:1,two:2,three:3};
+  const interview_rounds=rM?(parseInt(rM[1])||rMap[(rM[1]||'').toLowerCase()]||null):null;
+  const assessment_required=/EPP|Criteria|assessment/i.test(t);
+  const assessment_type=/EPP|Criteria/i.test(t)?'EPP':/technical test/i.test(t)?'technical':/case study/i.test(t)?'case_study':null;
+  const wordNums={'twenty-five':25,'twenty-four':24,twenty:20,thirty:30,'forty-five':45,'thirty-five':35,forty:40,fifteen:15,ten:10};
+  let time_to_offer_days=null;
+  const ttoM=t.match(/(twenty(?:-\w+)?|thirty(?:-\w+)?|forty(?:-\w+)?|fifteen|ten|\d+)\s+days?\s+(?:from|ideally|to offer)/i);
+  if(ttoM)time_to_offer_days=parseInt(ttoM[1])||wordNums[ttoM[1].toLowerCase()]||null;
+  const budget_confirmed=/budget.*(?:signed|approved|confirmed)|(?:signed|approved|confirmed).*budget/i.test(t);
+  const remoteM=t.match(/(?:remote policy|work policy|location)[^
+:]*[:\-–]?\s*([^
+\.]{5,80})/i);
+  const remote_policy=remoteM?remoteM[1].trim():null;
+  const rtM=t.match(/reports?\s+to\s+(?:me\s+directly|([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*))/i);
+  const reports_to=rtM?(rtM[1]||'Hiring Manager'):null;
+  const tsIdx=lines.findIndex(l=>/team size/i.test(l));
+  const tsCtx=tsIdx>=0?lines.slice(tsIdx,tsIdx+3).join(' '):'';
+  const tsM=tsCtx.match(/currently\s+(\d+|one|two|three)\s+/i)||tsCtx.match(/(\d+)\s+(?:people|BDR)/i);
+  const numMap={one:1,two:2,three:3};
+  const team_size=tsM?(parseInt(tsM[1])||numMap[(tsM[1]||'').toLowerCase()]||null):null;
+  const must_haves=dialogBlock(/must.?have|non.?negotiable|requirement/i,/nice.?to.?have|red flag|anna:|target/i);
+  const nice_to_haves=dialogBlock(/nice.?to.?have|good to have/i,/red flag|target|anna:/i);
+  const red_flags=dialogBlock(/red flag|disqualif|cautious/i,/target|interview|anna:/i);
+  const target_titles=dialogBlock(/target title|source from|titles.*look/i,/target company|anna:/i);
+  const target_companies=dialogBlock(/target compan|good hunting/i,/interview|anna:/i);
+  const key_selling_points=dialogBlock(/why.*join|sell|selling point/i,/must.?have|anna:/i);
+  const career_path=dialogBlock(/career path|promotion|path to/i,/growth|anna:/i);
+  return {confirmed_title,urgency_level,headcount_confirmed,budget_confirmed,remote_policy,notice_period_tolerance,must_haves,nice_to_haves,red_flags,target_titles,target_companies,key_selling_points,interview_rounds,interview_format,assessment_required,assessment_type,time_to_offer_days,reports_to,team_size,career_path};
+}
+
 
 // ── WORKFLOW STEP ACTIONS ─────────────────────
 async function _wfCompleteStep(roleId,stepKey) {
