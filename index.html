@@ -3337,144 +3337,241 @@ async function confirmLinkRole() {
 }
 
 // ── ROLE DETAIL ───────────────────────────────
+let _rdData = {}; // cache for current role detail
+
 async function viewRoleDetail(roleId) {
+  _rdData = {};
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading role...</div>';
   document.getElementById('topbar-actions').innerHTML='';
 
-  const [roleRes, appsRes, interviewsRes] = await Promise.all([
+  const [roleRes, appsRes] = await Promise.all([
     sb.from('roles').select('*, profiles!hiring_manager_id(full_name,email)').eq('id',roleId).single(),
     sb.from('applications').select('*, candidates(first_name,last_name,email,phone,location,source,linkedin_url,salary_expectation,notice_period_days)').eq('role_id',roleId).order('created_at',{ascending:false}),
-    sb.from('interviews').select('*, applications!inner(role_id)').eq('applications.role_id',roleId),
   ]);
 
   const role=roleRes.data;
   const apps=appsRes.data||[];
-  let roleJd=null;
   if(!role){toast('Role not found','err');renderRoles();return;}
 
-  // Fetch JD separately — don't block role load if job_descriptions table lacks role_id column
-  try {
-    const jdRes = await sb.from('job_descriptions').select('id,title,competencies,updated_at').eq('role_id',roleId).order('updated_at',{ascending:false}).limit(1).maybeSingle();
-    roleJd = jdRes?.data || null;
-  } catch(e) { /* table or column missing — patch v5 not run yet */ }
+  // Extended data with graceful fallbacks (tables may not exist yet)
+  let roleJd=null, intake=null, wfSteps=[], jdApprovals=[], activityLog=[];
+  const ext = await Promise.allSettled([
+    sb.from('job_descriptions').select('id,title,content,competencies,updated_at').eq('role_id',roleId).order('updated_at',{ascending:false}).limit(1).maybeSingle(),
+    sb.from('role_intake').select('*').eq('role_id',roleId).maybeSingle(),
+    sb.from('role_workflow_steps').select('*').eq('role_id',roleId).order('created_at'),
+    sb.from('role_jd_approvals').select('*').eq('role_id',roleId).order('created_at',{ascending:false}),
+    sb.from('role_activity_log').select('*').eq('role_id',roleId).order('created_at',{ascending:false}).limit(50),
+  ]);
+  if(ext[0].status==='fulfilled') roleJd = ext[0].value?.data||null;
+  if(ext[1].status==='fulfilled') intake = ext[1].value?.data||null;
+  if(ext[2].status==='fulfilled') wfSteps = ext[2].value?.data||[];
+  if(ext[3].status==='fulfilled') jdApprovals = ext[3].value?.data||[];
+  if(ext[4].status==='fulfilled') activityLog = ext[4].value?.data||[];
 
-  // breadcrumb nav — push this role to history
-  var _roleHistFn = (function(rid){ return function(){ viewRoleDetail(rid); }; })(roleId);
-  _pushHistory('role:'+roleId, role.title, _roleHistFn);
+  // Init workflow steps for new roles when patch has been run
+  if(wfSteps.length===0 && ext[2].status==='fulfilled') {
+    try {
+      await sb.rpc('init_role_workflow',{p_role_id:roleId});
+      const {data:ns}=await sb.from('role_workflow_steps').select('*').eq('role_id',roleId).order('created_at');
+      if(ns){wfSteps=ns;}
+    } catch(e){}
+  }
+
+  _rdData = {roleId,role,apps,roleJd,intake,wfSteps,jdApprovals,activityLog};
+
+  // Breadcrumb
+  var _fn=(function(rid){return function(){viewRoleDetail(rid);};})(roleId);
+  _pushHistory('role:'+roleId,role.title,_fn);
   document.getElementById('page-title').textContent=role.title;
   const sub=document.getElementById('page-sub');
-  var _prevEntry = _navHistory[_navHistory.length - 2];
-  sub.textContent = _prevEntry ? '\u2190 ' + _prevEntry.label : '';
-  sub.style.cursor = _prevEntry ? 'pointer' : '';
-  sub.onclick = _prevEntry ? function(){ _goBack(); } : null;
+  var _prev=_navHistory[_navHistory.length-2];
+  sub.textContent=_prev?'← '+_prev.label:'';
+  sub.style.cursor=_prev?'pointer':'';
+  sub.onclick=_prev?function(){_goBack();}:null;
 
-  var _rdRoleTitle = role.title.replace(/'/g,"\\'");
+  var _t=role.title.replace(/'/g,"\\'");
   document.getElementById('topbar-actions').innerHTML=`
     <button class="btn btn-outline btn-sm" onclick="openEditRoleModal('${role.id}')">Edit Role</button>
     <button class="btn btn-outline btn-sm" onclick="openPreSelModal('${role.id}')">📋 Pre-selection Q's</button>
     ${roleJd
-      ? `<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 Edit JD</button>`
-      : `<button class="btn btn-primary btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
-    <button class="btn btn-outline btn-sm" onclick="openSourceModal('${role.id}')">🔍 Source Candidates</button>
-    <button class="btn btn-outline btn-sm" onclick="openRediscoveryModal('${role.id}','${_rdRoleTitle}')">🔄 Find Past Candidates</button>
-    ${role.status==='open'?`<button class="btn btn-outline btn-sm" style="color:var(--amber)" onclick="setRoleStatus('${role.id}','on_hold');viewRoleDetail('${role.id}')">Put On Hold</button>`:''}
-    ${(role.status==='open'||role.status==='on_hold')?`<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="setRoleStatus('${role.id}','filled');viewRoleDetail('${role.id}')">✓ Mark Filled</button>`:''}
-    ${role.status!=='closed'?`<button class="btn btn-outline btn-sm" style="color:var(--red-text)" onclick="confirmCloseRole('${role.id}')">✕ Close Role</button>`:''}
+      ?`<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 Edit JD</button>`
+      :`<button class="btn btn-primary btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
+    <button class="btn btn-outline btn-sm" onclick="openSourceModal('${role.id}')">🔍 Source</button>
+    <button class="btn btn-outline btn-sm" onclick="openRediscoveryModal('${role.id}','${_t}')">🔄 Past Candidates</button>
+    ${role.status==='open'?`<button class="btn btn-outline btn-sm" style="color:var(--amber)" onclick="setRoleStatus('${role.id}','on_hold');viewRoleDetail('${role.id}')">On Hold</button>`:''}
+    ${(role.status==='open'||role.status==='on_hold')?`<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="setRoleStatus('${role.id}','filled');viewRoleDetail('${role.id}')">✓ Filled</button>`:''}
+    ${role.status!=='closed'?`<button class="btn btn-outline btn-sm" style="color:var(--red-text)" onclick="confirmCloseRole('${role.id}')">✕ Close</button>`:''}
     ${role.status!=='open'?`<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="setRoleStatus('${role.id}','open');viewRoleDetail('${role.id}')">↺ Reopen</button>`:''}
   `;
 
-  // KPIs
+  const statusStyle=role.status==='open'?'color:var(--green)':role.status==='on_hold'?'color:var(--amber)':role.status==='filled'?'color:var(--green-text)':'color:var(--text-3)';
+  const fmtSal=r=>{if(!r.salary_min&&!r.salary_max)return'Not set';const c=r.salary_currency||'USD';const f=n=>n>=1000?(n/1000).toFixed(n%1000===0?0:1)+'k':n;return`${c} ${r.salary_min?f(r.salary_min):'?'}${r.salary_max?' – '+f(r.salary_max):'+'}`;};
+  const daysOpen=daysSince(role.created_at);
   const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
   const hiredApps=apps.filter(a=>a.stage==='hired');
-  const rejectedApps=apps.filter(a=>a.stage==='rejected');
-  const daysOpen=daysSince(role.created_at);
-  const pendingFeedback=activeApps.filter(a=>!a.hm_decision||a.hm_decision==='pending').length;
+  const wfDone=wfSteps.filter(s=>s.status==='completed').length;
+  const wfTotal=wfSteps.length||11;
+  const wfPct=Math.round(wfDone/wfTotal*100);
 
-  // Stage breakdown
+  document.getElementById('content').innerHTML=`
+    <div class="card" style="margin-bottom:16px;padding:20px 24px;border-top:4px solid var(--brand)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px">${role.title}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px">
+            ${role.department?`<span class="text-muted">${role.department}</span>`:''}
+            ${role.region?`<span class="tag tag-blue">${role.region}</span>`:''}
+            ${role.work_type?`<span class="tag" style="background:var(--purple-bg);color:var(--purple)">${role.work_type}</span>`:''}
+            <span style="font-size:12px;font-weight:600;${statusStyle}">${role.status==='open'?'● Open':role.status==='on_hold'?'⏸ On Hold':role.status==='filled'?'✓ Filled':'✕ '+role.status}</span>
+          </div>
+          <div style="font-size:13px;color:var(--text-2);display:flex;gap:16px;flex-wrap:wrap">
+            <span>💰 ${fmtSal(role)}</span>
+            <span>📅 ${daysOpen}d open</span>
+            ${role.target_start_date?`<span>🎯 Start: ${fmtDate(role.target_start_date)}</span>`:''}
+            ${role.profiles?.full_name?`<span>👤 HM: ${role.profiles.full_name}</span>`:''}
+            <span>👥 HC: ${role.headcount||1}</span>
+            <span style="color:var(--brand)">👤 ${activeApps.length} active · ${hiredApps.length} hired</span>
+          </div>
+        </div>
+        ${wfSteps.length?`<div style="text-align:right;flex-shrink:0">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Role Progress</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:120px;height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden">
+              <div style="width:${wfPct}%;height:100%;background:var(--brand);border-radius:99px"></div>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:var(--brand)">${wfDone}/${wfTotal}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">${wfPct}% complete</div>
+        </div>`:''}
+      </div>
+    </div>
+
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;overflow-x:auto" id="rd-tab-bar">
+      ${[['overview','📊 Overview'],['intake','📝 Intake'],['jd','📄 JD & Approval'],['workflow','✅ Workflow'],['pipeline','👤 Pipeline'],['activity','📋 Activity']].map(([k,l])=>`<button id="rd-tab-${k}" onclick="_rdSwitchTab('${k}')" style="padding:10px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-3);transition:color .15s">${l}</button>`).join('')}
+    </div>
+    <div id="rd-tab-content"></div>
+  `;
+
+  _rdSwitchTab('overview');
+}
+
+function _rdSwitchTab(tab) {
+  _rdData._tab=tab;
+  ['overview','intake','jd','workflow','pipeline','activity'].forEach(k=>{
+    const b=document.getElementById('rd-tab-'+k);
+    if(!b) return;
+    if(k===tab){b.style.color='var(--brand)';b.style.borderBottomColor='var(--brand)';}
+    else{b.style.color='var(--text-3)';b.style.borderBottomColor='transparent';}
+  });
+  const el=document.getElementById('rd-tab-content');
+  if(!el) return;
+  if(tab==='overview')   el.innerHTML=_rdOverviewHtml(_rdData);
+  else if(tab==='pipeline') el.innerHTML=_rdPipelineHtml(_rdData);
+  else if(tab==='intake')   el.innerHTML=_rdIntakeHtml(_rdData);
+  else if(tab==='workflow') el.innerHTML=_rdWorkflowHtml(_rdData);
+  else if(tab==='jd')       el.innerHTML=_rdJdTabHtml(_rdData);
+  else if(tab==='activity') el.innerHTML=_rdActivityHtml(_rdData);
+}
+
+// ── OVERVIEW TAB ──────────────────────────────
+function _rdOverviewHtml(d) {
+  const {roleId,role,apps,roleJd,wfSteps}=d;
+  const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
+  const hiredApps=apps.filter(a=>a.stage==='hired');
+  const pendingFB=activeApps.filter(a=>!a.hm_decision||a.hm_decision==='pending').length;
+  const daysOpen=daysSince(role.created_at);
   const stageCounts={};
   STAGES.forEach(s=>{stageCounts[s.key]=0;});
   activeApps.forEach(a=>{if(stageCounts[a.stage]!==undefined)stageCounts[a.stage]++;});
-  const maxStageCount=Math.max(...Object.values(stageCounts),1);
+  const maxSC=Math.max(...Object.values(stageCounts),1);
   const stageBars=STAGES.filter(s=>!['hired','rejected','withdrawn'].includes(s.key)).map(s=>`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <div style="width:110px;font-size:11px;font-weight:500;color:var(--text-2)">${s.label}</div>
       <div style="flex:1;height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden">
-        <div style="width:${Math.round(stageCounts[s.key]/maxStageCount*100)}%;height:100%;background:${s.color};border-radius:99px"></div>
+        <div style="width:${Math.round(stageCounts[s.key]/maxSC*100)}%;height:100%;background:${s.color};border-radius:99px"></div>
       </div>
       <div style="width:20px;text-align:right;font-size:12px;font-weight:700;color:var(--text-2)">${stageCounts[s.key]}</div>
     </div>`).join('');
+  const wfLabels={intake_meeting:'Intake meeting',intake_form:'Intake form',jd_draft:'Draft JD',jd_approved:'JD approval',req_approved:'Req approval',job_posted:'Post job',link_shared_hm:'Share link with HM',linkedin_post:'LinkedIn post',direct_search:'Direct search',applications_open:'Open applications',comms_active:'Activate comms'};
+  const nextStep=wfSteps.find(s=>s.status==='pending'||s.status==='in_progress');
+  const sortedTop=[...activeApps].sort((a,b)=>(b.fit_score||0)-(a.fit_score||0)).slice(0,6);
 
-  // Salary display
-  const fmtSal=r=>{if(!r.salary_min&&!r.salary_max)return'Not specified';const c=r.salary_currency||'USD';const fmt=n=>n>=1000?(n/1000).toFixed(n%1000===0?0:1)+'k':n;return`${c} ${r.salary_min?fmt(r.salary_min):'?'}${r.salary_max?' – '+fmt(r.salary_max):'+'}`;};
+  return `
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px">
+      <div class="card kpi"><div class="kpi-val">${apps.length}</div><div class="kpi-label">Total Apps</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${activeApps.length}</div><div class="kpi-label">Active</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:var(--amber)">${pendingFB}</div><div class="kpi-label">Awaiting HM</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:var(--green)">${hiredApps.length} / ${role.headcount||1}</div><div class="kpi-label">Hired / HC</div></div>
+      <div class="card kpi"><div class="kpi-val">${daysOpen}d</div><div class="kpi-label">Days Open</div></div>
+    </div>
 
-  // Status colour
-  const statusStyle=role.status==='open'?'color:var(--green)':role.status==='on_hold'?'color:var(--amber)':role.status==='filled'?'color:var(--green-text)':'color:var(--text-3)';
-
-  // Candidate rows
-  const decTag=d=>d==='approved'?'<span class="tag tag-green" style="font-size:10px">✓ Approved</span>':d==='rejected'?'<span class="tag tag-red" style="font-size:10px">✕ Rejected</span>':'<span class="tag tag-amber" style="font-size:10px">Pending</span>';
-
-  const renderAppRow=a=>{
-    const c=a.candidates;
-    const fitTip = a.fit_reasoning ? ` title="${a.fit_reasoning.replace(/"/g,"'")}"` : '';
-    const newBadge = daysSince(a.created_at) <= 7
-      ? '<span class="new-badge">NEW</span>'
-      : '';
-    return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''"
-        ondragover="event.preventDefault();this.classList.add('row-cv-over')"
-        ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('row-cv-over')"
-        ondrop="_onCandidateRowCvDrop(event,'${a.candidate_id||''}')">
-      <td style="padding:10px 12px" onclick="openCandidateDrawer('${a.id}')">
-        <div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${newBadge}</div>
-        <div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div>
-      </td>
-      <td style="padding:10px 12px" onclick="openCandidateDrawer('${a.id}')">${stageTag(a.stage)}</td>
-      <td style="padding:10px 12px;font-size:12px" onclick="openCandidateDrawer('${a.id}')"${fitTip}>${_fitScoreBadge(a.fit_score)}</td>
-      <td style="padding:10px 12px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.location||'—'}</td>
-      <td style="padding:10px 12px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.salary_expectation?'€'+Number(c.salary_expectation).toLocaleString():'—'}</td>
-      <td style="padding:10px 12px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td>
-      <td style="padding:10px 12px" onclick="openCandidateDrawer('${a.id}')">${decTag(a.hm_decision||'pending')}</td>
-      <td style="padding:12px 16px;font-size:11px;color:var(--text-3)" onclick="openCandidateDrawer('${a.id}')">${daysSince(a.created_at)}d</td>
-      <td style="padding:12px 16px;font-size:11px;color:var(--text-3)" onclick="openCandidateDrawer('${a.id}')">${fmtDate(a.updated_at)}</td>
-      <td style="padding:12px 16px;text-align:right;white-space:nowrap">
-        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openCandidateDrawer('${a.id}')">Open</button>
-        <button class="btn btn-outline btn-sm" style="font-size:11px;margin-left:4px" onclick="openHmFeedback('${a.id}','${(c?.first_name+' '+c?.last_name).replace(/'/g,"\\'")}','${(a.hm_feedback||'').replace(/'/g,"\\'").replace(/\n/g,' ')}','${a.hm_decision||'pending'}')">${a.hm_feedback||a.hm_decision!=='pending'?'Edit Feedback':'Give Feedback'}</button>
-      </td>
-    </tr>`;
-  };
-
-  // Sort active candidates by fit_score desc (scored first, then unscored)
-  const sortedActiveApps=[...activeApps].sort((a,b)=>{
-    if(a.fit_score!=null && b.fit_score!=null) return b.fit_score-a.fit_score;
-    if(a.fit_score!=null) return -1;
-    if(b.fit_score!=null) return 1;
-    return 0;
-  });
-
-  // Add rank position to each row
-  const renderAppRowRanked=(a,idx)=>{
-    const c=a.candidates;
-    const fitTip = a.fit_reasoning ? ` title="${a.fit_reasoning.replace(/"/g,"'")}"` : '';
-    var _rankClass = idx===0?'rank-badge-1':idx===1?'rank-badge-2':idx===2?'rank-badge-3':'';
-    var _rankSize = idx < 3 ? '24px' : '20px';
-    const rankHtml = a.fit_score!=null
-      ? '<span class="'+_rankClass+'" style="display:inline-flex;align-items:center;justify-content:center;width:'+_rankSize+';height:'+_rankSize+';border-radius:50%;'+(idx>=3?'background:var(--surface-2);color:var(--text-3)':'')+';font-size:'+(idx<3?'11':'10')+'px;font-weight:700;flex-shrink:0">'+(idx+1)+'</span>'
-      : '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);color:var(--text-3);font-size:10px">—</span>';
-    const newBadgeR = daysSince(a.created_at) <= 7
-      ? '<span class="new-badge">NEW</span>'
-      : '';
-    return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''"
-        ondragover="event.preventDefault();this.classList.add('row-cv-over')"
-        ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('row-cv-over')"
-        ondrop="_onCandidateRowCvDrop(event,'${a.candidate_id||''}')">
-      <td style="padding:10px 12px" onclick="openCandidateDrawer('${a.id}')">
-        <div style="display:flex;align-items:center;gap:8px">
-          ${rankHtml}
-          <div><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${newBadgeR}</div>
-          <div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></div>
+    ${nextStep?`<div class="card" style="margin-bottom:16px;border:1.5px solid var(--brand);background:var(--brand-light)">
+      <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--brand);letter-spacing:.4px;text-transform:uppercase;margin-bottom:2px">Next Step</div>
+          <div style="font-size:14px;font-weight:600">${wfLabels[nextStep.step_key]||nextStep.step_key}</div>
         </div>
-      </td>
+        <button class="btn btn-primary btn-sm" onclick="_rdSwitchTab('workflow')">Go to Workflow →</button>
+      </div>
+    </div>`:''}
+
+    ${renderCvBucket(roleId)}
+
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Active Pipeline (${activeApps.length}) <span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:6px">by fit ✦</span></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdSwitchTab('pipeline')">Full Pipeline →</button>
+            <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Add</button>
+          </div>
+        </div>
+        ${sortedTop.length?`<table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--surface-2)">
+            ${['Candidate','Stage','Fit ✦','HM'].map(h=>`<th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border)">${h}</th>`).join('')}
+          </tr></thead>
+          <tbody>${sortedTop.map(a=>{const c=a.candidates;const dec=a.hm_decision;return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+            <td style="padding:8px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}</div><div style="font-size:11px;color:var(--text-3)">${c?.location||''}</div></td>
+            <td style="padding:8px 12px">${stageTag(a.stage)}</td>
+            <td style="padding:8px 12px">${_fitScoreBadge(a.fit_score)}</td>
+            <td style="padding:8px 12px">${dec==='approved'?'<span class="tag tag-green" style="font-size:10px">✓</span>':dec==='rejected'?'<span class="tag tag-red" style="font-size:10px">✕</span>':'<span class="tag tag-amber" style="font-size:10px">?</span>'}</td>
+          </tr>`;}).join('')}</tbody>
+        </table>${activeApps.length>6?`<div style="padding:8px 12px;text-align:center"><button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="_rdSwitchTab('pipeline')">View all ${activeApps.length} →</button></div>`:''}
+        `:'<div class="card-body"><div class="text-muted">No active candidates — drop a CV above to add one</div></div>'}
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><div class="card-title">Stage Breakdown</div></div>
+          <div class="card-body">${stageBars}</div>
+        </div>
+        ${pendingFB?`<div class="card" style="border:1.5px solid var(--amber);background:var(--amber-bg);margin-bottom:16px">
+          <div class="card-body"><div style="font-size:13px;font-weight:600;color:var(--amber-text)">⏳ ${pendingFB} awaiting HM feedback</div></div>
+        </div>`:''}
+        ${_renderRoleJdCard(roleJd,roleId)}
+      </div>
+    </div>`;
+}
+
+// ── PIPELINE TAB ──────────────────────────────
+function _rdPipelineHtml(d) {
+  const {roleId,apps}=d;
+  const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
+  const doneApps=apps.filter(a=>['hired','rejected','withdrawn'].includes(a.stage));
+  const unscoredCount=activeApps.filter(a=>a.fit_score==null).length;
+  const hasGeminiKey=!!localStorage.getItem('hiro_gemini_key');
+  const thS='padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2);z-index:1';
+  const thead=`<thead><tr style="background:var(--surface-2)"><th style="${thS}">Rank · Candidate</th><th style="${thS}">Stage</th><th style="${thS}">Fit ✦</th><th style="${thS}">Location</th><th style="${thS}">Salary Exp.</th><th style="${thS}">Notice</th><th style="${thS}">HM Decision</th><th style="${thS}">Days</th><th style="${thS}">Updated</th><th style="padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2);z-index:1"></th></tr></thead>`;
+  const decTag=dec=>dec==='approved'?'<span class="tag tag-green" style="font-size:10px">✓ Approved</span>':dec==='rejected'?'<span class="tag tag-red" style="font-size:10px">✕ Rejected</span>':'<span class="tag tag-amber" style="font-size:10px">Pending</span>';
+  const sorted=[...activeApps].sort((a,b)=>{if(a.fit_score!=null&&b.fit_score!=null)return b.fit_score-a.fit_score;if(a.fit_score!=null)return -1;if(b.fit_score!=null)return 1;return 0;});
+  const renderRow=(a,idx)=>{
+    const c=a.candidates;const ft=a.fit_reasoning?` title="${a.fit_reasoning.replace(/"/g,"'")}"`:'';
+    const rk=a.fit_score!=null;const rc=idx===0?'rank-badge-1':idx===1?'rank-badge-2':idx===2?'rank-badge-3':'';const rs=idx<3?'24px':'20px';
+    const rankHtml=rk?`<span class="${rc}" style="display:inline-flex;align-items:center;justify-content:center;width:${rs};height:${rs};border-radius:50%;${idx>=3?'background:var(--surface-2);color:var(--text-3)':''};font-size:${idx<3?'11':'10'}px;font-weight:700;flex-shrink:0">${idx+1}</span>`:'<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);color:var(--text-3);font-size:10px">—</span>';
+    const nb=daysSince(a.created_at)<=7?'<span class="new-badge">NEW</span>':'';
+    return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''" ondragover="event.preventDefault();this.classList.add('row-cv-over')" ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('row-cv-over')" ondrop="_onCandidateRowCvDrop(event,'${a.candidate_id||''}')">
+      <td style="padding:10px 12px" onclick="openCandidateDrawer('${a.id}')"><div style="display:flex;align-items:center;gap:8px">${rankHtml}<div><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${nb}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></div></div></td>
       <td style="padding:12px 16px" onclick="openCandidateDrawer('${a.id}')">${stageTag(a.stage)}</td>
-      <td style="padding:12px 16px;font-size:12px" onclick="openCandidateDrawer('${a.id}')"${fitTip}>${_fitScoreBadge(a.fit_score)}</td>
+      <td style="padding:12px 16px;font-size:12px"${ft} onclick="openCandidateDrawer('${a.id}')">${_fitScoreBadge(a.fit_score)}</td>
       <td style="padding:12px 16px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.location||'—'}</td>
       <td style="padding:12px 16px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.salary_expectation?'€'+Number(c.salary_expectation).toLocaleString():'—'}</td>
       <td style="padding:12px 16px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td>
@@ -3483,99 +3580,397 @@ async function viewRoleDetail(roleId) {
       <td style="padding:12px 16px;font-size:11px;color:var(--text-3)" onclick="openCandidateDrawer('${a.id}')">${fmtDate(a.updated_at)}</td>
       <td style="padding:12px 16px;text-align:right;white-space:nowrap">
         <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openCandidateDrawer('${a.id}')">Open</button>
-        <button class="btn btn-outline btn-sm" style="font-size:11px;margin-left:4px" onclick="openHmFeedback('${a.id}','${(c?.first_name+' '+c?.last_name).replace(/'/g,"\\'")}','${(a.hm_feedback||'').replace(/'/g,"\\'").replace(/\n/g,' ')}','${a.hm_decision||'pending'}')">${a.hm_feedback||a.hm_decision!=='pending'?'Edit Feedback':'Give Feedback'}</button>
+        <button class="btn btn-outline btn-sm" style="font-size:11px;margin-left:4px" onclick="openHmFeedback('${a.id}','${(c?.first_name+' '+c?.last_name).replace(/'/g,"\\'")}','${(a.hm_feedback||'').replace(/'/g,"\\'").replace(/\n/g,' ')}','${a.hm_decision||'pending'}')">${a.hm_feedback||a.hm_decision!=='pending'?'Edit':'Give Feedback'}</button>
       </td>
     </tr>`;
   };
+  const doneRows=doneApps.map(a=>`<tr style="cursor:pointer;border-bottom:1px solid var(--border);opacity:.7" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+    <td style="padding:10px 12px"><div style="font-weight:600;font-size:13px">${a.candidates?.first_name} ${a.candidates?.last_name}</div><div style="font-size:11px;color:var(--text-3)">${a.candidates?.email||''}</div></td>
+    <td style="padding:10px 12px">${stageTag(a.stage)}</td>
+    <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
+    <td style="padding:10px 12px;font-size:12px">${a.candidates?.location||'—'}</td>
+    <td style="padding:10px 12px;font-size:12px">${a.candidates?.salary_expectation?'€'+Number(a.candidates.salary_expectation).toLocaleString():'—'}</td>
+    <td style="padding:10px 12px;font-size:12px">${a.candidates?.notice_period_days?a.candidates.notice_period_days+'d':'—'}</td>
+    <td style="padding:10px 12px">—</td>
+    <td style="padding:10px 12px;font-size:11px;color:var(--text-3)">${daysSince(a.created_at)}d</td>
+    <td style="padding:10px 12px;font-size:11px;color:var(--text-3)">${fmtDate(a.updated_at)}</td>
+    <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td>
+  </tr>`).join('');
 
-  const unscoredCount = activeApps.filter(a=>a.fit_score==null).length;
-  const hasGeminiKey  = !!localStorage.getItem('hiro_gemini_key');
-
-  const activeRows=sortedActiveApps.map((a,i)=>renderAppRowRanked(a,i)).join('');
-  const doneRows=[...hiredApps,...rejectedApps].map((a,i)=>renderAppRow(a)).join('');
-  const thStyle='padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2);z-index:1';
-  const tableHead=`<thead><tr style="background:var(--surface-2)">
-    <th style="${thStyle}">Rank · Candidate</th>
-    <th style="${thStyle}">Stage</th>
-    <th style="${thStyle}" title="AI fit score — hover a score for reasoning">Fit ✦</th>
-    <th style="${thStyle}">Location</th>
-    <th style="${thStyle}">Sal. Expect.</th>
-    <th style="${thStyle}">Notice</th>
-    <th style="${thStyle}">HM Decision</th>
-    <th style="${thStyle}">Days</th>
-    <th style="${thStyle}">Updated</th>
-    <th style="padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2);z-index:1"></th>
-  </tr></thead>`;
-
-  document.getElementById('content').innerHTML=`
-    <!-- ROLE HEADER -->
-    <div class="card" style="margin-bottom:20px;padding:24px 28px;border-top:4px solid var(--brand)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div>
-          <div style="font-size:18px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px">${role.title}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
-            ${role.department?`<span class="text-muted">${role.department}</span>`:''}
-            ${role.region?`<span class="tag tag-blue">${role.region}</span>`:''}
-            ${role.work_type?`<span class="tag" style="background:var(--purple-bg);color:var(--purple)">${role.work_type}</span>`:''}
-            <span style="font-size:12px;font-weight:600;${statusStyle}">${role.status==='open'?'● Open':role.status==='on_hold'?'⏸ On Hold':role.status==='filled'?'✓ Filled':role.status==='closed'?'✕ Closed/Eliminated':'● '+role.status}</span>
-          </div>
-          <div style="font-size:13px;color:var(--text-2);display:flex;gap:20px;flex-wrap:wrap">
-            <span>💰 ${fmtSal(role)}</span>
-            <span>📅 Opened ${daysOpen} days ago</span>
-            ${role.target_start_date?`<span>🎯 Target start: ${fmtDate(role.target_start_date)}</span>`:''}
-            ${role.profiles?.full_name?`<span>👤 HM: ${role.profiles.full_name}</span>`:''}
-            <span>👥 Headcount: ${role.headcount||1}</span>
-          </div>
-          ${role.description?`<div style="margin-top:12px;padding:10px 14px;background:var(--surface-2);border-radius:var(--r);font-size:13px;color:var(--text-2);line-height:1.6">${role.description}</div>`:''}
+  return `
+    ${renderCvBucket(roleId)}
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Active Candidates (${activeApps.length}) <span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:6px">sorted by AI fit ✦</span></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${hasGeminiKey&&unscoredCount>0?`<button class="btn btn-outline btn-sm" style="font-size:11px;color:var(--brand)" onclick="_scoreAllCandidates('${roleId}',this)">✦ Score ${unscoredCount}</button>`:unscoredCount>0?`<span style="font-size:11px;color:var(--text-3)">${unscoredCount} unscored</span>`:''}
+          <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
         </div>
       </div>
+      ${activeApps.length?`<table style="width:100%;border-collapse:collapse">${thead}<tbody>${sorted.map(renderRow).join('')}</tbody></table>`:'<div class="card-body"><div class="text-muted">No active candidates — drop a CV above to add one</div></div>'}
     </div>
+    ${doneRows?`<div class="card" style="margin-top:16px">
+      <div class="card-header"><div class="card-title">Hired / Rejected / Withdrawn</div></div>
+      <table style="width:100%;border-collapse:collapse">${thead}<tbody>${doneRows}</tbody></table>
+    </div>`:''}`;
+}
 
-    <!-- KPIs -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px">
-      <div class="card kpi"><div class="kpi-val">${apps.length}</div><div class="kpi-label">Total Applications</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${activeApps.length}</div><div class="kpi-label">Active</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:var(--amber)">${pendingFeedback}</div><div class="kpi-label">Awaiting HM Feedback</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:var(--green)">${hiredApps.length} / ${role.headcount||1}</div><div class="kpi-label">Hired / Headcount</div></div>
-      <div class="card kpi"><div class="kpi-val">${daysOpen}d</div><div class="kpi-label">Days Open</div></div>
-    </div>
-
-    <!-- STAGE BREAKDOWN + ACTIONS -->
-    ${renderCvBucket(roleId)}
-    <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;margin-bottom:16px">
-      <div class="card">
-        <div class="card-header"><div class="card-title">Active Candidates (${activeApps.length}) <span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:6px">sorted by AI fit ✦</span></div>
-          <div style="display:flex;align-items:center;gap:8px">
-            ${hasGeminiKey && unscoredCount>0
-              ? `<button class="btn btn-outline btn-sm" style="font-size:11px;color:var(--brand)" onclick="_scoreAllCandidates('${roleId}',this)" title="Run AI fit scoring for ${unscoredCount} unscored candidate${unscoredCount!==1?'s':''}">✦ Score ${unscoredCount} unscored</button>`
-              : unscoredCount>0 && !hasGeminiKey
-                ? `<span style="font-size:11px;color:var(--text-3)">${unscoredCount} unscored — add Gemini key in Settings</span>`
-                : activeApps.length>0 ? `<span style="font-size:11px;color:var(--green-text)">✓ All scored</span>` : ''}
-            <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
-          </div>
+// ── INTAKE TAB ────────────────────────────────
+function _rdIntakeHtml(d) {
+  const {roleId,intake}=d;
+  const v=intake||{};
+  const fld=(key,label,type='text',opts={})=>{
+    const val=(v[key]||'').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    if(type==='checkbox') return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ri-${key}" ${v[key]?'checked':''} style="width:16px;height:16px"> ${label}</label>`;
+    if(type==='select') return `<div><label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">${label}</label><select id="ri-${key}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px">${(opts.options||[]).map(o=>`<option value="${o.v}" ${v[key]===o.v?'selected':''}>${o.l}</option>`).join('')}</select></div>`;
+    if(type==='textarea') return `<div><label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">${label}</label><textarea id="ri-${key}" rows="${opts.rows||3}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;resize:vertical;font-family:inherit">${(v[key]||'').replace(/</g,'&lt;')}</textarea></div>`;
+    return `<div><label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">${label}</label><input type="${type}" id="ri-${key}" value="${val}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box"></div>`;
+  };
+  const sec=(title,icon,body)=>`<div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title">${icon} ${title}</div></div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${body}</div></div>`;
+  const full=html=>`<div style="grid-column:1/-1">${html}</div>`;
+  return `
+    <div style="max-width:900px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div><div style="font-size:15px;font-weight:700">Intake Form</div><div style="font-size:12px;color:var(--text-3)">Complete with the hiring manager during your intake meeting</div></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${intake?.hm_confirmed?`<span class="tag tag-green">✓ HM Confirmed</span>`:`<button class="btn btn-outline btn-sm" onclick="_intakeConfirmHm('${roleId}')">Mark HM Confirmed</button>`}
+          <button class="btn btn-primary btn-sm" onclick="saveRoleIntake('${roleId}')">Save</button>
         </div>
-        ${activeApps.length?`<table style="width:100%;border-collapse:collapse">${tableHead}<tbody>${activeRows}</tbody></table>`:'<div class="card-body"><div class="text-muted">No active candidates — drop a CV above to add one</div></div>'}
+      </div>
+      ${sec('Role Basics','📌',`
+        ${fld('confirmed_title','Confirmed Job Title')}
+        ${fld('urgency_level','Urgency','select',{options:[{v:'immediate',l:'Immediate'},{v:'standard',l:'Standard'},{v:'future_pipeline',l:'Future Pipeline'}]})}
+        ${fld('headcount_confirmed','Confirmed Headcount','number')}
+        ${fld('target_start_confirmed','Target Start Date','date')}
+        ${full(fld('budget_confirmed','Budget confirmed','checkbox'))}
+        ${full(fld('salary_band_confirmed','Salary band confirmed with HM','checkbox'))}
+        ${full(fld('relocation_supported','Relocation supported','checkbox'))}
+        ${full(fld('remote_policy','Remote Policy / Location Requirements','textarea',{rows:2}))}
+        ${fld('notice_period_tolerance','Notice Period Tolerance','select',{options:[{v:'',l:'— Select —'},{v:'immediate',l:'Immediate'},{v:'1_month',l:'Up to 1 month'},{v:'2_months',l:'Up to 2 months'},{v:'flexible',l:'Flexible'}]})}
+        ${full(fld('key_selling_points','Key Selling Points (why join?)','textarea',{rows:3}))}
+      `)}
+      ${sec('Ideal Candidate','🎯',`
+        ${full(fld('must_haves','Must Haves','textarea',{rows:3}))}
+        ${full(fld('nice_to_haves','Nice to Haves','textarea',{rows:2}))}
+        ${full(fld('red_flags','Red Flags / Disqualifiers','textarea',{rows:2}))}
+        ${fld('target_titles','Target Job Titles','textarea',{rows:2})}
+        ${fld('target_companies','Target Companies','textarea',{rows:2})}
+      `)}
+      ${sec('Interview Process','🗓',`
+        ${fld('interview_rounds','Number of Rounds','number')}
+        ${fld('interview_format','Format','select',{options:[{v:'video',l:'Video'},{v:'onsite',l:'On-site'},{v:'hybrid',l:'Hybrid'}]})}
+        ${full(fld('interviewers','Interviewers (names and roles)','textarea',{rows:2}))}
+        ${full(fld('assessment_required','Assessment Required','checkbox'))}
+        ${fld('assessment_type','Assessment Type','select',{options:[{v:'',l:'None'},{v:'EPP',l:'EPP (Criteria)'},{v:'technical',l:'Technical'},{v:'case_study',l:'Case Study'}]})}
+        ${fld('time_to_offer_days','Target Time to Offer (days)','number')}
+      `)}
+      ${sec('Team Structure','👥',`
+        ${fld('reports_to','Reports To')}
+        ${fld('team_size','Team Size','number')}
+        ${full(fld('team_structure','Team Structure / Context','textarea',{rows:2}))}
+        ${full(fld('key_stakeholders','Key Stakeholders','textarea',{rows:2}))}
+      `)}
+      ${sec('Career Path','📈',`
+        ${full(fld('career_path','Career Path / Development','textarea',{rows:2}))}
+        ${full(fld('growth_opportunities','Growth Opportunities','textarea',{rows:2}))}
+        ${fld('promotion_timeline','Typical Promotion Timeline')}
+      `)}
+      ${sec('Intake Meeting Notes','📋',`
+        ${fld('intake_date','Intake Meeting Date','date')}
+        ${fld('intake_attendees','Attendees')}
+        ${full(fld('intake_notes','Notes / Additional Context','textarea',{rows:4}))}
+      `)}
+      <div style="text-align:right;margin-top:4px">
+        <button class="btn btn-primary" onclick="saveRoleIntake('${roleId}')">Save Intake Form</button>
+      </div>
+    </div>`;
+}
+
+// ── WORKFLOW TAB ──────────────────────────────
+function _rdWorkflowHtml(d) {
+  const {roleId,wfSteps}=d;
+  const defs=[
+    {key:'intake_meeting',  label:'Intake Meeting',           icon:'🤝', tip:'Schedule and run intake meeting with the hiring manager'},
+    {key:'intake_form',     label:'Intake Form',              icon:'📝', tip:'Complete the intake form with all role details'},
+    {key:'jd_draft',        label:'Draft Job Description',    icon:'✍️',  tip:'Write or update the JD using intake notes'},
+    {key:'jd_approved',     label:'JD Approved by HM',        icon:'✅', tip:'Get hiring manager sign-off on the JD via the JD & Approval tab'},
+    {key:'req_approved',    label:'Req Approved',             icon:'🔐', tip:'Complete approval chain for requisition opening'},
+    {key:'job_posted',      label:'Job Posted',               icon:'📢', tip:'Post to LinkedIn, job boards, internal careers page'},
+    {key:'link_shared_hm',  label:'Link Shared with HM',      icon:'🔗', tip:'Send the live job link to the hiring manager'},
+    {key:'linkedin_post',   label:'LinkedIn Post',            icon:'💼', tip:'Post on your LinkedIn, tag the hiring manager'},
+    {key:'direct_search',   label:'Direct Sourcing',          icon:'🔍', tip:'Start proactive outreach on LinkedIn Recruiter / Sales Nav'},
+    {key:'applications_open',label:'Applications Open',       icon:'📬', tip:'Confirm application flow is working end-to-end'},
+    {key:'comms_active',    label:'Candidate Comms Active',   icon:'📨', tip:'Auto-comms and response templates in place'},
+  ];
+  const sm={};wfSteps.forEach(s=>{sm[s.step_key]=s;});
+  const patchMissing=wfSteps.length===0;
+  const badge=s=>{
+    if(!s) return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Pending</span>';
+    if(s.status==='completed') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Done</span>';
+    if(s.status==='skipped') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Skipped</span>';
+    if(s.status==='in_progress') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--brand-light);color:var(--brand);font-weight:600">In Progress</span>';
+    if(s.status==='blocked') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--red-bg);color:var(--red-text);font-weight:600">Blocked</span>';
+    return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Pending</span>';
+  };
+  const rows=defs.map((def,i)=>{
+    const s=sm[def.key];
+    const done=s?.status==='completed';const skip=s?.status==='skipped';
+    let actions='';
+    if(!patchMissing){
+      if(def.key==='linkedin_post'){
+        actions=done?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
+          :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdGenerateLinkedInPost('${roleId}')">Generate Post</button><button class="btn btn-primary btn-sm" style="font-size:11px;margin-left:4px" onclick="_wfCompleteStep('${roleId}','${def.key}')">Mark Done</button>`;
+      } else if(def.key==='jd_approved'){
+        actions=done?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
+          :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdSwitchTab('jd')">Go to JD →</button>`;
+      } else if(def.key==='intake_form'){
+        actions=done?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
+          :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdSwitchTab('intake')">Fill Form →</button><button class="btn btn-primary btn-sm" style="font-size:11px;margin-left:4px" onclick="_wfCompleteStep('${roleId}','${def.key}')">Mark Done</button>`;
+      } else {
+        actions=(done||skip)?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
+          :`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfSkipStep('${roleId}','${def.key}')">Skip</button><button class="btn btn-primary btn-sm" style="font-size:11px;margin-left:4px" onclick="_wfCompleteStep('${roleId}','${def.key}')">Mark Done</button>`;
+      }
+    }
+    return `<div style="display:flex;align-items:flex-start;gap:16px;padding:14px 0;border-bottom:1px solid var(--border);${done?'opacity:.55':''}">
+      <div style="width:32px;height:32px;border-radius:50%;background:${done?'var(--green)':skip?'var(--surface-3)':'var(--surface-2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:${done?'14':'13'}px;font-weight:700;color:${done?'white':'var(--text-3)'}">${done?'✓':skip?'—':(i+1)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+          <span style="font-size:14px">${def.icon}</span>
+          <span style="font-size:14px;font-weight:600;${done?'text-decoration:line-through;color:var(--text-3)':''}">${def.label}</span>
+          ${badge(s)}
+          ${s?.completed_at?`<span style="font-size:11px;color:var(--text-3)">· ${fmtDate(s.completed_at)}</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--text-3)">${def.tip}</div>
+        ${s?.notes?`<div style="margin-top:6px;padding:6px 10px;background:var(--surface-2);border-radius:var(--r);font-size:12px;color:var(--text-2)">${s.notes}</div>`:''}
+        ${def.key==='linkedin_post'&&!done?`<div id="li-post-draft-${roleId}" style="display:none;margin-top:10px;padding:14px;background:var(--brand-light);border-radius:var(--r);border:1px solid var(--brand);font-size:13px;line-height:1.7;white-space:pre-wrap;position:relative">
+          <button style="position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:11px;cursor:pointer" onclick="navigator.clipboard.writeText(document.getElementById('li-post-draft-${roleId}').innerText).then(()=>toast('Copied!'))">Copy</button>
+        </div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">${actions}</div>
+    </div>`;
+  }).join('');
+
+  const wfDone=wfSteps.filter(s=>s.status==='completed').length;
+  const wfTotal=wfSteps.length||11;
+  return `
+    <div style="max-width:780px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div><div style="font-size:15px;font-weight:700">Role Workflow Checklist</div><div style="font-size:12px;color:var(--text-3)">${wfDone} of ${wfTotal} steps complete</div></div>
+        ${!patchMissing?`<div style="display:flex;align-items:center;gap:10px">
+          <div style="width:200px;height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden">
+            <div style="width:${Math.round(wfDone/wfTotal*100)}%;height:100%;background:var(--brand);border-radius:99px;transition:width .4s"></div>
+          </div>
+          <span style="font-size:13px;font-weight:700;color:var(--brand)">${Math.round(wfDone/wfTotal*100)}%</span>
+        </div>`:''}
+      </div>
+      ${patchMissing?`<div class="card"><div class="card-body" style="text-align:center;padding:32px">
+        <div style="font-size:32px;margin-bottom:8px">⚠️</div>
+        <div style="font-weight:600;margin-bottom:6px">Database patch not applied yet</div>
+        <div style="font-size:13px;color:var(--text-3)">Run <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px">hiro_patch_intake_approvals.sql</code> in Supabase SQL Editor to enable this feature</div>
+      </div></div>`:`<div class="card"><div class="card-body" style="padding-top:0;padding-bottom:0">${rows}</div></div>`}
+    </div>`;
+}
+
+// ── JD & APPROVAL TAB ────────────────────────
+function _rdJdTabHtml(d) {
+  const {roleId,roleJd,jdApprovals}=d;
+  const latest=jdApprovals[0]||null;
+  const apS=latest?.status;
+  const apBadge=apS==='approved'?'<span class="tag tag-green">✓ Approved</span>':apS==='changes_requested'?'<span class="tag tag-amber">Changes Requested</span>':apS==='rejected'?'<span class="tag tag-red">Rejected</span>':apS==='pending'?'<span class="tag tag-blue">Pending Review</span>':'';
+  return `
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:20px;max-width:1100px">
+      <div>
+        ${roleJd?`<div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div><div class="card-title">📄 ${roleJd.title}</div><div style="font-size:11px;color:var(--text-3)">Updated ${fmtDate(roleJd.updated_at)}</div></div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>
+              <button class="btn btn-primary btn-sm" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Submit for Approval</button>
+            </div>
+          </div>
+          <div class="card-body">
+            ${(roleJd.competencies||[]).length?`<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Competencies</div><div style="display:flex;flex-wrap:wrap;gap:4px">${roleJd.competencies.map(c=>`<span style="background:var(--brand-light);color:var(--brand-dark);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500">${c}</span>`).join('')}</div></div>`:''}
+            ${roleJd.content?`<div style="font-size:13px;color:var(--text-2);line-height:1.7;max-height:500px;overflow-y:auto;white-space:pre-wrap;border-top:1px solid var(--border);padding-top:12px">${roleJd.content.replace(/</g,'&lt;').slice(0,4000)}${roleJd.content.length>4000?'\n…':''}</div>`:'<div class="text-muted">No content — edit JD to add the full job description</div>'}
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="openInterviewPack('${roleJd.id}')">View Interview Pack</button>
+              <button class="btn btn-ghost btn-sm" onclick="openLinkJdModal('${roleId}')">Swap JD</button>
+            </div>
+          </div>
+        </div>`:`<div class="card" style="margin-bottom:16px"><div class="card-body" style="text-align:center;padding:32px">
+          <div style="font-size:32px;margin-bottom:8px">📄</div>
+          <div style="font-weight:600;margin-bottom:10px">No JD linked yet</div>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn btn-primary btn-sm" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>
+            <button class="btn btn-outline btn-sm" onclick="openLinkJdModal('${roleId}')">Link from Library</button>
+          </div>
+        </div></div>`}
       </div>
       <div>
         <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><div class="card-title">Stage Breakdown</div></div>
-          <div class="card-body">${stageBars}</div>
-        </div>
-        ${pendingFeedback?`<div class="card" style="border:1.5px solid var(--amber);background:var(--amber-bg);margin-bottom:16px">
+          <div class="card-header"><div class="card-title">🔐 JD Approval</div></div>
           <div class="card-body">
-            <div style="font-size:13px;font-weight:600;color:var(--amber-text);margin-bottom:4px">⏳ ${pendingFeedback} awaiting HM feedback</div>
-            <div style="font-size:12px;color:var(--amber-text)">Candidates ready for your review</div>
+            ${latest?`
+              <div style="margin-bottom:12px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;font-weight:600">Status</span>${apBadge}</div>
+                <div style="font-size:12px;color:var(--text-3)">Submitted ${fmtDate(latest.submitted_at)}</div>
+                ${latest.reviewed_at?`<div style="font-size:12px;color:var(--text-3)">Reviewed ${fmtDate(latest.reviewed_at)}</div>`:''}
+              </div>
+              ${latest.comments?`<div style="padding:10px;background:var(--surface-2);border-radius:var(--r);font-size:13px;color:var(--text-2);margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:4px">COMMENTS</div>${latest.comments}</div>`:''}
+              ${apS==='pending'?`<div style="border-top:1px solid var(--border);padding-top:12px">
+                <div style="font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Review</div>
+                <textarea id="jd-ap-comments-${latest.id}" placeholder="Comments (optional)..." rows="3" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;resize:none;font-family:inherit;margin-bottom:8px;box-sizing:border-box"></textarea>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-primary btn-sm" style="flex:1" onclick="_jdApprovalAction('${latest.id}','${roleId}','approved')">✓ Approve</button>
+                  <button class="btn btn-outline btn-sm" style="flex:1;color:var(--amber)" onclick="_jdApprovalAction('${latest.id}','${roleId}','changes_requested')">Request Changes</button>
+                </div>
+              </div>`:''}
+              ${(apS==='approved'||apS==='changes_requested')&&roleJd?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Re-submit Updated JD</button>`:''}
+            `:roleJd?`
+              <div class="text-muted" style="margin-bottom:12px;font-size:13px">No approval submitted yet</div>
+              <button class="btn btn-primary btn-sm" style="width:100%" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Submit for HM Approval</button>
+            `:`<div class="text-muted" style="font-size:13px">Add a JD first to enable approval</div>`}
+          </div>
+        </div>
+        ${jdApprovals.length>1?`<div class="card">
+          <div class="card-header"><div class="card-title">Approval History</div></div>
+          <div style="padding:0 20px">
+            ${jdApprovals.slice(1).map(ap=>`<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;color:var(--text-2)">v${ap.jd_version||'?'} · ${fmtDate(ap.submitted_at)}</span>
+                ${ap.status==='approved'?'<span class="tag tag-green" style="font-size:10px">Approved</span>':ap.status==='changes_requested'?'<span class="tag tag-amber" style="font-size:10px">Changes</span>':`<span class="tag" style="font-size:10px">${ap.status}</span>`}
+              </div>
+              ${ap.comments?`<div style="font-size:11px;color:var(--text-3);margin-top:2px">${ap.comments}</div>`:''}
+            </div>`).join('')}
           </div>
         </div>`:''}
-
-        ${_renderRoleJdCard(roleJd, role.id)}
       </div>
-    </div>
+    </div>`;
+}
 
-    ${doneRows?`<div class="card">
-      <div class="card-header"><div class="card-title">Hired / Rejected</div></div>
-      <table style="width:100%;border-collapse:collapse">${tableHead}<tbody>${doneRows}</tbody></table>
-    </div>`:''}`;
+// ── ACTIVITY TAB ──────────────────────────────
+function _rdActivityHtml(d) {
+  const {activityLog}=d;
+  if(!activityLog.length) return `<div class="card"><div class="card-body" style="text-align:center;padding:32px">
+    <div style="font-size:32px;margin-bottom:8px">📋</div>
+    <div style="font-weight:600;margin-bottom:4px">No activity logged yet</div>
+    <div style="font-size:13px;color:var(--text-3)">Activity will appear here as the role progresses</div>
+  </div></div>`;
+  const icons={intake_completed:'📝',jd_submitted:'📤',jd_approved:'✅',req_approved:'🔐',job_posted:'📢',candidate_added:'👤',stage_moved:'➡️',interview_scheduled:'📅',email_sent:'📧',offer_made:'💼',offer_accepted:'🎉',offer_rejected:'❌',candidate_hired:'🏆',workflow_step_completed:'✓',workflow_step_skipped:'⏭'};
+  const labels={intake_completed:'Intake Completed',jd_submitted:'JD Submitted for Approval',jd_approved:'JD Approved',req_approved:'Req Approved',job_posted:'Job Posted',candidate_added:'Candidate Added',stage_moved:'Stage Changed',interview_scheduled:'Interview Scheduled',email_sent:'Email Sent',offer_made:'Offer Made',offer_accepted:'Offer Accepted',offer_rejected:'Offer Rejected',candidate_hired:'Candidate Hired',workflow_step_completed:'Workflow Step Completed',workflow_step_skipped:'Step Skipped'};
+  return `<div style="max-width:780px"><div class="card">
+    <div class="card-header"><div class="card-title">📋 Role Activity Log</div><span style="font-size:12px;color:var(--text-3)">${activityLog.length} entries</span></div>
+    <div style="padding:0 24px">
+      ${activityLog.map(a=>`<div style="display:flex;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:18px;flex-shrink:0;width:28px;text-align:center">${icons[a.action_type]||'·'}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600">${labels[a.action_type]||a.action_type}</div>${a.description?`<div style="font-size:12px;color:var(--text-2)">${a.description}</div>`:''}</div>
+        <div style="font-size:11px;color:var(--text-3);flex-shrink:0;white-space:nowrap">${fmtDate(a.created_at)}</div>
+      </div>`).join('')}
+    </div>
+  </div></div>`;
+}
+
+// ── SAVE INTAKE ────────────────────────────────
+async function saveRoleIntake(roleId) {
+  const g=id=>{const el=document.getElementById(id);if(!el)return null;if(el.type==='checkbox')return el.checked;if(el.type==='number')return el.value?parseInt(el.value):null;if(el.type==='date')return el.value||null;return el.value.trim()||null;};
+  const data={role_id:roleId,confirmed_title:g('ri-confirmed_title'),urgency_level:g('ri-urgency_level')||'standard',headcount_confirmed:g('ri-headcount_confirmed'),target_start_confirmed:g('ri-target_start_confirmed'),budget_confirmed:g('ri-budget_confirmed')||false,salary_band_confirmed:g('ri-salary_band_confirmed')||false,relocation_supported:g('ri-relocation_supported')||false,remote_policy:g('ri-remote_policy'),notice_period_tolerance:g('ri-notice_period_tolerance'),key_selling_points:g('ri-key_selling_points'),must_haves:g('ri-must_haves'),nice_to_haves:g('ri-nice_to_haves'),red_flags:g('ri-red_flags'),target_titles:g('ri-target_titles'),target_companies:g('ri-target_companies'),interview_rounds:g('ri-interview_rounds')||3,interview_format:g('ri-interview_format')||'video',interviewers:g('ri-interviewers'),assessment_required:g('ri-assessment_required')||false,assessment_type:g('ri-assessment_type'),time_to_offer_days:g('ri-time_to_offer_days'),reports_to:g('ri-reports_to'),team_size:g('ri-team_size'),team_structure:g('ri-team_structure'),key_stakeholders:g('ri-key_stakeholders'),career_path:g('ri-career_path'),growth_opportunities:g('ri-growth_opportunities'),promotion_timeline:g('ri-promotion_timeline'),intake_date:g('ri-intake_date'),intake_attendees:g('ri-intake_attendees'),intake_notes:g('ri-intake_notes'),updated_at:new Date().toISOString()};
+  const ex=_rdData.intake;let err;
+  if(ex?.id){({error:err}=await sb.from('role_intake').update(data).eq('id',ex.id));}
+  else{const res=await sb.from('role_intake').insert({...data,completed_at:new Date().toISOString()}).select().single();err=res.error;if(!err){_rdData.intake=res.data;}}
+  if(err){toast('Error saving: '+err.message,'err');return;}
+  _rdData.intake={...(_rdData.intake||{}),...data};
+  toast('Intake saved ✓');
+  try{const uid=(await sb.auth.getUser()).data.user?.id;await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'intake_completed',p_description:'Intake form saved'});}catch(e){}
+}
+
+async function _intakeConfirmHm(roleId) {
+  const ex=_rdData.intake;
+  if(!ex?.id){toast('Save intake first','err');return;}
+  const {error}=await sb.from('role_intake').update({hm_confirmed:true,hm_confirmed_at:new Date().toISOString()}).eq('id',ex.id);
+  if(error){toast('Error: '+error.message,'err');return;}
+  _rdData.intake={...ex,hm_confirmed:true};
+  toast('HM confirmation recorded ✓');
+  _rdSwitchTab('intake');
+}
+
+// ── WORKFLOW STEP ACTIONS ─────────────────────
+async function _wfCompleteStep(roleId,stepKey) {
+  const uid=(await sb.auth.getUser()).data.user?.id;
+  const {error}=await sb.from('role_workflow_steps').update({status:'completed',completed_by:uid,completed_at:new Date().toISOString()}).eq('role_id',roleId).eq('step_key',stepKey);
+  if(error){toast('Error: '+error.message,'err');return;}
+  const s=_rdData.wfSteps.find(x=>x.step_key===stepKey);
+  if(s){s.status='completed';s.completed_at=new Date().toISOString();}
+  try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'workflow_step_completed',p_description:'Step completed: '+stepKey});}catch(e){}
+  toast('Step done ✓');_rdSwitchTab('workflow');
+}
+
+async function _wfSkipStep(roleId,stepKey) {
+  const uid=(await sb.auth.getUser()).data.user?.id;
+  const {error}=await sb.from('role_workflow_steps').update({status:'skipped',completed_at:new Date().toISOString()}).eq('role_id',roleId).eq('step_key',stepKey);
+  if(error){toast('Error: '+error.message,'err');return;}
+  const s=_rdData.wfSteps.find(x=>x.step_key===stepKey);
+  if(s){s.status='skipped';}
+  try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'workflow_step_skipped',p_description:'Step skipped: '+stepKey});}catch(e){}
+  toast('Step skipped');_rdSwitchTab('workflow');
+}
+
+async function _wfUndoStep(roleId,stepKey) {
+  const {error}=await sb.from('role_workflow_steps').update({status:'pending',completed_at:null,completed_by:null}).eq('role_id',roleId).eq('step_key',stepKey);
+  if(error){toast('Error: '+error.message,'err');return;}
+  const s=_rdData.wfSteps.find(x=>x.step_key===stepKey);
+  if(s){s.status='pending';s.completed_at=null;}
+  _rdSwitchTab('workflow');
+}
+
+// ── LINKEDIN POST GENERATOR ────────────────────
+async function _rdGenerateLinkedInPost(roleId) {
+  const el=document.getElementById('li-post-draft-'+roleId);
+  if(!el) return;
+  el.style.display='block';
+  el.innerHTML='<div style="text-align:center;padding:8px"><div class="spinner" style="margin:0 auto"></div></div>';
+  const d=_rdData;const intake=d.intake||{};const role=d.role||{};
+  const claudeKey=localStorage.getItem('hiro_claude_key');
+  const title=intake.confirmed_title||role.title||'open role';
+  const dept=role.department||'';const loc=role.location||role.region||'';
+  const remote=intake.remote_policy||role.work_type||'';
+  const selling=intake.key_selling_points||'';const mustHave=intake.must_haves||'';
+  const sal=role.salary_min&&role.salary_max?`${role.salary_currency||'USD'} ${Math.round(role.salary_min/1000)}k–${Math.round(role.salary_max/1000)}k`:'';
+  if(claudeKey){
+    try{
+      const prompt=`Write a compelling LinkedIn recruitment post. Punchy, 200-250 words, use line breaks for readability, end with 5-7 relevant hashtags. No fluff.\n\nRole: ${title}${dept?'\nDepartment: '+dept:''}${loc?'\nLocation: '+loc:''}${remote?'\nWork policy: '+remote:''}${sal?'\nSalary: '+sal:''}${selling?'\nWhy join:\n'+selling:''}${mustHave?'\nKey requirements:\n'+mustHave:''}\n\nWrite the post now:`;
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':claudeKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:prompt}]})});
+      const json=await res.json();const text=json.content?.[0]?.text||'';
+      if(text){el.textContent=text;return;}
+    }catch(e){}
+  }
+  // Template fallback
+  const tags=['#hiring','#jobs','#recruitment',dept?'#'+dept.replace(/\s+/g,''):'#talent',loc?'#'+loc.split(',')[0].trim().replace(/\s+/g,'')+'jobs':'#careers'].filter(Boolean);
+  const post=`🚀 We're hiring a ${title}${dept?' ('+dept+')':''}!\n\n${loc||remote?`📍 ${[loc,remote].filter(Boolean).join(' · ')}\n\n`:''}${selling?selling+'\n\n':''}${mustHave?`What we're looking for:\n${mustHave}\n\n`:''}${sal?`💰 ${sal}\n\n`:''}If this sounds like you — or someone you know — drop me a message or apply via the link. 👇\n\n${tags.join(' ')}`;
+  el.textContent=post;
+}
+
+// ── JD APPROVAL ACTIONS ───────────────────────
+async function _submitJdApproval(roleId,jdId) {
+  if(!jdId){toast('No JD linked to this role','err');return;}
+  const uid=(await sb.auth.getUser()).data.user?.id;
+  const {data:jd}=await sb.from('job_descriptions').select('title,content').eq('id',jdId).maybeSingle();
+  const version=((_rdData.jdApprovals||[]).length)+1;
+  const {data:ap,error}=await sb.from('role_jd_approvals').insert({role_id:roleId,jd_id:jdId,jd_version:version,jd_snapshot:jd?.content||null,status:'pending',submitted_by:uid,submitted_at:new Date().toISOString()}).select().single();
+  if(error){toast('Error: '+error.message,'err');return;}
+  _rdData.jdApprovals=[ap,...(_rdData.jdApprovals||[])];
+  try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' submitted for approval'});}catch(e){}
+  toast('JD submitted for approval ✓');_rdSwitchTab('jd');
+}
+
+async function _jdApprovalAction(approvalId,roleId,action) {
+  const comments=document.getElementById('jd-ap-comments-'+approvalId)?.value.trim()||null;
+  const uid=(await sb.auth.getUser()).data.user?.id;
+  const {error}=await sb.from('role_jd_approvals').update({status:action,reviewed_by:uid,reviewed_at:new Date().toISOString(),comments}).eq('id',approvalId);
+  if(error){toast('Error: '+error.message,'err');return;}
+  const ap=(_rdData.jdApprovals||[]).find(a=>a.id===approvalId);
+  if(ap){ap.status=action;ap.comments=comments;ap.reviewed_at=new Date().toISOString();}
+  if(action==='approved'){await _wfCompleteStep(roleId,'jd_approved');}
+  toast(action==='approved'?'JD approved ✓':action==='changes_requested'?'Changes requested':'Done');
+  _rdSwitchTab('jd');
 }
 
 let _editingRoleId=null;
@@ -7628,6 +8023,12 @@ function openSettingsModal(tabId) {
   const status = document.getElementById('settings-score-status');
   if (status) status.textContent = k ? '✓ Key saved — scoring is active' : 'No key — scoring disabled';
 
+  const ck = localStorage.getItem('hiro_claude_key') || '';
+  const ckEl = document.getElementById('settings-claude-key');
+  if (ckEl) ckEl.value = ck;
+  const cStatus = document.getElementById('settings-claude-status');
+  if (cStatus) cStatus.textContent = ck ? '✓ Claude key saved — AI features active' : 'No key — LinkedIn post generation uses template fallback';
+
   // Switch to requested tab or default to 'general'
   _switchSettingsTab(tabId || 'general');
 
@@ -7650,6 +8051,8 @@ function _switchSettingsTab(tabId) {
   if (tabId === 'gdpr') { _settingsRenderGdpr(); }
   // Lazy-load Email Templates tab
   if (tabId === 'email_templates') { _settingsRenderEmailTemplates(); }
+  // Lazy-load Approval Chains tab
+  if (tabId === 'approval_chains') { _settingsRenderApprovalChains(); }
 }
 
 function saveSettings() {
@@ -7659,6 +8062,11 @@ function saveSettings() {
   else localStorage.removeItem('hiro_gemini_key');
   const status = document.getElementById('settings-score-status');
   if (status) status.textContent = key ? '✓ Key saved — scoring is active' : 'Key removed — scoring disabled';
+
+  // Claude
+  const ckey = document.getElementById('settings-claude-key')?.value.trim() || '';
+  if (ckey) localStorage.setItem('hiro_claude_key', ckey);
+  else localStorage.removeItem('hiro_claude_key');
 
   toast('Settings saved');
   closeModal('modal-settings');
@@ -7817,6 +8225,141 @@ function _settingsRenderEmailTemplates() {
   if (!container) return;
   container.innerHTML = '<div style="text-align:center;padding:24px"><p style="color:var(--text-2);margin-bottom:12px">Manage email templates in the dedicated Email Templates section.</p><button class="btn btn-primary btn-sm" onclick="closeModal(\'modal-settings\');nav(\'email_templates\',null)">Open Email Templates →</button></div>';
 }
+// ── SETTINGS: Approval Chains tab ────────────
+async function _settingsRenderApprovalChains() {
+  var c = document.getElementById('settings-approval-chains-content');
+  if (!c) return;
+  c.innerHTML = '<div class="loading" style="padding:24px"><div class="spinner"></div> Loading...</div>';
+  var chains = [];
+  try {
+    var res = await sb.from('approval_chains').select('*').order('chain_type').order('name');
+    chains = res.data || [];
+  } catch(e) {
+    c.innerHTML = '<div class="text-muted" style="padding:16px;text-align:center"><div style="font-size:28px;margin-bottom:8px">⚠️</div><div style="font-weight:600;margin-bottom:4px">Table not found</div><div style="font-size:12px">Run <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px">hiro_patch_intake_approvals.sql</code> in Supabase to enable this feature</div></div>';
+    return;
+  }
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">';
+  html += '<div><div style="font-size:13px;font-weight:700">Approval Chains</div><div style="font-size:12px;color:var(--text-3)">Define who must approve requisitions and offers, per region/department</div></div>';
+  html += '<button class="btn btn-primary btn-sm" onclick="_acOpenModal(null)">+ New Chain</button></div>';
+  if (chains.length === 0) {
+    html += '<div class="text-muted" style="text-align:center;padding:32px;border:2px dashed var(--border);border-radius:var(--r-lg)"><div style="font-size:28px;margin-bottom:8px">🔐</div><div style="font-weight:600;margin-bottom:4px">No chains yet</div><div style="font-size:12px">Create your first approval chain above</div></div>';
+  } else {
+    html += '<div style="display:grid;gap:10px">';
+    chains.forEach(function(ch) {
+      var steps = ch.steps || [];
+      var stepLabels = steps.map(function(s,i){ return (i+1)+'. '+s.label; }).join(' → ');
+      var typeTag = ch.chain_type==='req_opening'?'<span class="tag tag-blue" style="font-size:10px">Req Opening</span>':'<span class="tag tag-purple" style="font-size:10px">Offer</span>';
+      var scopeTag = ch.region||ch.department ? '<span class="tag" style="font-size:10px;background:var(--surface-2);color:var(--text-3)">'+(ch.region||'')+(ch.region&&ch.department?' / ':'')+(ch.department||'')+'</span>' : '<span class="tag" style="font-size:10px;background:var(--surface-2);color:var(--text-3)">All regions/depts</span>';
+      html += '<div style="padding:14px 16px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+      html += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:600">'+ch.name+'</span>'+typeTag+scopeTag+(ch.is_active?'<span class="tag tag-green" style="font-size:10px">Active</span>':'<span class="tag" style="font-size:10px;background:var(--amber-bg);color:var(--amber)">Inactive</span>')+'</div>';
+      html += '<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_acOpenModal(\''+ch.id+'\')">Edit</button><button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red-text)" onclick="_acDelete(\''+ch.id+'\')">Delete</button></div>';
+      html += '</div>';
+      html += '<div style="font-size:12px;color:var(--text-3)">' + (stepLabels || 'No steps configured') + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  c.innerHTML = html;
+}
+
+var _acEditId = null;
+function _acOpenModal(chainId) {
+  _acEditId = chainId;
+  if (chainId) {
+    // Load chain and populate form
+    sb.from('approval_chains').select('*').eq('id',chainId).single().then(function(res) {
+      var ch = res.data;
+      if (!ch) return;
+      document.getElementById('ac-name').value = ch.name || '';
+      document.getElementById('ac-type').value = ch.chain_type || 'req_opening';
+      document.getElementById('ac-region').value = ch.region || '';
+      document.getElementById('ac-dept').value = ch.department || '';
+      document.getElementById('ac-active').checked = ch.is_active !== false;
+      _acRenderSteps(ch.steps || []);
+    });
+  } else {
+    document.getElementById('ac-name').value = '';
+    document.getElementById('ac-type').value = 'req_opening';
+    document.getElementById('ac-region').value = '';
+    document.getElementById('ac-dept').value = '';
+    document.getElementById('ac-active').checked = true;
+    _acRenderSteps([]);
+  }
+  openModal('modal-approval-chain');
+}
+
+function _acRenderSteps(steps) {
+  var c = document.getElementById('ac-steps-list');
+  if (!c) return;
+  if (!steps.length) {
+    c.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0">No steps yet — add one below</div>';
+    return;
+  }
+  c.innerHTML = steps.map(function(s,i) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--surface-2);border-radius:var(--r);margin-bottom:6px">'
+      + '<span style="font-size:12px;color:var(--text-3);min-width:16px">'+(i+1)+'.</span>'
+      + '<div style="flex:1"><div style="font-size:13px;font-weight:600">'+s.label+'</div>'
+      + (s.approver_role?'<div style="font-size:11px;color:var(--text-3)">Role: '+s.approver_role+'</div>':'')+' </div>'
+      + '<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--red-text)" onclick="_acRemoveStep('+i+')">✕</button>'
+      + '</div>';
+  }).join('');
+  // Store steps on window for later save
+  window._acCurrentSteps = steps;
+}
+
+window._acCurrentSteps = [];
+function _acAddStep() {
+  var label = document.getElementById('ac-step-label').value.trim();
+  var role = document.getElementById('ac-step-role').value.trim();
+  if (!label) { toast('Step label required','err'); return; }
+  var steps = window._acCurrentSteps || [];
+  steps.push({order: steps.length+1, label: label, approver_role: role||null, approver_user_id: null});
+  window._acCurrentSteps = steps;
+  document.getElementById('ac-step-label').value = '';
+  document.getElementById('ac-step-role').value = '';
+  _acRenderSteps(steps);
+}
+function _acRemoveStep(idx) {
+  var steps = (window._acCurrentSteps||[]).filter(function(_,i){return i!==idx;});
+  steps.forEach(function(s,i){s.order=i+1;});
+  window._acCurrentSteps = steps;
+  _acRenderSteps(steps);
+}
+async function _acSaveChain() {
+  var name = document.getElementById('ac-name').value.trim();
+  var type = document.getElementById('ac-type').value;
+  if (!name) { toast('Chain name required','err'); return; }
+  if (!(window._acCurrentSteps||[]).length) { toast('Add at least one step','err'); return; }
+  var uid = (await sb.auth.getUser()).data.user?.id;
+  var payload = {
+    name: name,
+    chain_type: type,
+    region: document.getElementById('ac-region').value.trim()||null,
+    department: document.getElementById('ac-dept').value.trim()||null,
+    is_active: document.getElementById('ac-active').checked,
+    steps: window._acCurrentSteps,
+    updated_at: new Date().toISOString(),
+  };
+  var err;
+  if (_acEditId) {
+    ({error:err} = await sb.from('approval_chains').update(payload).eq('id',_acEditId));
+  } else {
+    ({error:err} = await sb.from('approval_chains').insert({...payload, created_by:uid}));
+  }
+  if (err) { toast('Error: '+err.message,'err'); return; }
+  toast(_acEditId?'Chain updated ✓':'Chain created ✓');
+  closeModal('modal-approval-chain');
+  _settingsRenderApprovalChains();
+}
+async function _acDelete(chainId) {
+  if (!confirm('Delete this approval chain? This cannot be undone.')) return;
+  var {error} = await sb.from('approval_chains').delete().eq('id',chainId);
+  if (error) { toast('Error: '+error.message,'err'); return; }
+  toast('Chain deleted');
+  _settingsRenderApprovalChains();
+}
+
 window._stSelectTemplate = function(idx, btn) {
   document.querySelectorAll('[id^="st-content-"]').forEach(function(el){ el.style.display='none'; });
   var c = document.getElementById('st-content-'+idx);
@@ -10867,6 +11410,7 @@ initApp();
       <button class="settings-tab" data-tab="integrations" onclick="_switchSettingsTab('integrations')">Integrations</button>
       <button class="settings-tab" data-tab="gdpr" onclick="_switchSettingsTab('gdpr')">GDPR</button>
       <button class="settings-tab" data-tab="email_templates" onclick="_switchSettingsTab('email_templates')">Email Templates</button>
+      <button class="settings-tab" data-tab="approval_chains" onclick="_switchSettingsTab('approval_chains')">Approval Chains</button>
     </div>
     <div class="modal-body" style="overflow-y:auto;flex:1">
 
@@ -10880,6 +11424,12 @@ initApp();
           <button class="btn btn-outline btn-sm" id="settings-test-btn" onclick="testGeminiKey()">Test key</button>
         </div>
         <div id="settings-score-status" style="margin-top:6px;font-size:11.5px;color:var(--text-3)"></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-top:24px;margin-bottom:12px">Claude API (AI Features)</div>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Used for LinkedIn post generation and AI candidate insights. Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--brand)">console.anthropic.com</a></div>
+        <div style="display:flex;gap:8px">
+          <input id="settings-claude-key" type="password" placeholder="sk-ant-..." style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit">
+        </div>
+        <div id="settings-claude-status" style="margin-top:6px;font-size:11.5px;color:var(--text-3)"></div>
         <div class="form-actions" style="margin-top:20px">
           <button class="btn btn-outline" onclick="closeModal('modal-settings')">Cancel</button>
           <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
@@ -10921,6 +11471,66 @@ initApp();
         <div id="settings-email-templates-content"><div class="text-muted" style="font-size:13px">Loading...</div></div>
       </div>
 
+      <!-- APPROVAL CHAINS TAB -->
+      <div class="settings-tab-content" data-tab="approval_chains">
+        <div id="settings-approval-chains-content"><div class="text-muted" style="font-size:13px">Loading...</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- APPROVAL CHAIN MODAL -->
+<div class="modal-overlay" id="modal-approval-chain" style="display:none" onclick="if(event.target===this)closeModal('modal-approval-chain')">
+  <div class="modal" style="max-width:540px;width:90%;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div class="modal-title">Approval Chain</div>
+      <button class="modal-close" onclick="closeModal('modal-approval-chain')">✕</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1">
+      <div style="display:grid;gap:12px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Chain Name *</label>
+          <input id="ac-name" type="text" placeholder="e.g. EMEA Req Opening" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Type *</label>
+            <select id="ac-type" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px">
+              <option value="req_opening">Req Opening</option>
+              <option value="offer">Offer</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Region (optional)</label>
+            <input id="ac-region" type="text" placeholder="e.g. EMEA, US, LATAM" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Department (optional)</label>
+            <input id="ac-dept" type="text" placeholder="e.g. Engineering, Sales" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ac-active" checked style="width:16px;height:16px"> Active</label>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Approval Steps (in order)</div>
+          <div id="ac-steps-list"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:8px">
+            <input id="ac-step-label" type="text" placeholder="Step label e.g. Line Manager" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+            <input id="ac-step-role" type="text" placeholder="Role (optional) e.g. VP" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+            <button class="btn btn-outline btn-sm" onclick="_acAddStep()">+ Add Step</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:6px">Specific approvers can be assigned once users are set up in the Team tab</div>
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-approval-chain')">Cancel</button>
+      <button class="btn btn-primary" onclick="_acSaveChain()">Save Chain</button>
     </div>
   </div>
 </div>
