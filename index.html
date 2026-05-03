@@ -4140,7 +4140,10 @@ JSON:`;
     });
 
     const json = await res.json();
+    if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
     const raw = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('Gemini raw response:', raw);
+    if (!raw) throw new Error('Empty response from Gemini. Full response: ' + JSON.stringify(json).slice(0, 300));
 
     // Strip markdown fences and extract JSON
     let jsonStr = raw.replace(/```json/gi,'').replace(/```/g,'').trim();
