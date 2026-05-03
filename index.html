@@ -3484,7 +3484,7 @@ function _rdRenderTimeline() {
     {key:'s5', num:5, label:'Offer', icon:'💼', sub:'Offer · Decision'},
     {key:'s6', num:6, label:'Onboarding', icon:'🚀', sub:'Docs · IT · Payroll'},
   ];
-  const stageCount=(d.apps||_rdData.apps||[]);
+  const stageCount=(_rdData.apps||[]);
   el.innerHTML='<div class="card" style="padding:8px 0">'
     +stages.map((s,i)=>{
       const st=_rdStageStatus(s.key);
