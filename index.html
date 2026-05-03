@@ -4206,8 +4206,7 @@ JSON:`;
 }
 
 function _ruleBasedExtract(t) {
-  const lines = t.split('
-');
+  const lines = t.split('\n');
   const dialogBlock = (triggerRe, stopRe) => {
     let out=[],capturing=false;
     for(let i=0;i<lines.length;i++){
@@ -4218,8 +4217,7 @@ function _ruleBasedExtract(t) {
         if(stripped){stripped.split(/(?<=\.)\s+|,\s+(?=[A-Z])/g).filter(s=>s.trim().length>3).forEach(s=>out.push('- '+s.trim()));if(out.length>=8)break;}
       }
     }
-    return out.length?out.join('
-'):null;
+    return out.length?out.join('\n'):null;
   };
   let confirmed_title=null;
   for(let i=0;i<lines.length;i++){
