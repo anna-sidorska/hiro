@@ -4159,7 +4159,7 @@ TRANSCRIPT:
 ${transcript.slice(0, 12000)}`;
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
       method: 'POST',
       headers: {'content-type': 'application/json'},
       body: JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1500,temperature:0.1}})
@@ -4256,7 +4256,7 @@ async function _rdGenerateLinkedInPost(roleId) {
   if(geminiKey){
     try{
       const prompt=`Write a compelling LinkedIn recruitment post. Punchy, 200-250 words, use line breaks for readability, end with 5-7 relevant hashtags. No fluff.\n\nRole: ${title}${dept?'\nDepartment: '+dept:''}${loc?'\nLocation: '+loc:''}${remote?'\nWork policy: '+remote:''}${sal?'\nSalary: '+sal:''}${selling?'\nWhy join:\n'+selling:''}${mustHave?'\nKey requirements:\n'+mustHave:''}\n\nWrite the post now:`;
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:600}})});
+      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:600}})});
       const json=await res.json();const text=json.candidates?.[0]?.content?.parts?.[0]?.text||'';
       if(text){el.textContent=text;return;}
     }catch(e){}
@@ -8699,7 +8699,7 @@ window._stCopyTemplate = function(idx, btn) {
   }).catch(function(){ toast('Copy failed — select text manually','err'); });
 };
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 async function testGeminiKey() {
   const key = document.getElementById('settings-gemini-key').value.trim();
@@ -10957,7 +10957,7 @@ async function sendChatMessage(contextStr) {
   var systemPrompt = 'You are a friendly, professional AI assistant for Sovos TA. Context: role="' + (ctx.role||'') + '", company="Sovos — global leader in tax compliance". Answer questions about the role, process, company, and benefits. Be concise (2-3 sentences max). If asked about compensation specifics, say the recruiter will discuss. Never make up facts.';
 
   try {
-    var r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + key, {
+    var r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + key, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({contents:[{parts:[{text:systemPrompt+'\n\nCandidate: '+msg}]}],generationConfig:{temperature:0.7,maxOutputTokens:256}})
