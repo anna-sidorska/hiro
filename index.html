@@ -4110,15 +4110,15 @@ async function _extractIntakeFromTranscript() {
 
   if (!transcript) { toast('Paste a transcript first', 'err'); return; }
 
-  const claudeKey = localStorage.getItem('hiro_claude_key');
-  if (!claudeKey) {
-    statusEl.innerHTML = '<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚠️ No Claude API key set. Add one in Settings → General to enable AI extraction.</div>';
+  const geminiKey = localStorage.getItem('hiro_gemini_key');
+  if (!geminiKey) {
+    statusEl.innerHTML = '<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚠️ No Gemini API key set. Add one in Settings → General to enable AI extraction.</div>';
     return;
   }
 
   btn.disabled = true;
   btn.textContent = 'Extracting...';
-  statusEl.innerHTML = '<div style="color:var(--text-3);font-size:13px">Analysing transcript with Claude...</div>';
+  statusEl.innerHTML = '<div style="color:var(--text-3);font-size:13px">Analysing transcript with Gemini...</div>';
 
   const prompt = `You are a recruitment assistant. Extract structured intake information from this meeting transcript. Return ONLY a valid JSON object with these exact keys (use null for anything not mentioned):
 
@@ -4159,23 +4159,14 @@ TRANSCRIPT:
 ${transcript.slice(0, 12000)}`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
       method: 'POST',
-      headers: {
-        'x-api-key': claudeKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1500,temperature:0.1}})
     });
 
     const json = await res.json();
-    const raw = json.content?.[0]?.text || '';
+    const raw = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     // Strip markdown code fences if present
     const jsonStr = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
@@ -4256,17 +4247,17 @@ async function _rdGenerateLinkedInPost(roleId) {
   el.style.display='block';
   el.innerHTML='<div style="text-align:center;padding:8px"><div class="spinner" style="margin:0 auto"></div></div>';
   const d=_rdData;const intake=d.intake||{};const role=d.role||{};
-  const claudeKey=localStorage.getItem('hiro_claude_key');
+  const geminiKey=localStorage.getItem('hiro_gemini_key');
   const title=intake.confirmed_title||role.title||'open role';
   const dept=role.department||'';const loc=role.location||role.region||'';
   const remote=intake.remote_policy||role.work_type||'';
   const selling=intake.key_selling_points||'';const mustHave=intake.must_haves||'';
   const sal=role.salary_min&&role.salary_max?`${role.salary_currency||'USD'} ${Math.round(role.salary_min/1000)}k–${Math.round(role.salary_max/1000)}k`:'';
-  if(claudeKey){
+  if(geminiKey){
     try{
       const prompt=`Write a compelling LinkedIn recruitment post. Punchy, 200-250 words, use line breaks for readability, end with 5-7 relevant hashtags. No fluff.\n\nRole: ${title}${dept?'\nDepartment: '+dept:''}${loc?'\nLocation: '+loc:''}${remote?'\nWork policy: '+remote:''}${sal?'\nSalary: '+sal:''}${selling?'\nWhy join:\n'+selling:''}${mustHave?'\nKey requirements:\n'+mustHave:''}\n\nWrite the post now:`;
-      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':claudeKey,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:prompt}]})});
-      const json=await res.json();const text=json.content?.[0]?.text||'';
+      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:600}})});
+      const json=await res.json();const text=json.candidates?.[0]?.content?.parts?.[0]?.text||'';
       if(text){el.textContent=text;return;}
     }catch(e){}
   }
