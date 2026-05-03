@@ -4224,9 +4224,7 @@ function _ruleBasedExtract(t) {
     if(/title|go with/i.test(lines[i])){
       for(let j=i+1;j<Math.min(i+4,lines.length);j++){
         const stripped=lines[j].replace(/^[A-Z][a-z]+:\s*/,'').trim();
-        const m=stripped.match(/(?:full title[:\s]+|let'?s?\s+go\s+with\s+)([A-Z][^,\.
-]{3,60})/i)||stripped.match(/([A-Z][A-Za-z\s\-,]+(?:Representative|Manager|Analyst|Engineer|Director|Lead|Specialist|Developer|Consultant|Coordinator|Executive|Associate|Officer)[^,\.
-]*)/);
+        const m=stripped.match(/(?:full title[:\s]+|let'?s?\s+go\s+with\s+)([A-Z][^,\.\n]{3,60})/i)||stripped.match(/([A-Z][A-Za-z\s\-,]+(?:Representative|Manager|Analyst|Engineer|Director|Lead|Specialist|Developer|Consultant|Coordinator|Executive|Associate|Officer)[^,\.\n]*)/);
         if(m){confirmed_title=m[1].trim().replace(/[,\.]+$/,'');break;}
       }
       if(confirmed_title)break;
@@ -4234,8 +4232,7 @@ function _ruleBasedExtract(t) {
   }
   const urgency_level=/immediate|ASAP/i.test(t)?'immediate':/future pipeline/i.test(t)?'future_pipeline':'standard';
   let headcount_confirmed=null;
-  const hcM=t.match(/(\d+)\s+confirmed\s+hire|headcount[^\d
-]*(\d+)/i);
+  const hcM=t.match(/(\d+)\s+confirmed\s+hire|headcount[^\d\n]*(\d+)/i);
   if(hcM)headcount_confirmed=parseInt(hcM[1]||hcM[2]);
   else if(/yes[,.]?\s+one|one\s+confirmed\s+hire/i.test(t))headcount_confirmed=1;
   let notice_period_tolerance=null;
@@ -4256,9 +4253,7 @@ function _ruleBasedExtract(t) {
   const ttoM=t.match(/(twenty(?:-\w+)?|thirty(?:-\w+)?|forty(?:-\w+)?|fifteen|ten|\d+)\s+days?\s+(?:from|ideally|to offer)/i);
   if(ttoM)time_to_offer_days=parseInt(ttoM[1])||wordNums[ttoM[1].toLowerCase()]||null;
   const budget_confirmed=/budget.*(?:signed|approved|confirmed)|(?:signed|approved|confirmed).*budget/i.test(t);
-  const remoteM=t.match(/(?:remote policy|work policy|location)[^
-:]*[:\-–]?\s*([^
-\.]{5,80})/i);
+  const remoteM=t.match(/(?:remote policy|work policy|location)[^\n:]*[:\-–]?\s*([^\n\.]{5,80})/i);
   const remote_policy=remoteM?remoteM[1].trim():null;
   const rtM=t.match(/reports?\s+to\s+(?:me\s+directly|([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*))/i);
   const reports_to=rtM?(rtM[1]||'Hiring Manager'):null;
