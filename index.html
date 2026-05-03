@@ -3710,6 +3710,13 @@ function _rdS1Html(d) {
 // ══════════════════════════════════════════════
 // STAGE 2 — POST ROLE
 // ══════════════════════════════════════════════
+function _rdPostAllBoards(roleId) {
+  const checked=Array.from(document.querySelectorAll('input[name="s2-board"]:checked'));
+  if(checked.length===0){toast('Select at least one board');return;}
+  checked.forEach(cb=>{window.open(cb.dataset.url,'_blank');});
+  setTimeout(()=>{_wfCompleteStep(roleId,'job_posted');},400);
+}
+
 function _rdS2Html(d) {
   const {roleId,role,intake,wfSteps,roleJd}=d;
   const sm={};wfSteps.forEach(s=>{sm[s.step_key]=s;});
@@ -3728,18 +3735,12 @@ function _rdS2Html(d) {
   ];
 
   const boardCard=(b)=>{
-    const stepKey='job_posted_'+b.key;
-    const posted=!!((d._customWf||{})[stepKey]);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);${posted?'border-color:var(--green);background:var(--green-bg)':''}">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:18px">${b.icon}</span>
-        <span style="font-size:13px;font-weight:600;color:${posted?'var(--green-text)':'var(--text)'}">${posted?'✓ ':''} ${b.label}</span>
-      </div>
-      <div style="display:flex;gap:6px">
-        <a href="${b.url}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">Open ${b.label} →</a>
-        <button class="btn ${posted?'btn-ghost':'btn-primary'} btn-sm" style="font-size:11px" onclick="_rdMarkPosted('${roleId}','${b.key}',this)">${posted?'Undo':'Mark Posted'}</button>
-      </div>
-    </div>`;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">
+      <input type="checkbox" name="s2-board" value="${b.key}" data-url="${b.url}" checked style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer">
+      <span style="font-size:16px">${b.icon}</span>
+      <span style="font-size:13px;font-weight:600">${b.label}</span>
+      <a href="${b.url}" target="_blank" style="margin-left:auto;font-size:11px;color:var(--brand);text-decoration:none;flex-shrink:0" onclick="event.stopPropagation()">Open ↗</a>
+    </label>`;
   };
 
   return `
@@ -3777,10 +3778,18 @@ function _rdS2Html(d) {
           <button class="btn btn-outline btn-sm" onclick="_rdAddCustomBoard()">+ Add</button>
         </div>
         <div id="s2-custom-boards"></div>
-        <div style="margin-top:8px;display:flex;gap:8px">
-          ${done('job_posted')?`<button class="btn btn-ghost btn-sm" onclick="_wfUndoStep('${roleId}','job_posted')">Undo posted</button>`:`<button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','job_posted')">✓ Mark Job Posted</button>`}
-          ${done('link_shared_hm')?`<button class="btn btn-ghost btn-sm" onclick="_wfUndoStep('${roleId}','link_shared_hm')">Undo link shared</button>`:`<button class="btn btn-outline btn-sm" onclick="_wfCompleteStep('${roleId}','link_shared_hm')">✓ Link Shared with HM</button>`}
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          ${done('job_posted')
+            ?`<div style="display:flex;gap:8px;align-items:center;width:100%">
+                <span style="font-size:12px;color:var(--green-text);font-weight:600">✓ Posted to selected boards</span>
+                <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px" onclick="_wfUndoStep('${roleId}','job_posted')">Undo</button>
+              </div>`
+            :`<button class="btn btn-primary" style="flex:1;padding:10px 0;font-size:13px;font-weight:600" onclick="_rdPostAllBoards('${roleId}')">🚀 Open All &amp; Mark Posted</button>`
+          }
         </div>
+        ${done('job_posted')?`<div style="margin-top:6px;display:flex;gap:8px">
+          ${done('link_shared_hm')?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','link_shared_hm')">Undo link shared</button>`:`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','link_shared_hm')">✓ Share Job Link with HM</button>`}
+        </div>`:''}
       </div>
     </div>
 
