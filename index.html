@@ -3336,8 +3336,8 @@ async function confirmLinkRole() {
   renderJdLibrary();
 }
 
-// ── ROLE DETAIL ───────────────────────────────
-let _rdData = {}; // cache for current role detail
+// ── ROLE DETAIL  (6-stage timeline) ─────────────
+let _rdData = {};
 
 async function viewRoleDetail(roleId) {
   _rdData = {};
@@ -3349,276 +3349,208 @@ async function viewRoleDetail(roleId) {
     sb.from('applications').select('*, candidates(first_name,last_name,email,phone,location,source,linkedin_url,salary_expectation,notice_period_days)').eq('role_id',roleId).order('created_at',{ascending:false}),
   ]);
 
-  const role=roleRes.data;
-  const apps=appsRes.data||[];
+  const role=roleRes.data, apps=appsRes.data||[];
   if(!role){toast('Role not found','err');renderRoles();return;}
 
-  // Extended data with graceful fallbacks (tables may not exist yet)
-  let roleJd=null, intake=null, wfSteps=[], jdApprovals=[], activityLog=[];
-  const ext = await Promise.allSettled([
+  let roleJd=null,intake=null,wfSteps=[],jdApprovals=[],activityLog=[],interviews=[];
+  const ext=await Promise.allSettled([
     sb.from('job_descriptions').select('id,title,content,competencies,updated_at').eq('role_id',roleId).order('updated_at',{ascending:false}).limit(1).maybeSingle(),
     sb.from('role_intake').select('*').eq('role_id',roleId).maybeSingle(),
     sb.from('role_workflow_steps').select('*').eq('role_id',roleId).order('created_at'),
     sb.from('role_jd_approvals').select('*').eq('role_id',roleId).order('created_at',{ascending:false}),
     sb.from('role_activity_log').select('*').eq('role_id',roleId).order('created_at',{ascending:false}).limit(50),
+    sb.from('interviews').select('*, profiles(full_name)').eq('applications.role_id',roleId),
   ]);
-  if(ext[0].status==='fulfilled') roleJd = ext[0].value?.data||null;
-  if(ext[1].status==='fulfilled') intake = ext[1].value?.data||null;
-  if(ext[2].status==='fulfilled') wfSteps = ext[2].value?.data||[];
-  if(ext[3].status==='fulfilled') jdApprovals = ext[3].value?.data||[];
-  if(ext[4].status==='fulfilled') activityLog = ext[4].value?.data||[];
+  if(ext[0].status==='fulfilled') roleJd=ext[0].value?.data||null;
+  if(ext[1].status==='fulfilled') intake=ext[1].value?.data||null;
+  if(ext[2].status==='fulfilled') wfSteps=ext[2].value?.data||[];
+  if(ext[3].status==='fulfilled') jdApprovals=ext[3].value?.data||[];
+  if(ext[4].status==='fulfilled') activityLog=ext[4].value?.data||[];
+  if(ext[5].status==='fulfilled') interviews=ext[5].value?.data||[];
 
-  // Init workflow steps for new roles when patch has been run
-  if(wfSteps.length===0 && ext[2].status==='fulfilled') {
-    try {
-      await sb.rpc('init_role_workflow',{p_role_id:roleId});
-      const {data:ns}=await sb.from('role_workflow_steps').select('*').eq('role_id',roleId).order('created_at');
-      if(ns){wfSteps=ns;}
-    } catch(e){}
+  if(wfSteps.length===0&&ext[2].status==='fulfilled'){
+    try{await sb.rpc('init_role_workflow',{p_role_id:roleId});const{data:ns}=await sb.from('role_workflow_steps').select('*').eq('role_id',roleId).order('created_at');if(ns)wfSteps=ns;}catch(e){}
   }
 
-  _rdData = {roleId,role,apps,roleJd,intake,wfSteps,jdApprovals,activityLog};
+  _rdData={roleId,role,apps,roleJd,intake,wfSteps,jdApprovals,activityLog,interviews};
 
-  // Breadcrumb
-  var _fn=(function(rid){return function(){viewRoleDetail(rid);};})(roleId);
-  _pushHistory('role:'+roleId,role.title,_fn);
+  const fn=(function(rid){return function(){viewRoleDetail(rid);};})(roleId);
+  _pushHistory('role:'+roleId,role.title,fn);
   document.getElementById('page-title').textContent=role.title;
   const sub=document.getElementById('page-sub');
-  var _prev=_navHistory[_navHistory.length-2];
-  sub.textContent=_prev?'← '+_prev.label:'';
-  sub.style.cursor=_prev?'pointer':'';
-  sub.onclick=_prev?function(){_goBack();}:null;
+  const prev=_navHistory[_navHistory.length-2];
+  sub.textContent=prev?'← '+prev.label:''; sub.style.cursor=prev?'pointer':'';
+  sub.onclick=prev?function(){_goBack();}:null;
 
-  var _t=role.title.replace(/'/g,"\\'");
+  const t=role.title.replace(/'/g,"\\'");
   document.getElementById('topbar-actions').innerHTML=`
     <button class="btn btn-outline btn-sm" onclick="openEditRoleModal('${role.id}')">Edit Role</button>
-    <button class="btn btn-outline btn-sm" onclick="openPreSelModal('${role.id}')">📋 Pre-selection Q's</button>
-    ${roleJd
-      ?`<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 Edit JD</button>`
-      :`<button class="btn btn-primary btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
+    ${roleJd?`<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 Edit JD</button>`:`<button class="btn btn-outline btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
     <button class="btn btn-outline btn-sm" onclick="openSourceModal('${role.id}')">🔍 Source</button>
-    <button class="btn btn-outline btn-sm" onclick="openRediscoveryModal('${role.id}','${_t}')">🔄 Past Candidates</button>
+    <button class="btn btn-outline btn-sm" onclick="openRediscoveryModal('${role.id}','${t}')">🔄 Past Candidates</button>
     ${role.status==='open'?`<button class="btn btn-outline btn-sm" style="color:var(--amber)" onclick="setRoleStatus('${role.id}','on_hold');viewRoleDetail('${role.id}')">On Hold</button>`:''}
     ${(role.status==='open'||role.status==='on_hold')?`<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="setRoleStatus('${role.id}','filled');viewRoleDetail('${role.id}')">✓ Filled</button>`:''}
     ${role.status!=='closed'?`<button class="btn btn-outline btn-sm" style="color:var(--red-text)" onclick="confirmCloseRole('${role.id}')">✕ Close</button>`:''}
     ${role.status!=='open'?`<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="setRoleStatus('${role.id}','open');viewRoleDetail('${role.id}')">↺ Reopen</button>`:''}
   `;
 
-  const statusStyle=role.status==='open'?'color:var(--green)':role.status==='on_hold'?'color:var(--amber)':role.status==='filled'?'color:var(--green-text)':'color:var(--text-3)';
   const fmtSal=r=>{if(!r.salary_min&&!r.salary_max)return'Not set';const c=r.salary_currency||'USD';const f=n=>n>=1000?(n/1000).toFixed(n%1000===0?0:1)+'k':n;return`${c} ${r.salary_min?f(r.salary_min):'?'}${r.salary_max?' – '+f(r.salary_max):'+'}`;};
   const daysOpen=daysSince(role.created_at);
   const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
   const hiredApps=apps.filter(a=>a.stage==='hired');
-  const wfDone=wfSteps.filter(s=>s.status==='completed').length;
-  const wfTotal=wfSteps.length||11;
-  const wfPct=Math.round(wfDone/wfTotal*100);
+  const statusStyle=role.status==='open'?'color:var(--green)':role.status==='on_hold'?'color:var(--amber)':role.status==='filled'?'color:var(--green-text)':'color:var(--text-3)';
 
   document.getElementById('content').innerHTML=`
-    <div class="card" style="margin-bottom:16px;padding:20px 24px;border-top:4px solid var(--brand)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <!-- ROLE HEADER -->
+    <div class="card" style="margin-bottom:16px;padding:16px 24px;border-top:4px solid var(--brand)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
           <div style="font-size:18px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px">${role.title}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:4px">
             ${role.department?`<span class="text-muted">${role.department}</span>`:''}
             ${role.region?`<span class="tag tag-blue">${role.region}</span>`:''}
             ${role.work_type?`<span class="tag" style="background:var(--purple-bg);color:var(--purple)">${role.work_type}</span>`:''}
             <span style="font-size:12px;font-weight:600;${statusStyle}">${role.status==='open'?'● Open':role.status==='on_hold'?'⏸ On Hold':role.status==='filled'?'✓ Filled':'✕ '+role.status}</span>
           </div>
-          <div style="font-size:13px;color:var(--text-2);display:flex;gap:16px;flex-wrap:wrap">
+          <div style="font-size:12px;color:var(--text-2);display:flex;gap:14px;flex-wrap:wrap">
             <span>💰 ${fmtSal(role)}</span>
             <span>📅 ${daysOpen}d open</span>
-            ${role.target_start_date?`<span>🎯 Start: ${fmtDate(role.target_start_date)}</span>`:''}
             ${role.profiles?.full_name?`<span>👤 HM: ${role.profiles.full_name}</span>`:''}
             <span>👥 HC: ${role.headcount||1}</span>
             <span style="color:var(--brand)">👤 ${activeApps.length} active · ${hiredApps.length} hired</span>
           </div>
         </div>
-        ${wfSteps.length?`<div style="text-align:right;flex-shrink:0">
-          <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">Role Progress</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="width:120px;height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden">
-              <div style="width:${wfPct}%;height:100%;background:var(--brand);border-radius:99px"></div>
-            </div>
-            <span style="font-size:12px;font-weight:700;color:var(--brand)">${wfDone}/${wfTotal}</span>
-          </div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:2px">${wfPct}% complete</div>
-        </div>`:''}
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_rdActivityPanel()">📋 Activity</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Candidate</button>
+        </div>
       </div>
     </div>
 
-    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;overflow-x:auto" id="rd-tab-bar">
-      ${[['overview','📊 Overview'],['intake','📝 Intake'],['jd','📄 JD & Approval'],['workflow','✅ Workflow'],['pipeline','👤 Pipeline'],['activity','📋 Activity']].map(([k,l])=>`<button id="rd-tab-${k}" onclick="_rdSwitchTab('${k}')" style="padding:10px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-3);transition:color .15s">${l}</button>`).join('')}
+    <!-- TIMELINE + CONTENT -->
+    <div style="display:grid;grid-template-columns:230px 1fr;gap:16px;align-items:start">
+      <!-- LEFT: VERTICAL TIMELINE -->
+      <div id="rd-timeline" style="position:sticky;top:16px"></div>
+      <!-- RIGHT: STAGE CONTENT -->
+      <div id="rd-stage-content"></div>
     </div>
-    <div id="rd-tab-content"></div>
   `;
 
-  _rdSwitchTab('overview');
+  _rdRenderTimeline();
+  _rdStage('s1');
 }
 
-function _rdSwitchTab(tab) {
-  _rdData._tab=tab;
-  ['overview','intake','jd','workflow','pipeline','activity'].forEach(k=>{
-    const b=document.getElementById('rd-tab-'+k);
-    if(!b) return;
-    if(k===tab){b.style.color='var(--brand)';b.style.borderBottomColor='var(--brand)';}
-    else{b.style.color='var(--text-3)';b.style.borderBottomColor='transparent';}
-  });
-  const el=document.getElementById('rd-tab-content');
+// ── TIMELINE HELPERS ──────────────────────────
+function _rdStageStatus(stageKey) {
+  const d=_rdData;
+  const sm={};(d.wfSteps||[]).forEach(s=>{sm[s.step_key]=s;});
+  const done=k=>sm[k]?.status==='completed';
+  if(stageKey==='s1'){
+    const steps=['intake_meeting','intake_form','jd_approved'];
+    const n=steps.filter(done).length;
+    return n===steps.length?'done':n>0?'active':'pending';
+  }
+  if(stageKey==='s2'){
+    const steps=['req_approved','job_posted','link_shared_hm','linkedin_post'];
+    const n=steps.filter(done).length;
+    return n===steps.length?'done':n>0?'active':'pending';
+  }
+  if(stageKey==='s3'){
+    const steps=['direct_search','applications_open','comms_active'];
+    const n=steps.filter(done).length;
+    const apps=(d.apps||[]).filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
+    return n===steps.length||apps.length>0?'active':'pending';
+  }
+  if(stageKey==='s4'){
+    return (d.interviews||[]).length>0?'active':'pending';
+  }
+  if(stageKey==='s5'){
+    const hired=(d.apps||[]).filter(a=>a.stage==='hired');
+    return hired.length>0?'done':'pending';
+  }
+  if(stageKey==='s6') return 'pending';
+  return 'pending';
+}
+
+function _rdRenderTimeline() {
+  const el=document.getElementById('rd-timeline');
   if(!el) return;
-  if(tab==='overview')   el.innerHTML=_rdOverviewHtml(_rdData);
-  else if(tab==='pipeline') el.innerHTML=_rdPipelineHtml(_rdData);
-  else if(tab==='intake')   el.innerHTML=_rdIntakeHtml(_rdData);
-  else if(tab==='workflow') el.innerHTML=_rdWorkflowHtml(_rdData);
-  else if(tab==='jd')       el.innerHTML=_rdJdTabHtml(_rdData);
-  else if(tab==='activity') el.innerHTML=_rdActivityHtml(_rdData);
-}
-
-// ── OVERVIEW TAB ──────────────────────────────
-function _rdOverviewHtml(d) {
-  const {roleId,role,apps,roleJd,wfSteps}=d;
-  const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
-  const hiredApps=apps.filter(a=>a.stage==='hired');
-  const pendingFB=activeApps.filter(a=>!a.hm_decision||a.hm_decision==='pending').length;
-  const daysOpen=daysSince(role.created_at);
-  const stageCounts={};
-  STAGES.forEach(s=>{stageCounts[s.key]=0;});
-  activeApps.forEach(a=>{if(stageCounts[a.stage]!==undefined)stageCounts[a.stage]++;});
-  const maxSC=Math.max(...Object.values(stageCounts),1);
-  const stageBars=STAGES.filter(s=>!['hired','rejected','withdrawn'].includes(s.key)).map(s=>`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <div style="width:110px;font-size:11px;font-weight:500;color:var(--text-2)">${s.label}</div>
-      <div style="flex:1;height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden">
-        <div style="width:${Math.round(stageCounts[s.key]/maxSC*100)}%;height:100%;background:${s.color};border-radius:99px"></div>
-      </div>
-      <div style="width:20px;text-align:right;font-size:12px;font-weight:700;color:var(--text-2)">${stageCounts[s.key]}</div>
-    </div>`).join('');
-  const wfLabels={intake_meeting:'Intake meeting',intake_form:'Intake form',jd_draft:'Draft JD',jd_approved:'JD approval',req_approved:'Req approval',job_posted:'Post job',link_shared_hm:'Share link with HM',linkedin_post:'LinkedIn post',direct_search:'Direct search',applications_open:'Open applications',comms_active:'Activate comms'};
-  const nextStep=wfSteps.find(s=>s.status==='pending'||s.status==='in_progress');
-  const sortedTop=[...activeApps].sort((a,b)=>(b.fit_score||0)-(a.fit_score||0)).slice(0,6);
-
-  return `
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px">
-      <div class="card kpi"><div class="kpi-val">${apps.length}</div><div class="kpi-label">Total Apps</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${activeApps.length}</div><div class="kpi-label">Active</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:var(--amber)">${pendingFB}</div><div class="kpi-label">Awaiting HM</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:var(--green)">${hiredApps.length} / ${role.headcount||1}</div><div class="kpi-label">Hired / HC</div></div>
-      <div class="card kpi"><div class="kpi-val">${daysOpen}d</div><div class="kpi-label">Days Open</div></div>
-    </div>
-
-    ${nextStep?`<div class="card" style="margin-bottom:16px;border:1.5px solid var(--brand);background:var(--brand-light)">
-      <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:var(--brand);letter-spacing:.4px;text-transform:uppercase;margin-bottom:2px">Next Step</div>
-          <div style="font-size:14px;font-weight:600">${wfLabels[nextStep.step_key]||nextStep.step_key}</div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="_rdSwitchTab('workflow')">Go to Workflow →</button>
-      </div>
-    </div>`:''}
-
-    ${renderCvBucket(roleId)}
-
-    <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;margin-bottom:16px">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Active Pipeline (${activeApps.length}) <span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:6px">by fit ✦</span></div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdSwitchTab('pipeline')">Full Pipeline →</button>
-            <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Add</button>
+  const cur=_rdData._stage||'s1';
+  const stages=[
+    {key:'s1', num:1, label:'Intake', icon:'🤝', sub:'Meeting · Form · JD'},
+    {key:'s2', num:2, label:'Post Role', icon:'📢', sub:'Job boards · LinkedIn'},
+    {key:'s3', num:3, label:'Pipeline', icon:'👤', sub:'Source · Review'},
+    {key:'s4', num:4, label:'Interviews', icon:'🗓', sub:'Schedule · Feedback'},
+    {key:'s5', num:5, label:'Offer', icon:'💼', sub:'Offer · Decision'},
+    {key:'s6', num:6, label:'Onboarding', icon:'🚀', sub:'Docs · IT · Payroll'},
+  ];
+  const stageCount=(d.apps||_rdData.apps||[]);
+  el.innerHTML='<div class="card" style="padding:8px 0">'
+    +stages.map((s,i)=>{
+      const st=_rdStageStatus(s.key);
+      const isActive=s.key===cur;
+      const isDone=st==='done';
+      const isInProg=st==='active';
+      const circleColor=isDone?'var(--green)':isInProg?'var(--brand)':isActive?'var(--brand)':'var(--surface-3)';
+      const textColor=isDone?'var(--green-text)':isInProg?'var(--brand)':isActive?'var(--brand)':'var(--text-3)';
+      const bg=isActive?'var(--brand-light)':'transparent';
+      const showLine=i<stages.length-1;
+      return `<div>
+        <div onclick="_rdStage('${s.key}')" style="display:flex;align-items:flex-start;gap:12px;padding:10px 16px;cursor:pointer;background:${bg};border-right:${isActive?'3px solid var(--brand)':'3px solid transparent'};transition:background .15s" onmouseover="if('${s.key}'!=='${cur}')this.style.background='var(--surface-2)'" onmouseout="this.style.background='${bg}'">
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+            <div style="width:28px;height:28px;border-radius:50%;background:${circleColor};display:flex;align-items:center;justify-content:center;font-size:${isDone?'13':'12'}px;font-weight:700;color:${isDone?'white':isActive||isInProg?'white':'var(--text-3)'}">
+              ${isDone?'✓':s.num}
+            </div>
+            ${showLine?`<div style="width:2px;height:24px;background:${isDone?'var(--green)':isInProg?'var(--brand)':'var(--border)'};margin-top:2px"></div>`:''}
+          </div>
+          <div style="flex:1;min-width:0;${showLine?'padding-bottom:24px':''}">
+            <div style="font-size:13px;font-weight:700;color:${isActive||isInProg||isDone?'var(--text)':'var(--text-3)'};display:flex;align-items:center;gap:6px">${s.icon} ${s.label}</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:1px">${s.sub}</div>
+            ${isDone?'<span style="font-size:10px;font-weight:600;color:var(--green-text);background:var(--green-bg);padding:1px 6px;border-radius:99px;display:inline-block;margin-top:3px">Complete</span>':isInProg?'<span style="font-size:10px;font-weight:600;color:var(--brand);background:var(--brand-light);padding:1px 6px;border-radius:99px;display:inline-block;margin-top:3px">In progress</span>':''}
           </div>
         </div>
-        ${sortedTop.length?`<table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:var(--surface-2)">
-            ${['Candidate','Stage','Fit ✦','HM'].map(h=>`<th style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border)">${h}</th>`).join('')}
-          </tr></thead>
-          <tbody>${sortedTop.map(a=>{const c=a.candidates;const dec=a.hm_decision;return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
-            <td style="padding:8px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}</div><div style="font-size:11px;color:var(--text-3)">${c?.location||''}</div></td>
-            <td style="padding:8px 12px">${stageTag(a.stage)}</td>
-            <td style="padding:8px 12px">${_fitScoreBadge(a.fit_score)}</td>
-            <td style="padding:8px 12px">${dec==='approved'?'<span class="tag tag-green" style="font-size:10px">✓</span>':dec==='rejected'?'<span class="tag tag-red" style="font-size:10px">✕</span>':'<span class="tag tag-amber" style="font-size:10px">?</span>'}</td>
-          </tr>`;}).join('')}</tbody>
-        </table>${activeApps.length>6?`<div style="padding:8px 12px;text-align:center"><button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="_rdSwitchTab('pipeline')">View all ${activeApps.length} →</button></div>`:''}
-        `:'<div class="card-body"><div class="text-muted">No active candidates — drop a CV above to add one</div></div>'}
-      </div>
-      <div>
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><div class="card-title">Stage Breakdown</div></div>
-          <div class="card-body">${stageBars}</div>
-        </div>
-        ${pendingFB?`<div class="card" style="border:1.5px solid var(--amber);background:var(--amber-bg);margin-bottom:16px">
-          <div class="card-body"><div style="font-size:13px;font-weight:600;color:var(--amber-text)">⏳ ${pendingFB} awaiting HM feedback</div></div>
-        </div>`:''}
-        ${_renderRoleJdCard(roleJd,roleId)}
-      </div>
-    </div>`;
+      </div>`;
+    }).join('')
+    +'</div>';
 }
 
-// ── PIPELINE TAB ──────────────────────────────
-function _rdPipelineHtml(d) {
-  const {roleId,apps}=d;
-  const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
-  const doneApps=apps.filter(a=>['hired','rejected','withdrawn'].includes(a.stage));
-  const unscoredCount=activeApps.filter(a=>a.fit_score==null).length;
-  const hasGeminiKey=!!localStorage.getItem('hiro_gemini_key');
-  const thS='padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2);z-index:1';
-  const thead=`<thead><tr style="background:var(--surface-2)"><th style="${thS}">Rank · Candidate</th><th style="${thS}">Stage</th><th style="${thS}">Fit ✦</th><th style="${thS}">Location</th><th style="${thS}">Salary Exp.</th><th style="${thS}">Notice</th><th style="${thS}">HM Decision</th><th style="${thS}">Days</th><th style="${thS}">Updated</th><th style="padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2);z-index:1"></th></tr></thead>`;
-  const decTag=dec=>dec==='approved'?'<span class="tag tag-green" style="font-size:10px">✓ Approved</span>':dec==='rejected'?'<span class="tag tag-red" style="font-size:10px">✕ Rejected</span>':'<span class="tag tag-amber" style="font-size:10px">Pending</span>';
-  const sorted=[...activeApps].sort((a,b)=>{if(a.fit_score!=null&&b.fit_score!=null)return b.fit_score-a.fit_score;if(a.fit_score!=null)return -1;if(b.fit_score!=null)return 1;return 0;});
-  const renderRow=(a,idx)=>{
-    const c=a.candidates;const ft=a.fit_reasoning?` title="${a.fit_reasoning.replace(/"/g,"'")}"`:'';
-    const rk=a.fit_score!=null;const rc=idx===0?'rank-badge-1':idx===1?'rank-badge-2':idx===2?'rank-badge-3':'';const rs=idx<3?'24px':'20px';
-    const rankHtml=rk?`<span class="${rc}" style="display:inline-flex;align-items:center;justify-content:center;width:${rs};height:${rs};border-radius:50%;${idx>=3?'background:var(--surface-2);color:var(--text-3)':''};font-size:${idx<3?'11':'10'}px;font-weight:700;flex-shrink:0">${idx+1}</span>`:'<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);color:var(--text-3);font-size:10px">—</span>';
-    const nb=daysSince(a.created_at)<=7?'<span class="new-badge">NEW</span>':'';
-    return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''" ondragover="event.preventDefault();this.classList.add('row-cv-over')" ondragleave="if(!this.contains(event.relatedTarget))this.classList.remove('row-cv-over')" ondrop="_onCandidateRowCvDrop(event,'${a.candidate_id||''}')">
-      <td style="padding:10px 12px" onclick="openCandidateDrawer('${a.id}')"><div style="display:flex;align-items:center;gap:8px">${rankHtml}<div><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${nb}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></div></div></td>
-      <td style="padding:12px 16px" onclick="openCandidateDrawer('${a.id}')">${stageTag(a.stage)}</td>
-      <td style="padding:12px 16px;font-size:12px"${ft} onclick="openCandidateDrawer('${a.id}')">${_fitScoreBadge(a.fit_score)}</td>
-      <td style="padding:12px 16px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.location||'—'}</td>
-      <td style="padding:12px 16px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.salary_expectation?'€'+Number(c.salary_expectation).toLocaleString():'—'}</td>
-      <td style="padding:12px 16px;font-size:12px" onclick="openCandidateDrawer('${a.id}')">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td>
-      <td style="padding:12px 16px" onclick="openCandidateDrawer('${a.id}')">${decTag(a.hm_decision||'pending')}</td>
-      <td style="padding:12px 16px;font-size:11px;color:var(--text-3)" onclick="openCandidateDrawer('${a.id}')">${daysSince(a.created_at)}d</td>
-      <td style="padding:12px 16px;font-size:11px;color:var(--text-3)" onclick="openCandidateDrawer('${a.id}')">${fmtDate(a.updated_at)}</td>
-      <td style="padding:12px 16px;text-align:right;white-space:nowrap">
-        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openCandidateDrawer('${a.id}')">Open</button>
-        <button class="btn btn-outline btn-sm" style="font-size:11px;margin-left:4px" onclick="openHmFeedback('${a.id}','${(c?.first_name+' '+c?.last_name).replace(/'/g,"\\'")}','${(a.hm_feedback||'').replace(/'/g,"\\'").replace(/\n/g,' ')}','${a.hm_decision||'pending'}')">${a.hm_feedback||a.hm_decision!=='pending'?'Edit':'Give Feedback'}</button>
-      </td>
-    </tr>`;
-  };
-  const doneRows=doneApps.map(a=>`<tr style="cursor:pointer;border-bottom:1px solid var(--border);opacity:.7" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
-    <td style="padding:10px 12px"><div style="font-weight:600;font-size:13px">${a.candidates?.first_name} ${a.candidates?.last_name}</div><div style="font-size:11px;color:var(--text-3)">${a.candidates?.email||''}</div></td>
-    <td style="padding:10px 12px">${stageTag(a.stage)}</td>
-    <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
-    <td style="padding:10px 12px;font-size:12px">${a.candidates?.location||'—'}</td>
-    <td style="padding:10px 12px;font-size:12px">${a.candidates?.salary_expectation?'€'+Number(a.candidates.salary_expectation).toLocaleString():'—'}</td>
-    <td style="padding:10px 12px;font-size:12px">${a.candidates?.notice_period_days?a.candidates.notice_period_days+'d':'—'}</td>
-    <td style="padding:10px 12px">—</td>
-    <td style="padding:10px 12px;font-size:11px;color:var(--text-3)">${daysSince(a.created_at)}d</td>
-    <td style="padding:10px 12px;font-size:11px;color:var(--text-3)">${fmtDate(a.updated_at)}</td>
-    <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td>
-  </tr>`).join('');
-
-  return `
-    ${renderCvBucket(roleId)}
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Active Candidates (${activeApps.length}) <span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:6px">sorted by AI fit ✦</span></div>
-        <div style="display:flex;align-items:center;gap:8px">
-          ${hasGeminiKey&&unscoredCount>0?`<button class="btn btn-outline btn-sm" style="font-size:11px;color:var(--brand)" onclick="_scoreAllCandidates('${roleId}',this)">✦ Score ${unscoredCount}</button>`:unscoredCount>0?`<span style="font-size:11px;color:var(--text-3)">${unscoredCount} unscored</span>`:''}
-          <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
-        </div>
-      </div>
-      ${activeApps.length?`<table style="width:100%;border-collapse:collapse">${thead}<tbody>${sorted.map(renderRow).join('')}</tbody></table>`:'<div class="card-body"><div class="text-muted">No active candidates — drop a CV above to add one</div></div>'}
-    </div>
-    ${doneRows?`<div class="card" style="margin-top:16px">
-      <div class="card-header"><div class="card-title">Hired / Rejected / Withdrawn</div></div>
-      <table style="width:100%;border-collapse:collapse">${thead}<tbody>${doneRows}</tbody></table>
-    </div>`:''}`;
+function _rdStage(key) {
+  _rdData._stage=key;
+  _rdRenderTimeline();
+  const el=document.getElementById('rd-stage-content');
+  if(!el) return;
+  if(key==='s1') el.innerHTML=_rdS1Html(_rdData);
+  else if(key==='s2') el.innerHTML=_rdS2Html(_rdData);
+  else if(key==='s3') el.innerHTML=_rdS3Html(_rdData);
+  else if(key==='s4') el.innerHTML=_rdS4Html(_rdData);
+  else if(key==='s5') el.innerHTML=_rdS5Html(_rdData);
+  else if(key==='s6') el.innerHTML=_rdS6Html(_rdData);
 }
 
-// ── INTAKE TAB ────────────────────────────────
-function _rdIntakeHtml(d) {
-  const {roleId,intake}=d;
+// ══════════════════════════════════════════════
+// STAGE 1 — INTAKE
+// ══════════════════════════════════════════════
+function _rdS1Html(d) {
+  const {roleId,role,intake,roleJd,jdApprovals,wfSteps}=d;
+  const sm={};wfSteps.forEach(s=>{sm[s.step_key]=s;});
+  const done=k=>sm[k]?.status==='completed';
   const v=intake||{};
+
+  // Meeting info
+  const hasMeeting=!!(v.intake_date||v.intake_attendees);
+  const apStatus=jdApprovals[0]?.status;
+
+  // Sub-step status badges
+  const sBadge=(isDone,label,extra='')=>isDone
+    ?`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ ${label}</span>`
+    :`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">${label}${extra}</span>`;
+
+  // JD approval badge
+  const apBadge=apStatus==='approved'?`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Approved</span>`
+    :apStatus==='pending'?`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--brand-light);color:var(--brand);font-weight:600">Pending review</span>`
+    :apStatus==='changes_requested'?`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--amber-bg);color:var(--amber-text);font-weight:600">Changes requested</span>`
+    :`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Not submitted</span>`;
+
   const fld=(key,label,type='text',opts={})=>{
     const val=(v[key]||'').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;');
     if(type==='checkbox') return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ri-${key}" ${v[key]?'checked':''} style="width:16px;height:16px"> ${label}</label>`;
@@ -3626,249 +3558,514 @@ function _rdIntakeHtml(d) {
     if(type==='textarea') return `<div><label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">${label}</label><textarea id="ri-${key}" rows="${opts.rows||3}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;resize:vertical;font-family:inherit">${(v[key]||'').replace(/</g,'&lt;')}</textarea></div>`;
     return `<div><label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">${label}</label><input type="${type}" id="ri-${key}" value="${val}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box"></div>`;
   };
-  const sec=(title,icon,body)=>`<div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title">${icon} ${title}</div></div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${body}</div></div>`;
+  const sec=(title,icon,body,extra='')=>`<div class="card" style="margin-bottom:12px"><div class="card-header"><div class="card-title">${icon} ${title}</div>${extra}</div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${body}</div></div>`;
   const full=html=>`<div style="grid-column:1/-1">${html}</div>`;
+
   return `
-    <div style="max-width:900px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div><div style="font-size:15px;font-weight:700">Intake Form</div><div style="font-size:12px;color:var(--text-3)">Complete with the hiring manager during your intake meeting</div></div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          ${intake?.hm_confirmed?`<span class="tag tag-green">✓ HM Confirmed</span>`:`<button class="btn btn-outline btn-sm" onclick="_intakeConfirmHm('${roleId}')">Mark HM Confirmed</button>`}
-          <button class="btn btn-outline btn-sm" style="color:var(--brand)" onclick="_openTranscriptModal('${roleId}')">📋 Paste Transcript</button>
-          <button class="btn btn-primary btn-sm" onclick="saveRoleIntake('${roleId}')">Save</button>
+    <!-- Stage 1 header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:16px;font-weight:700">🤝 Stage 1: Intake</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
+          ${sBadge(done('intake_meeting'),'Meeting')}
+          ${sBadge(done('intake_form'),'Intake Form')}
+          ${sBadge(done('jd_draft'),'JD Draft')}
+          ${apBadge}
         </div>
       </div>
-      ${sec('Role Basics','📌',`
+      <button class="btn btn-outline btn-sm" style="color:var(--brand)" onclick="_openTranscriptModal('${roleId}')">📋 Paste Transcript</button>
+    </div>
+
+    <!-- 1a: SCHEDULE MEETING -->
+    <div class="card" style="margin-bottom:12px;${done('intake_meeting')?'border:1.5px solid var(--green)':''}">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="card-title">1a · Schedule Intake Meeting</div>
+          ${done('intake_meeting')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Done</span>':''}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${done('intake_meeting')?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','intake_meeting')">Undo</button>`:''}
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Date</label>
+            <input type="date" id="mtg-date" value="${v.intake_date||''}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Time</label>
+            <input type="time" id="mtg-time" value="${v.intake_notes?.match(/TIME:([\d:]+)/)?.[1]||''}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Duration</label>
+            <select id="mtg-duration" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px">
+              <option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Attendees</label>
+            <input type="text" id="mtg-attendees" value="${(v.intake_attendees||role.profiles?.full_name||'').replace(/"/g,'&quot;')}" placeholder="${role.profiles?.full_name||'HM name, recruiter...'}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Teams / Meet Link (optional)</label>
+            <input type="url" id="mtg-link" value="${v.intake_notes?.match(/LINK:(https?[^\s]+)/)?.[1]||''}" placeholder="https://teams.microsoft.com/..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="_rdBookIntakeCalendar('${roleId}')">📅 Download .ics (Outlook)</button>
+          <button class="btn btn-primary btn-sm" onclick="_rdSaveMeeting('${roleId}')">Save &amp; Mark Scheduled</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px">Outlook calendar integration coming soon — for now download the .ics file and attach in Outlook</div>
+      </div>
+    </div>
+
+    <!-- 1b: INTAKE FORM -->
+    <div class="card" style="margin-bottom:12px;${done('intake_form')?'border:1.5px solid var(--green)':''}">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="card-title">1b · Intake Form</div>
+          ${done('intake_form')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Done</span>':''}
+          ${intake?.hm_confirmed?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">HM Confirmed</span>':''}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${!intake?.hm_confirmed?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_intakeConfirmHm('${roleId}')">Mark HM Confirmed</button>`:''}
+          ${done('intake_form')?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','intake_form')">Undo</button>`:`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="saveRoleIntake('${roleId}');_wfCompleteStep('${roleId}','intake_form')">Save &amp; Mark Done</button>`}
+        </div>
+      </div>
+      <div class="card-body" id="s1-intake-form-body">
+        <!-- Role Basics -->
+        <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid var(--border)">📌 Role Basics</div>
         ${fld('confirmed_title','Confirmed Job Title')}
         ${fld('urgency_level','Urgency','select',{options:[{v:'immediate',l:'Immediate'},{v:'standard',l:'Standard'},{v:'future_pipeline',l:'Future Pipeline'}]})}
         ${fld('headcount_confirmed','Confirmed Headcount','number')}
         ${fld('target_start_confirmed','Target Start Date','date')}
         ${full(fld('budget_confirmed','Budget confirmed','checkbox'))}
-        ${full(fld('salary_band_confirmed','Salary band confirmed with HM','checkbox'))}
-        ${full(fld('relocation_supported','Relocation supported','checkbox'))}
         ${full(fld('remote_policy','Remote Policy / Location Requirements','textarea',{rows:2}))}
         ${fld('notice_period_tolerance','Notice Period Tolerance','select',{options:[{v:'',l:'— Select —'},{v:'immediate',l:'Immediate'},{v:'1_month',l:'Up to 1 month'},{v:'2_months',l:'Up to 2 months'},{v:'flexible',l:'Flexible'}]})}
-        ${full(fld('key_selling_points','Key Selling Points (why join?)','textarea',{rows:3}))}
-      `)}
-      ${sec('Ideal Candidate','🎯',`
+        ${full(fld('key_selling_points','Key Selling Points (why join?)','textarea',{rows:2}))}
+
+        <!-- Ideal Candidate -->
+        <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--border)">🎯 Ideal Candidate</div>
         ${full(fld('must_haves','Must Haves','textarea',{rows:3}))}
         ${full(fld('nice_to_haves','Nice to Haves','textarea',{rows:2}))}
         ${full(fld('red_flags','Red Flags / Disqualifiers','textarea',{rows:2}))}
         ${fld('target_titles','Target Job Titles','textarea',{rows:2})}
         ${fld('target_companies','Target Companies','textarea',{rows:2})}
-      `)}
-      ${sec('Interview Process','🗓',`
+
+        <!-- Interview Process -->
+        <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--border)">🗓 Interview Process</div>
         ${fld('interview_rounds','Number of Rounds','number')}
         ${fld('interview_format','Format','select',{options:[{v:'video',l:'Video'},{v:'onsite',l:'On-site'},{v:'hybrid',l:'Hybrid'}]})}
         ${full(fld('interviewers','Interviewers (names and roles)','textarea',{rows:2}))}
-        ${full(fld('assessment_required','Assessment Required','checkbox'))}
         ${fld('assessment_type','Assessment Type','select',{options:[{v:'',l:'None'},{v:'EPP',l:'EPP (Criteria)'},{v:'technical',l:'Technical'},{v:'case_study',l:'Case Study'}]})}
         ${fld('time_to_offer_days','Target Time to Offer (days)','number')}
-      `)}
-      ${sec('Team Structure','👥',`
+
+        <!-- Team Structure -->
+        <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--border)">👥 Team Structure</div>
         ${fld('reports_to','Reports To')}
         ${fld('team_size','Team Size','number')}
-        ${full(fld('team_structure','Team Structure / Context','textarea',{rows:2}))}
+        ${full(fld('team_structure','Team Context','textarea',{rows:2}))}
         ${full(fld('key_stakeholders','Key Stakeholders','textarea',{rows:2}))}
-      `)}
-      ${sec('Career Path','📈',`
+
+        <!-- Career Path -->
+        <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--border)">📈 Career Path</div>
         ${full(fld('career_path','Career Path / Development','textarea',{rows:2}))}
         ${full(fld('growth_opportunities','Growth Opportunities','textarea',{rows:2}))}
         ${fld('promotion_timeline','Typical Promotion Timeline')}
-      `)}
-      ${sec('Intake Meeting Notes','📋',`
-        ${fld('intake_date','Intake Meeting Date','date')}
-        ${fld('intake_attendees','Attendees')}
-        ${full(fld('intake_notes','Notes / Additional Context','textarea',{rows:4}))}
-      `)}
-      <div style="text-align:right;margin-top:4px">
-        <button class="btn btn-primary" onclick="saveRoleIntake('${roleId}')">Save Intake Form</button>
-      </div>
-    </div>`;
-}
 
-// ── WORKFLOW TAB ──────────────────────────────
-function _rdWorkflowHtml(d) {
-  const {roleId,wfSteps}=d;
-  const defs=[
-    {key:'intake_meeting',  label:'Intake Meeting',           icon:'🤝', tip:'Schedule and run intake meeting with the hiring manager'},
-    {key:'intake_form',     label:'Intake Form',              icon:'📝', tip:'Complete the intake form with all role details'},
-    {key:'jd_draft',        label:'Draft Job Description',    icon:'✍️',  tip:'Write or update the JD using intake notes'},
-    {key:'jd_approved',     label:'JD Approved by HM',        icon:'✅', tip:'Get hiring manager sign-off on the JD via the JD & Approval tab'},
-    {key:'req_approved',    label:'Req Approved',             icon:'🔐', tip:'Complete approval chain for requisition opening'},
-    {key:'job_posted',      label:'Job Posted',               icon:'📢', tip:'Post to LinkedIn, job boards, internal careers page'},
-    {key:'link_shared_hm',  label:'Link Shared with HM',      icon:'🔗', tip:'Send the live job link to the hiring manager'},
-    {key:'linkedin_post',   label:'LinkedIn Post',            icon:'💼', tip:'Post on your LinkedIn, tag the hiring manager'},
-    {key:'direct_search',   label:'Direct Sourcing',          icon:'🔍', tip:'Start proactive outreach on LinkedIn Recruiter / Sales Nav'},
-    {key:'applications_open',label:'Applications Open',       icon:'📬', tip:'Confirm application flow is working end-to-end'},
-    {key:'comms_active',    label:'Candidate Comms Active',   icon:'📨', tip:'Auto-comms and response templates in place'},
-  ];
-  const sm={};wfSteps.forEach(s=>{sm[s.step_key]=s;});
-  const patchMissing=wfSteps.length===0;
-  const badge=s=>{
-    if(!s) return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Pending</span>';
-    if(s.status==='completed') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Done</span>';
-    if(s.status==='skipped') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Skipped</span>';
-    if(s.status==='in_progress') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--brand-light);color:var(--brand);font-weight:600">In Progress</span>';
-    if(s.status==='blocked') return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--red-bg);color:var(--red-text);font-weight:600">Blocked</span>';
-    return '<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Pending</span>';
-  };
-  const rows=defs.map((def,i)=>{
-    const s=sm[def.key];
-    const done=s?.status==='completed';const skip=s?.status==='skipped';
-    let actions='';
-    if(!patchMissing){
-      if(def.key==='linkedin_post'){
-        actions=done?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
-          :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdGenerateLinkedInPost('${roleId}')">Generate Post</button><button class="btn btn-primary btn-sm" style="font-size:11px;margin-left:4px" onclick="_wfCompleteStep('${roleId}','${def.key}')">Mark Done</button>`;
-      } else if(def.key==='jd_approved'){
-        actions=done?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
-          :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdSwitchTab('jd')">Go to JD →</button>`;
-      } else if(def.key==='intake_form'){
-        actions=done?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
-          :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_rdSwitchTab('intake')">Fill Form →</button><button class="btn btn-primary btn-sm" style="font-size:11px;margin-left:4px" onclick="_wfCompleteStep('${roleId}','${def.key}')">Mark Done</button>`;
-      } else {
-        actions=(done||skip)?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','${def.key}')">Undo</button>`
-          :`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfSkipStep('${roleId}','${def.key}')">Skip</button><button class="btn btn-primary btn-sm" style="font-size:11px;margin-left:4px" onclick="_wfCompleteStep('${roleId}','${def.key}')">Mark Done</button>`;
-      }
-    }
-    return `<div style="display:flex;align-items:flex-start;gap:16px;padding:14px 0;border-bottom:1px solid var(--border);${done?'opacity:.55':''}">
-      <div style="width:32px;height:32px;border-radius:50%;background:${done?'var(--green)':skip?'var(--surface-3)':'var(--surface-2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:${done?'14':'13'}px;font-weight:700;color:${done?'white':'var(--text-3)'}">${done?'✓':skip?'—':(i+1)}</div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-          <span style="font-size:14px">${def.icon}</span>
-          <span style="font-size:14px;font-weight:600;${done?'text-decoration:line-through;color:var(--text-3)':''}">${def.label}</span>
-          ${badge(s)}
-          ${s?.completed_at?`<span style="font-size:11px;color:var(--text-3)">· ${fmtDate(s.completed_at)}</span>`:''}
+        <div style="grid-column:1/-1;text-align:right;margin-top:8px">
+          <button class="btn btn-primary" onclick="saveRoleIntake('${roleId}')">Save Intake Form</button>
         </div>
-        <div style="font-size:12px;color:var(--text-3)">${def.tip}</div>
-        ${s?.notes?`<div style="margin-top:6px;padding:6px 10px;background:var(--surface-2);border-radius:var(--r);font-size:12px;color:var(--text-2)">${s.notes}</div>`:''}
-        ${def.key==='linkedin_post'&&!done?`<div id="li-post-draft-${roleId}" style="display:none;margin-top:10px;padding:14px;background:var(--brand-light);border-radius:var(--r);border:1px solid var(--brand);font-size:13px;line-height:1.7;white-space:pre-wrap;position:relative">
-          <button style="position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:11px;cursor:pointer" onclick="navigator.clipboard.writeText(document.getElementById('li-post-draft-${roleId}').innerText).then(()=>toast('Copied!'))">Copy</button>
-        </div>`:''}
       </div>
-      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">${actions}</div>
-    </div>`;
-  }).join('');
-
-  const wfDone=wfSteps.filter(s=>s.status==='completed').length;
-  const wfTotal=wfSteps.length||11;
-  return `
-    <div style="max-width:780px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <div><div style="font-size:15px;font-weight:700">Role Workflow Checklist</div><div style="font-size:12px;color:var(--text-3)">${wfDone} of ${wfTotal} steps complete</div></div>
-        ${!patchMissing?`<div style="display:flex;align-items:center;gap:10px">
-          <div style="width:200px;height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden">
-            <div style="width:${Math.round(wfDone/wfTotal*100)}%;height:100%;background:var(--brand);border-radius:99px;transition:width .4s"></div>
-          </div>
-          <span style="font-size:13px;font-weight:700;color:var(--brand)">${Math.round(wfDone/wfTotal*100)}%</span>
-        </div>`:''}
-      </div>
-      ${patchMissing?`<div class="card"><div class="card-body" style="text-align:center;padding:32px">
-        <div style="font-size:32px;margin-bottom:8px">⚠️</div>
-        <div style="font-weight:600;margin-bottom:6px">Database patch not applied yet</div>
-        <div style="font-size:13px;color:var(--text-3)">Run <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px">hiro_patch_intake_approvals.sql</code> in Supabase SQL Editor to enable this feature</div>
-      </div></div>`:`<div class="card"><div class="card-body" style="padding-top:0;padding-bottom:0">${rows}</div></div>`}
-    </div>`;
-}
-
-// ── JD & APPROVAL TAB ────────────────────────
-function _rdJdTabHtml(d) {
-  const {roleId,roleJd,jdApprovals}=d;
-  const latest=jdApprovals[0]||null;
-  const apS=latest?.status;
-  const apBadge=apS==='approved'?'<span class="tag tag-green">✓ Approved</span>':apS==='changes_requested'?'<span class="tag tag-amber">Changes Requested</span>':apS==='rejected'?'<span class="tag tag-red">Rejected</span>':apS==='pending'?'<span class="tag tag-blue">Pending Review</span>':'';
-  return `
-    <div style="display:grid;grid-template-columns:1fr 300px;gap:20px;max-width:1100px">
-      <div>
-        ${roleJd?`<div class="card" style="margin-bottom:16px">
-          <div class="card-header">
-            <div><div class="card-title">📄 ${roleJd.title}</div><div style="font-size:11px;color:var(--text-3)">Updated ${fmtDate(roleJd.updated_at)}</div></div>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>
-              <button class="btn btn-primary btn-sm" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Submit for Approval</button>
-            </div>
-          </div>
-          <div class="card-body">
-            ${(roleJd.competencies||[]).length?`<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Competencies</div><div style="display:flex;flex-wrap:wrap;gap:4px">${roleJd.competencies.map(c=>`<span style="background:var(--brand-light);color:var(--brand-dark);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500">${c}</span>`).join('')}</div></div>`:''}
-            ${roleJd.content?`<div style="font-size:13px;color:var(--text-2);line-height:1.7;max-height:500px;overflow-y:auto;white-space:pre-wrap;border-top:1px solid var(--border);padding-top:12px">${roleJd.content.replace(/</g,'&lt;').slice(0,4000)}${roleJd.content.length>4000?'\n…':''}</div>`:'<div class="text-muted">No content — edit JD to add the full job description</div>'}
-            <div style="margin-top:12px;display:flex;gap:8px">
-              <button class="btn btn-outline btn-sm" onclick="openInterviewPack('${roleJd.id}')">View Interview Pack</button>
-              <button class="btn btn-ghost btn-sm" onclick="openLinkJdModal('${roleId}')">Swap JD</button>
-            </div>
-          </div>
-        </div>`:`<div class="card" style="margin-bottom:16px"><div class="card-body" style="text-align:center;padding:32px">
-          <div style="font-size:32px;margin-bottom:8px">📄</div>
-          <div style="font-weight:600;margin-bottom:10px">No JD linked yet</div>
-          <div style="display:flex;gap:8px;justify-content:center">
-            <button class="btn btn-primary btn-sm" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>
-            <button class="btn btn-outline btn-sm" onclick="openLinkJdModal('${roleId}')">Link from Library</button>
-          </div>
-        </div></div>`}
-      </div>
-      <div>
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><div class="card-title">🔐 JD Approval</div></div>
-          <div class="card-body">
-            ${latest?`
-              <div style="margin-bottom:12px">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:13px;font-weight:600">Status</span>${apBadge}</div>
-                <div style="font-size:12px;color:var(--text-3)">Submitted ${fmtDate(latest.submitted_at)}</div>
-                ${latest.reviewed_at?`<div style="font-size:12px;color:var(--text-3)">Reviewed ${fmtDate(latest.reviewed_at)}</div>`:''}
-              </div>
-              ${latest.comments?`<div style="padding:10px;background:var(--surface-2);border-radius:var(--r);font-size:13px;color:var(--text-2);margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:4px">COMMENTS</div>${latest.comments}</div>`:''}
-              ${apS==='pending'?`<div style="border-top:1px solid var(--border);padding-top:12px">
-                <div style="font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Review</div>
-                <textarea id="jd-ap-comments-${latest.id}" placeholder="Comments (optional)..." rows="3" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;resize:none;font-family:inherit;margin-bottom:8px;box-sizing:border-box"></textarea>
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-primary btn-sm" style="flex:1" onclick="_jdApprovalAction('${latest.id}','${roleId}','approved')">✓ Approve</button>
-                  <button class="btn btn-outline btn-sm" style="flex:1;color:var(--amber)" onclick="_jdApprovalAction('${latest.id}','${roleId}','changes_requested')">Request Changes</button>
-                </div>
-              </div>`:''}
-              ${(apS==='approved'||apS==='changes_requested')&&roleJd?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Re-submit Updated JD</button>`:''}
-            `:roleJd?`
-              <div class="text-muted" style="margin-bottom:12px;font-size:13px">No approval submitted yet</div>
-              <button class="btn btn-primary btn-sm" style="width:100%" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Submit for HM Approval</button>
-            `:`<div class="text-muted" style="font-size:13px">Add a JD first to enable approval</div>`}
-          </div>
-        </div>
-        ${jdApprovals.length>1?`<div class="card">
-          <div class="card-header"><div class="card-title">Approval History</div></div>
-          <div style="padding:0 20px">
-            ${jdApprovals.slice(1).map(ap=>`<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-              <div style="display:flex;align-items:center;justify-content:space-between">
-                <span style="font-size:12px;color:var(--text-2)">v${ap.jd_version||'?'} · ${fmtDate(ap.submitted_at)}</span>
-                ${ap.status==='approved'?'<span class="tag tag-green" style="font-size:10px">Approved</span>':ap.status==='changes_requested'?'<span class="tag tag-amber" style="font-size:10px">Changes</span>':`<span class="tag" style="font-size:10px">${ap.status}</span>`}
-              </div>
-              ${ap.comments?`<div style="font-size:11px;color:var(--text-3);margin-top:2px">${ap.comments}</div>`:''}
-            </div>`).join('')}
-          </div>
-        </div>`:''}
-      </div>
-    </div>`;
-}
-
-// ── ACTIVITY TAB ──────────────────────────────
-function _rdActivityHtml(d) {
-  const {activityLog}=d;
-  if(!activityLog.length) return `<div class="card"><div class="card-body" style="text-align:center;padding:32px">
-    <div style="font-size:32px;margin-bottom:8px">📋</div>
-    <div style="font-weight:600;margin-bottom:4px">No activity logged yet</div>
-    <div style="font-size:13px;color:var(--text-3)">Activity will appear here as the role progresses</div>
-  </div></div>`;
-  const icons={intake_completed:'📝',jd_submitted:'📤',jd_approved:'✅',req_approved:'🔐',job_posted:'📢',candidate_added:'👤',stage_moved:'➡️',interview_scheduled:'📅',email_sent:'📧',offer_made:'💼',offer_accepted:'🎉',offer_rejected:'❌',candidate_hired:'🏆',workflow_step_completed:'✓',workflow_step_skipped:'⏭'};
-  const labels={intake_completed:'Intake Completed',jd_submitted:'JD Submitted for Approval',jd_approved:'JD Approved',req_approved:'Req Approved',job_posted:'Job Posted',candidate_added:'Candidate Added',stage_moved:'Stage Changed',interview_scheduled:'Interview Scheduled',email_sent:'Email Sent',offer_made:'Offer Made',offer_accepted:'Offer Accepted',offer_rejected:'Offer Rejected',candidate_hired:'Candidate Hired',workflow_step_completed:'Workflow Step Completed',workflow_step_skipped:'Step Skipped'};
-  return `<div style="max-width:780px"><div class="card">
-    <div class="card-header"><div class="card-title">📋 Role Activity Log</div><span style="font-size:12px;color:var(--text-3)">${activityLog.length} entries</span></div>
-    <div style="padding:0 24px">
-      ${activityLog.map(a=>`<div style="display:flex;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:18px;flex-shrink:0;width:28px;text-align:center">${icons[a.action_type]||'·'}</div>
-        <div style="flex:1"><div style="font-size:13px;font-weight:600">${labels[a.action_type]||a.action_type}</div>${a.description?`<div style="font-size:12px;color:var(--text-2)">${a.description}</div>`:''}</div>
-        <div style="font-size:11px;color:var(--text-3);flex-shrink:0;white-space:nowrap">${fmtDate(a.created_at)}</div>
-      </div>`).join('')}
     </div>
-  </div></div>`;
+
+    <!-- 1c: JD & APPROVAL -->
+    <div class="card" style="${apStatus==='approved'?'border:1.5px solid var(--green)':''}">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="card-title">1c · Job Description &amp; HM Approval</div>
+          ${apBadge}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${roleJd?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>`:`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>`}
+          ${roleJd&&apStatus!=='approved'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Submit for Approval</button>`:''}
+        </div>
+      </div>
+      <div class="card-body">
+        ${roleJd?`
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">${roleJd.title}</div>
+          ${(roleJd.competencies||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">${roleJd.competencies.map(c=>`<span style="background:var(--brand-light);color:var(--brand-dark);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500">${c}</span>`).join('')}</div>`:''}
+          ${jdApprovals.length?`<div style="padding:10px;background:var(--surface-2);border-radius:var(--r);font-size:13px;margin-bottom:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-weight:600">Latest Approval</span>${apBadge}</div>
+            ${jdApprovals[0].comments?`<div style="font-size:12px;color:var(--text-2);margin-top:4px"><strong>Comments:</strong> ${jdApprovals[0].comments}</div>`:''}
+            ${jdApprovals[0].status==='pending'?`<div style="margin-top:10px"><textarea id="jd-ap-comments-${jdApprovals[0].id}" placeholder="Review comments..." rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;resize:none;font-family:inherit;box-sizing:border-box"></textarea><div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-primary btn-sm" onclick="_jdApprovalAction('${jdApprovals[0].id}','${roleId}','approved')">✓ Approve</button><button class="btn btn-outline btn-sm" style="color:var(--amber)" onclick="_jdApprovalAction('${jdApprovals[0].id}','${roleId}','changes_requested')">Request Changes</button></div></div>`:''}
+          </div>`:`<div class="text-muted" style="font-size:13px;margin-bottom:10px">Not yet submitted for approval</div>`}
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm" onclick="openInterviewPack('${roleJd.id}')">View Interview Pack</button>
+            <button class="btn btn-ghost btn-sm" onclick="openLinkJdModal('${roleId}')">Swap JD</button>
+          </div>
+        `:`<div class="text-muted">No JD yet — add one above to enable HM approval workflow</div>`}
+      </div>
+    </div>`;
 }
+
+// ══════════════════════════════════════════════
+// STAGE 2 — POST ROLE
+// ══════════════════════════════════════════════
+function _rdS2Html(d) {
+  const {roleId,role,intake,wfSteps,roleJd}=d;
+  const sm={};wfSteps.forEach(s=>{sm[s.step_key]=s;});
+  const done=k=>sm[k]?.status==='completed';
+  const v=intake||{};
+
+  // Build job title + location for pre-filling board links
+  const title=encodeURIComponent(v.confirmed_title||role.title||'');
+  const loc=encodeURIComponent(role.location||role.region||'');
+
+  const boards=[
+    {key:'linkedin',    label:'LinkedIn',           icon:'💼', color:'#0077b5', url:`https://www.linkedin.com/jobs/post/?f_title=${title}&f_location=${loc}`},
+    {key:'indeed',      label:'Indeed',             icon:'🔵', color:'#003A9B', url:`https://employers.indeed.com/p/post-job?title=${title}&location=${loc}`},
+    {key:'internal',    label:'Internal Careers',   icon:'🏢', color:'var(--brand)', url:'https://boards.greenhouse.io/'},
+    {key:'glassdoor',   label:'Glassdoor',          icon:'🟢', color:'#0caa41', url:`https://www.glassdoor.com/employer/jobListing/jobListingAdd.htm`},
+  ];
+
+  const boardCard=(b)=>{
+    const stepKey='job_posted_'+b.key;
+    const posted=!!((d._customWf||{})[stepKey]);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);${posted?'border-color:var(--green);background:var(--green-bg)':''}">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">${b.icon}</span>
+        <span style="font-size:13px;font-weight:600;color:${posted?'var(--green-text)':'var(--text)'}">${posted?'✓ ':''} ${b.label}</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <a href="${b.url}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">Open ${b.label} →</a>
+        <button class="btn ${posted?'btn-ghost':'btn-primary'} btn-sm" style="font-size:11px" onclick="_rdMarkPosted('${roleId}','${b.key}',this)">${posted?'Undo':'Mark Posted'}</button>
+      </div>
+    </div>`;
+  };
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:700">📢 Stage 2: Post Role</div>
+    </div>
+
+    <!-- Req Approval -->
+    <div class="card" style="margin-bottom:12px;${done('req_approved')?'border:1.5px solid var(--green)':''}">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="card-title">2a · Requisition Approval</div>
+          ${done('req_approved')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Approved</span>':'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Pending</span>'}
+        </div>
+        ${done('req_approved')
+          ?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','req_approved')">Undo</button>`
+          :`<button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','req_approved')">Mark Approved</button>`}
+      </div>
+      <div class="card-body">
+        <div style="font-size:13px;color:var(--text-2)">Confirm the requisition has been approved through your approval chain before posting publicly.</div>
+      </div>
+    </div>
+
+    <!-- Job Boards -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header">
+        <div class="card-title">2b · Post to Job Boards</div>
+        ${done('job_posted')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
+      </div>
+      <div class="card-body" style="display:grid;gap:8px">
+        ${boards.map(boardCard).join('')}
+        <div style="margin-top:4px;display:flex;gap:8px">
+          <input id="s2-custom-board-name" type="text" placeholder="Board name (e.g. Glassdoor PL)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+          <input id="s2-custom-board-url" type="url" placeholder="URL" style="flex:2;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+          <button class="btn btn-outline btn-sm" onclick="_rdAddCustomBoard()">+ Add</button>
+        </div>
+        <div id="s2-custom-boards"></div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          ${done('job_posted')?`<button class="btn btn-ghost btn-sm" onclick="_wfUndoStep('${roleId}','job_posted')">Undo posted</button>`:`<button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','job_posted')">✓ Mark Job Posted</button>`}
+          ${done('link_shared_hm')?`<button class="btn btn-ghost btn-sm" onclick="_wfUndoStep('${roleId}','link_shared_hm')">Undo link shared</button>`:`<button class="btn btn-outline btn-sm" onclick="_wfCompleteStep('${roleId}','link_shared_hm')">✓ Link Shared with HM</button>`}
+        </div>
+      </div>
+    </div>
+
+    <!-- LinkedIn Post -->
+    <div class="card" style="${done('linkedin_post')?'border:1.5px solid var(--green)':''}">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="card-title">2c · LinkedIn Post</div>
+          ${done('linkedin_post')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${!done('linkedin_post')?`<button class="btn btn-outline btn-sm" onclick="_rdGenerateLinkedInPost('${roleId}')">✦ Generate Post</button><button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','linkedin_post')">Mark Posted</button>`:`<button class="btn btn-ghost btn-sm" onclick="_wfUndoStep('${roleId}','linkedin_post')">Undo</button>`}
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">Generate a compelling LinkedIn post, copy it, and post manually on your profile — tagging the hiring manager.</div>
+        <div id="li-post-draft-${roleId}" style="display:none;padding:14px;background:var(--brand-light);border-radius:var(--r);border:1px solid var(--brand);font-size:13px;line-height:1.7;white-space:pre-wrap;position:relative">
+          <button style="position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:11px;cursor:pointer" onclick="navigator.clipboard.writeText(document.getElementById('li-post-draft-${roleId}').innerText.replace('Copy','').trim()).then(()=>toast('Copied!'))">Copy</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// STAGE 3 — PIPELINE
+// ══════════════════════════════════════════════
+function _rdS3Html(d) {
+  const {roleId,role,apps,wfSteps,intake}=d;
+  const sm={};wfSteps.forEach(s=>{sm[s.step_key]=s;});
+  const done=k=>sm[k]?.status==='completed';
+  const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
+  const sorted=[...activeApps].sort((a,b)=>(b.fit_score||0)-(a.fit_score||0));
+  const v=intake||{};
+
+  const thS='padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--surface-2)';
+  const decTag=dec=>dec==='approved'?'<span class="tag tag-green" style="font-size:10px">✓</span>':dec==='rejected'?'<span class="tag tag-red" style="font-size:10px">✕</span>':'<span class="tag tag-amber" style="font-size:10px">?</span>';
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:700">👤 Stage 3: Pipeline</div>
+      <div style="display:flex;gap:6px">
+        ${done('direct_search')?`<span class="tag tag-green" style="font-size:10px">Sourcing active</span>`:`<button class="btn btn-outline btn-sm" onclick="_wfCompleteStep('${roleId}','direct_search')">✓ Mark Sourcing Active</button>`}
+      </div>
+    </div>
+
+    <!-- Sourcing Tools -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><div class="card-title">🔍 Sourcing Tools</div></div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Quick links to search for candidates based on this role</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${[
+            ['LinkedIn Recruiter', `https://www.linkedin.com/recruiter/search?keywords=${encodeURIComponent(v.confirmed_title||role.title||'')}&location=${encodeURIComponent(role.location||role.region||'')}`, '💼'],
+            ['LinkedIn Jobs Search', `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(v.confirmed_title||role.title||'')}&location=${encodeURIComponent(role.location||role.region||'')}`, '🔎'],
+            ['Indeed CV Search', `https://resumes.indeed.com/search?q=${encodeURIComponent(v.confirmed_title||role.title||'')}&l=${encodeURIComponent(role.location||'')}`, '🔵'],
+            ['Google X-Ray', `https://www.google.com/search?q=site:linkedin.com/in+${encodeURIComponent('"'+(v.target_titles||v.confirmed_title||role.title||'')+'"')}`, '🔍'],
+          ].map(([label,url,icon])=>`<a href="${url}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">${icon} ${label} →</a>`).join('')}
+        </div>
+        ${v.target_companies?`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Target Companies from Intake</div><div style="font-size:13px;color:var(--text-2);background:var(--surface-2);padding:8px 12px;border-radius:var(--r)">${v.target_companies.replace(/\n/g,'<br>')}</div></div>`:''}
+        ${v.target_titles?`<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Target Job Titles from Intake</div><div style="font-size:13px;color:var(--text-2);background:var(--surface-2);padding:8px 12px;border-radius:var(--r)">${v.target_titles.replace(/\n/g,'<br>')}</div></div>`:''}
+        <div style="margin-top:10px;display:flex;gap:6px">
+          <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
+          <button class="btn btn-outline btn-sm" onclick="openSourceModal('${roleId}')">Source from Database</button>
+          <button class="btn btn-outline btn-sm" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Find Past Candidates</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CV Drop Zone -->
+    ${renderCvBucket(roleId)}
+
+    <!-- Active Pipeline -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Active Candidates (${activeApps.length}) <span style="font-size:11px;font-weight:400;color:var(--text-3);margin-left:6px">by fit ✦</span></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${!done('applications_open')?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','applications_open')">✓ Apps Open</button>`:'<span class="tag tag-green" style="font-size:10px">Apps open</span>'}
+          ${!done('comms_active')?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','comms_active')">✓ Comms Active</button>`:'<span class="tag tag-green" style="font-size:10px">Comms active</span>'}
+        </div>
+      </div>
+      ${sorted.length?`<table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--surface-2)">
+          ${['Candidate','Stage','Fit ✦','Location','Salary','Notice','HM',''].map(h=>`<th style="${thS}">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${sorted.map((a,i)=>{
+          const c=a.candidates;
+          const rc=i===0?'rank-badge-1':i===1?'rank-badge-2':i===2?'rank-badge-3':'';
+          const rs=i<3?'24px':'20px';
+          const rk=a.fit_score!=null?`<span class="${rc}" style="display:inline-flex;align-items:center;justify-content:center;width:${rs};height:${rs};border-radius:50%;${i>=3?'background:var(--surface-2);color:var(--text-3)':''};font-size:${i<3?'11':'10'}px;font-weight:700;flex-shrink:0">${i+1}</span>`:'<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);color:var(--text-3);font-size:10px">—</span>';
+          const nb=daysSince(a.created_at)<=7?'<span class="new-badge">NEW</span>':'';
+          return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+            <td style="padding:10px 12px"><div style="display:flex;align-items:center;gap:8px">${rk}<div><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${nb}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></div></div></td>
+            <td style="padding:10px 12px">${stageTag(a.stage)}</td>
+            <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
+            <td style="padding:10px 12px;font-size:12px">${c?.location||'—'}</td>
+            <td style="padding:10px 12px;font-size:12px">${c?.salary_expectation?'€'+Number(c.salary_expectation).toLocaleString():'—'}</td>
+            <td style="padding:10px 12px;font-size:12px">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td>
+            <td style="padding:10px 12px">${decTag(a.hm_decision||'pending')}</td>
+            <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`:'<div class="card-body"><div class="text-muted">No active candidates yet — drop a CV above or use the sourcing tools</div></div>'}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// STAGE 4 — INTERVIEWS
+// ══════════════════════════════════════════════
+function _rdS4Html(d) {
+  const {roleId,apps,interviews}=d;
+  const interviewApps=apps.filter(a=>['interview_1','interview_2','interview_final','assessment'].includes(a.stage));
+  return `
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px">🗓 Stage 4: Interviews</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header">
+        <div class="card-title">Candidates in Interview Stages (${interviewApps.length})</div>
+        <button class="btn btn-primary btn-sm" onclick="openInterviewModal()">+ Schedule Interview</button>
+      </div>
+      ${interviewApps.length?`<table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--surface-2)">
+          ${['Candidate','Stage','Fit ✦','Location',''].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--surface-2)">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${interviewApps.map(a=>{const c=a.candidates;return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+          <td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></td>
+          <td style="padding:10px 12px">${stageTag(a.stage)}</td>
+          <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
+          <td style="padding:10px 12px;font-size:12px">${c?.location||'—'}</td>
+          <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td>
+        </tr>`;}).join('')}</tbody>
+      </table>`:`<div class="card-body"><div class="text-muted">No candidates in interview stages yet — advance candidates from Stage 3</div></div>`}
+    </div>
+    <div class="card" style="border:2px dashed var(--border);background:transparent">
+      <div class="card-body" style="text-align:center;padding:24px">
+        <div style="font-size:24px;margin-bottom:8px">🗓</div>
+        <div style="font-weight:600;margin-bottom:4px">Interview scheduling &amp; feedback forms</div>
+        <div style="font-size:13px;color:var(--text-3)">Full interview panel management, scorecards and AI feedback analysis coming in the next build</div>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// STAGE 5 — OFFER
+// ══════════════════════════════════════════════
+function _rdS5Html(d) {
+  const {roleId,apps}=d;
+  const offerApps=apps.filter(a=>['offer'].includes(a.stage));
+  const hired=apps.filter(a=>a.stage==='hired');
+  return `
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px">💼 Stage 5: Offer</div>
+    ${hired.length?`<div class="card" style="margin-bottom:12px;border:1.5px solid var(--green)"><div class="card-body"><div style="font-size:14px;font-weight:600;color:var(--green-text)">🎉 ${hired.length} candidate${hired.length>1?'s':''} hired!</div>${hired.map(a=>`<div style="font-size:13px;color:var(--text-2);margin-top:4px">${a.candidates?.first_name} ${a.candidates?.last_name}</div>`).join('')}</div></div>`:''}
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header">
+        <div class="card-title">Candidates at Offer Stage (${offerApps.length})</div>
+      </div>
+      ${offerApps.length?`<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--surface-2)">${['Candidate','Salary Exp.','Notice','HM Decision',''].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border)">${h}</th>`).join('')}</tr></thead><tbody>${offerApps.map(a=>{const c=a.candidates;return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''"><td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}</div></td><td style="padding:10px 12px;font-size:12px">${c?.salary_expectation?'€'+Number(c.salary_expectation).toLocaleString():'—'}</td><td style="padding:10px 12px;font-size:12px">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td><td style="padding:10px 12px">${a.hm_decision==='approved'?'<span class="tag tag-green" style="font-size:10px">Approved</span>':a.hm_decision==='rejected'?'<span class="tag tag-red" style="font-size:10px">Rejected</span>':'<span class="tag tag-amber" style="font-size:10px">Pending</span>'}</td><td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td></tr>`;}).join('')}</tbody></table>`:`<div class="card-body"><div class="text-muted">No candidates at offer stage yet</div></div>`}
+    </div>
+    <div class="card" style="border:2px dashed var(--border);background:transparent">
+      <div class="card-body" style="text-align:center;padding:24px">
+        <div style="font-size:24px;margin-bottom:8px">💼</div>
+        <div style="font-weight:600;margin-bottom:4px">Offer workflow coming next</div>
+        <div style="font-size:13px;color:var(--text-3)">Offer letters, counter-offer flow, acceptance emails, rejected → restart pipeline</div>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// STAGE 6 — ONBOARDING
+// ══════════════════════════════════════════════
+function _rdS6Html(d) {
+  const hired=d.apps.filter(a=>a.stage==='hired');
+  return `
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px">🚀 Stage 6: Onboarding</div>
+    ${hired.length===0?`<div class="card" style="margin-bottom:12px;border:1.5px solid var(--amber)"><div class="card-body"><div style="font-size:13px;color:var(--amber-text)">⏳ No hired candidates yet — complete Stage 5 first</div></div></div>`:''}
+    ${hired.map(a=>`<div class="card" style="margin-bottom:12px;border:1.5px solid var(--green)">
+      <div class="card-header"><div class="card-title">🎉 ${a.candidates?.first_name} ${a.candidates?.last_name}</div></div>
+      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${[
+          {label:'Jira (IT Setup)', icon:'🎫', desc:'Create IT onboarding ticket', url:'https://your-jira.atlassian.net/jira/software/projects', color:'#0052CC'},
+          {label:'First Advantage', icon:'🔍', desc:'Background check request', url:'https://fadv.com', color:'#e44d26'},
+          {label:'ADP (Payroll)', icon:'💰', desc:'Set up in payroll system', url:'https://workforcenow.adp.com', color:'#d40000'},
+          {label:'Document Request', icon:'📄', desc:'Send doc request email', url:'#', color:'var(--brand)'},
+        ].map(item=>`<div style="padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="font-size:18px">${item.icon}</span>
+            <span style="font-size:13px;font-weight:600">${item.label}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">${item.desc}</div>
+          <a href="${item.url}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">Open ${item.label} →</a>
+        </div>`).join('')}
+      </div>
+    </div>`).join('')}
+    <div class="card" style="border:2px dashed var(--border);background:transparent">
+      <div class="card-body" style="text-align:center;padding:24px">
+        <div style="font-size:24px;margin-bottom:8px">🚀</div>
+        <div style="font-weight:600;margin-bottom:4px">Full onboarding workflow coming next</div>
+        <div style="font-size:13px;color:var(--text-3)">Jira API, First Advantage background check API, ADP integration, document collection — all in the next build</div>
+      </div>
+    </div>`;
+}
+
+// ── ACTIVITY PANEL ────────────────────────────
+function _rdActivityPanel() {
+  const log=_rdData.activityLog||[];
+  const icons={intake_completed:'📝',jd_submitted:'📤',jd_approved:'✅',req_approved:'🔐',job_posted:'📢',candidate_added:'👤',stage_moved:'➡️',interview_scheduled:'📅',offer_made:'💼',offer_accepted:'🎉',candidate_hired:'🏆',workflow_step_completed:'✓',workflow_step_skipped:'⏭'};
+  const labels={intake_completed:'Intake Completed',jd_submitted:'JD Submitted',jd_approved:'JD Approved',req_approved:'Req Approved',job_posted:'Job Posted',candidate_added:'Candidate Added',stage_moved:'Stage Changed',interview_scheduled:'Interview Scheduled',offer_made:'Offer Made',offer_accepted:'Offer Accepted',candidate_hired:'Candidate Hired',workflow_step_completed:'Step Completed',workflow_step_skipped:'Step Skipped'};
+  const html=log.length?log.map(a=>`<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+    <div style="font-size:16px;flex-shrink:0;width:24px;text-align:center">${icons[a.action_type]||'·'}</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600">${labels[a.action_type]||a.action_type}</div>${a.description?`<div style="font-size:12px;color:var(--text-2)">${a.description}</div>`:''}</div>
+    <div style="font-size:11px;color:var(--text-3);flex-shrink:0;white-space:nowrap">${fmtDate(a.created_at)}</div>
+  </div>`).join(''):`<div class="text-muted" style="padding:20px;text-align:center">No activity yet</div>`;
+  // Show in a modal
+  document.getElementById('modal-activity-title').textContent='Role Activity Log';
+  document.getElementById('modal-activity-body').innerHTML=html;
+  openModal('modal-activity');
+}
+
+// ── MEETING BOOKING ───────────────────────────
+async function _rdSaveMeeting(roleId) {
+  const date=document.getElementById('mtg-date')?.value;
+  const time=document.getElementById('mtg-time')?.value;
+  const attendees=document.getElementById('mtg-attendees')?.value.trim();
+  const link=document.getElementById('mtg-link')?.value.trim();
+  if(!date){toast('Pick a meeting date first','err');return;}
+  const notesMeta=`TIME:${time||'TBD'} LINK:${link||''}`;
+  const {error}=await sb.from('role_intake').upsert({
+    role_id:roleId, intake_date:date, intake_attendees:attendees||null,
+    intake_notes:((_rdData.intake?.intake_notes||'').split('\n---MTG---\n')[0]||'')+'\n---MTG---\n'+notesMeta,
+    updated_at:new Date().toISOString()
+  },{onConflict:'role_id'});
+  if(error){toast('Error: '+error.message,'err');return;}
+  if(!_rdData.intake) _rdData.intake={role_id:roleId};
+  _rdData.intake.intake_date=date;
+  _rdData.intake.intake_attendees=attendees;
+  await _wfCompleteStep(roleId,'intake_meeting');
+  toast('Meeting saved ✓');
+  _rdStage('s1');
+}
+
+function _rdBookIntakeCalendar(roleId) {
+  const date=document.getElementById('mtg-date')?.value;
+  const time=document.getElementById('mtg-time')?.value||'09:00';
+  const dur=parseInt(document.getElementById('mtg-duration')?.value||'60');
+  const attendees=document.getElementById('mtg-attendees')?.value||'';
+  const link=document.getElementById('mtg-link')?.value||'';
+  const role=_rdData.role||{};
+  if(!date){toast('Pick a date first','err');return;}
+  const dt=new Date(date+'T'+time+':00');
+  const end=new Date(dt.getTime()+dur*60000);
+  const fmt=d=>d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+  const ics=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Hiro ATS//EN\r\nBEGIN:VEVENT\r\nDTSTART:${fmt(dt)}\r\nDTEND:${fmt(end)}\r\nSUMMARY:Intake Meeting – ${role.title||'Role'}\r\nDESCRIPTION:Intake meeting for ${role.title||'role'}.${attendees?' Attendees: '+attendees:''}${link?' Teams: '+link:''}\r\n${link?'LOCATION:'+link+'\r\n':''}END:VEVENT\r\nEND:VCALENDAR`;
+  const blob=new Blob([ics],{type:'text/calendar'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`intake-${(role.title||'meeting').replace(/\s+/g,'-').toLowerCase()}.ics`;
+  a.click();
+  toast('Calendar invite downloaded ✓');
+}
+
+// ── CUSTOM JOB BOARD ──────────────────────────
+window._rdCustomBoards=[];
+function _rdAddCustomBoard() {
+  const name=document.getElementById('s2-custom-board-name')?.value.trim();
+  const url=document.getElementById('s2-custom-board-url')?.value.trim();
+  if(!name||!url){toast('Board name and URL required','err');return;}
+  window._rdCustomBoards.push({name,url});
+  const c=document.getElementById('s2-custom-boards');
+  if(c) c.innerHTML=window._rdCustomBoards.map((b,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);margin-top:6px">
+    <span style="font-size:13px;font-weight:600">🌐 ${b.name}</span>
+    <div style="display:flex;gap:6px"><a href="${b.url}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">Post →</a></div>
+  </div>`).join('');
+  document.getElementById('s2-custom-board-name').value='';
+  document.getElementById('s2-custom-board-url').value='';
+}
+
+window._rdMarkPosted=function(roleId,boardKey,btn){
+  if(!_rdData._customWf) _rdData._customWf={};
+  const key='job_posted_'+boardKey;
+  if(_rdData._customWf[key]){delete _rdData._customWf[key];btn.textContent='Mark Posted';btn.className='btn btn-primary btn-sm';btn.style.fontSize='11px';}
+  else{_rdData._customWf[key]=true;btn.textContent='Undo';btn.className='btn btn-ghost btn-sm';btn.style.fontSize='11px';const row=btn.closest('div[style*="display:flex;align-items:center"]');if(row){row.style.borderColor='var(--green)';row.style.background='var(--green-bg)';}}
+};
 
 // ── SAVE INTAKE ────────────────────────────────
 async function saveRoleIntake(roleId) {
@@ -11686,6 +11883,21 @@ initApp();
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-approval-chain')">Cancel</button>
       <button class="btn btn-primary" onclick="_acSaveChain()">Save Chain</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACTIVITY LOG MODAL -->
+<div class="modal-overlay" id="modal-activity" style="display:none" onclick="if(event.target===this)closeModal('modal-activity')">
+  <div class="modal" style="max-width:600px;width:90%;max-height:85vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-activity-title">Role Activity Log</div>
+      <button class="modal-close" onclick="closeModal('modal-activity')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-activity-body" style="overflow-y:auto;flex:1;padding:16px">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-activity')">Close</button>
     </div>
   </div>
 </div>
