@@ -1972,10 +1972,10 @@ function _escHtml(str) {
 // ── EMAIL TEMPLATES ───────────────────────────
 var _ET_DEFAULTS = [
   {id:'_d1',name:'Initial Outreach',type:'outreach',subject:'Exciting opportunity at Sovos — {{role_title}}',
-   body:'<p style="margin:0 0 16px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">I came across your profile and thought you could be a great fit for a <strong>{{role_title}}</strong> position we have open at Sovos.</p><div style="background:#eff6ff;border-left:4px solid #1a56db;border-radius:6px;padding:14px 18px;margin:20px 0"><p style="margin:0 0 6px;font-weight:700;color:#1e40af">About Sovos</p><p style="margin:0;font-size:13px;color:#374151">A leading global tax and compliance technology company trusted by thousands of businesses across 60+ countries.</p></div><p style="margin:0 0 20px">Would you be open to a quick 20-minute call this week to explore the opportunity?</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
+   body:'<p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">I came across your profile and thought you could be a great fit for a <strong>{{role_title}}</strong> position we have open at Sovos.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0"><tr><td bgcolor="#1a56db" width="4" style="width:4px;background-color:#1a56db">&nbsp;</td><td bgcolor="#eff6ff" style="padding:14px 18px;background-color:#eff6ff"><p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;color:#1e40af">About Sovos</p><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#374151">A leading global tax and compliance technology company trusted by thousands of businesses across 60+ countries.</p></td></tr></table><p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif">Would you be open to a quick 20-minute call this week to explore the opportunity?</p><p style="margin:20px 0 2px;font-family:Arial,Helvetica,sans-serif">Best regards,</p><p style="margin:0;font-weight:bold;font-family:Arial,Helvetica,sans-serif">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280;font-family:Arial,Helvetica,sans-serif">{{recruiter_title}} &middot; Sovos</p>',
    sort_order:1},
   {id:'_d2',name:'Interview Invitation',type:'interview_invite',subject:'Interview Invitation — {{role_title}} at Sovos',
-   body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">We are delighted to invite you to a <strong>{{interview_round}}</strong> interview for the <strong>{{role_title}}</strong> position at Sovos.</p><div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:18px 20px;margin:20px 0"><p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#1a56db;text-transform:uppercase;letter-spacing:.5px">Interview Details</p><table style="border-collapse:collapse;width:100%;font-size:14px"><tr><td style="padding:5px 16px 5px 0;color:#6b7280;white-space:nowrap">Date</td><td style="padding:5px 0;font-weight:500">{{interview_date}}</td></tr><tr><td style="padding:5px 16px 5px 0;color:#6b7280">Time</td><td style="padding:5px 0;font-weight:500">{{interview_time}}</td></tr><tr><td style="padding:5px 16px 5px 0;color:#6b7280">Format</td><td style="padding:5px 0;font-weight:500">{{interview_format}}</td></tr><tr><td style="padding:5px 16px 5px 0;color:#6b7280">Interviewer</td><td style="padding:5px 0;font-weight:500">{{interviewer_name}}</td></tr></table></div><p style="margin:0 0 14px">Join link: <a href="{{interview_link}}" style="color:#1a56db">Click here to join</a></p><p style="margin:0 0 20px">Please reply to confirm your availability, or let me know if you need to reschedule.</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
+   body:'<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">We are delighted to invite you to a <strong>{{interview_round}}</strong> interview for the <strong>{{role_title}}</strong> position at Sovos.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0"><tr><td bgcolor="#f9fafb" style="padding:18px 20px;border:1px solid #e5e7eb;background-color:#f9fafb"><p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;color:#1a56db">INTERVIEW DETAILS</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100" style="padding:4px 16px 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280;vertical-align:top">Date</td><td style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#111827">{{interview_date}}</td></tr><tr><td style="padding:4px 16px 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280">Time</td><td style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#111827">{{interview_time}}</td></tr><tr><td style="padding:4px 16px 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280">Format</td><td style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#111827">{{interview_format}}</td></tr><tr><td style="padding:4px 16px 4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280">Interviewer</td><td style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#111827">{{interviewer_name}}</td></tr></table></td></tr></table><p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">Join link: <a href="{{interview_link}}" style="color:#1a56db">Click here to join</a></p><p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif">Please reply to confirm your availability, or let me know if you need to reschedule.</p><p style="margin:20px 0 2px;font-family:Arial,Helvetica,sans-serif">Best regards,</p><p style="margin:0;font-weight:bold;font-family:Arial,Helvetica,sans-serif">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280;font-family:Arial,Helvetica,sans-serif">{{recruiter_title}} &middot; Sovos</p>',
    sort_order:2},
   {id:'_d3',name:'Rejection — After Screening',type:'rejection',subject:'Update on your application — {{role_title}} at Sovos',
    body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">Thank you for taking the time to speak with us about the <strong>{{role_title}}</strong> role at Sovos.</p><p style="margin:0 0 14px">After careful consideration, we have decided to move forward with candidates whose experience more closely matches our current requirements. This was not an easy decision.</p><p style="margin:0 0 20px">We will keep your profile on file and would love to stay in touch for future opportunities that may be a great match.</p><p style="margin:0 0 20px">We wish you all the best in your search.</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
@@ -1984,7 +1984,7 @@ var _ET_DEFAULTS = [
    body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">Thank you for the time and energy you invested in the interview process for the <strong>{{role_title}}</strong> role. It was a genuine pleasure getting to know you.</p><p style="margin:0 0 14px">After careful deliberation, we have decided to proceed with another candidate for this role. This was a difficult decision — you demonstrated real strengths throughout the process.</p><p style="margin:0 0 20px">I sincerely hope our paths cross again and I would love to stay in touch.</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
    sort_order:4},
   {id:'_d5',name:'Offer Introduction',type:'offer',subject:'Offer of Employment — {{role_title}} at Sovos',
-   body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">It is my absolute pleasure to extend an offer of employment for the <strong>{{role_title}}</strong> position at Sovos!</p><div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:6px;padding:14px 18px;margin:20px 0"><p style="margin:0;color:#166534;font-size:14px">Our HR team will be in touch shortly with the formal offer details. Please feel free to reach out with any questions in the meantime — we are here to help.</p></div><p style="margin:0 0 20px">We are truly excited to welcome you to the Sovos team.</p><p style="margin:20px 0 2px">Warmest regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
+   body:'<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">It is my absolute pleasure to extend an offer of employment for the <strong>{{role_title}}</strong> position at Sovos!</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0"><tr><td bgcolor="#16a34a" width="4" style="width:4px;background-color:#16a34a">&nbsp;</td><td bgcolor="#f0fdf4" style="padding:14px 18px;background-color:#f0fdf4"><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#166534">Our HR team will be in touch shortly with the formal offer details. Please feel free to reach out with any questions in the meantime &mdash; we are here to help.</p></td></tr></table><p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif">We are truly excited to welcome you to the Sovos team.</p><p style="margin:20px 0 2px;font-family:Arial,Helvetica,sans-serif">Warmest regards,</p><p style="margin:0;font-weight:bold;font-family:Arial,Helvetica,sans-serif">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280;font-family:Arial,Helvetica,sans-serif">{{recruiter_title}} &middot; Sovos</p>',
    sort_order:5},
   {id:'_d6',name:'Follow-up After Interview',type:'follow_up',subject:'Following up — {{role_title}} interview',
    body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">I wanted to reach out following your <strong>{{interview_round}}</strong> interview for the <strong>{{role_title}}</strong> role at Sovos.</p><p style="margin:0 0 14px">The team genuinely enjoyed speaking with you and we are working through our decision process. We aim to be back in touch by <strong>{{expected_date}}</strong>.</p><p style="margin:0 0 20px">Thank you for your patience — we really appreciate it. Please do not hesitate to reach out if you have any questions in the meantime.</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
@@ -1993,10 +1993,10 @@ var _ET_DEFAULTS = [
    body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">Thank you for letting us know your decision regarding the <strong>{{role_title}}</strong> role. We genuinely appreciate the time and interest you showed throughout the process.</p><p style="margin:0 0 20px">We wish you all the very best in your next chapter — and please do keep us in mind for the future.</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
    sort_order:7},
   {id:'_d8',name:'General Update',type:'general',subject:'Update on your application — {{role_title}}',
-   body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">I wanted to share a quick update on your application for the <strong>{{role_title}}</strong> role at Sovos.</p><div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:14px 18px;margin:20px 0"><p style="margin:0;font-size:14px;color:#374151">{{message}}</p></div><p style="margin:0 0 20px">Please feel free to reach out if you have any questions — I am happy to help.</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
+   body:'<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">I wanted to share a quick update on your application for the <strong>{{role_title}}</strong> role at Sovos.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0"><tr><td bgcolor="#f9fafb" style="padding:14px 18px;border:1px solid #e5e7eb;background-color:#f9fafb"><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#374151">{{message}}</p></td></tr></table><p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif">Please feel free to reach out if you have any questions &mdash; I am happy to help.</p><p style="margin:20px 0 2px;font-family:Arial,Helvetica,sans-serif">Best regards,</p><p style="margin:0;font-weight:bold;font-family:Arial,Helvetica,sans-serif">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280;font-family:Arial,Helvetica,sans-serif">{{recruiter_title}} &middot; Sovos</p>',
    sort_order:8},
   {id:'_d9',name:'Assessment Invitation (EPP)',type:'general',subject:'Next steps in your application — {{role_title}} at Sovos',
-   body:'<p style="margin:0 0 14px">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px">Thank you for applying to Sovos! We are excited to invite you to take the next step in our process.</p><div style="background:#eff6ff;border-left:4px solid #1a56db;border-radius:6px;padding:16px 20px;margin:20px 0"><p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#1e40af">Your Next Step: Complete the Sovos Assessment</p><p style="margin:0;color:#374151;font-size:13px">We ask every candidate — from interns to our CEO — to complete a short pre-employment assessment. It helps us understand how you work best and ensures everyone gets a fair opportunity.</p></div><p style="margin:0 0 6px;font-weight:700;color:#1a56db">Why we do this:</p><ul style="margin:0 0 16px;padding-left:0;list-style:none"><li style="padding:3px 0">&#10003; Gives us objective data to reduce bias</li><li style="padding:3px 0">&#10003; Helps identify people who thrive at Sovos</li><li style="padding:3px 0">&#10003; Ensures everyone gets a fair shot</li></ul><p style="margin:0 0 6px;font-weight:700;color:#1a56db">What it includes:</p><ul style="margin:0 0 20px;padding-left:0;list-style:none"><li style="padding:3px 0">&#8226; <strong>Personality questionnaire</strong> (untimed) — respond based on your natural preferences</li><li style="padding:3px 0">&#8226; <strong>Reasoning exercises</strong> (approx. 30 min) — no preparation needed</li></ul><p style="margin:0 0 20px">The assessment link will be sent separately. Please complete it within 5 days. If you have any questions, just reply to this email.</p><p style="margin:20px 0 2px">Best regards,</p><p style="margin:0;font-weight:600">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280">{{recruiter_title}} · Sovos</p>',
+   body:'<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">Hi <strong>{{candidate_name}}</strong>,</p><p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif">Thank you for applying to Sovos! We are excited to invite you to take the next step in our process.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0"><tr><td bgcolor="#1a56db" width="4" style="width:4px;background-color:#1a56db">&nbsp;</td><td bgcolor="#eff6ff" style="padding:16px 20px;background-color:#eff6ff"><p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#1e40af">Your Next Step: Complete the Sovos Assessment</p><p style="margin:0;font-family:Arial,Helvetica,sans-serif;color:#374151;font-size:13px">We ask every candidate &mdash; from interns to our CEO &mdash; to complete a short pre-employment assessment. It helps us understand how you work best and ensures everyone gets a fair opportunity.</p></td></tr></table><p style="margin:0 0 6px;font-weight:bold;color:#1a56db;font-family:Arial,Helvetica,sans-serif">Why we do this:</p><p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif">&#10003; &nbsp;Gives us objective data to reduce bias</p><p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif">&#10003; &nbsp;Helps identify people who thrive at Sovos</p><p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif">&#10003; &nbsp;Ensures everyone gets a fair shot</p><p style="margin:0 0 6px;font-weight:bold;color:#1a56db;font-family:Arial,Helvetica,sans-serif">What it includes:</p><p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif">&#8226; &nbsp;<strong>Personality questionnaire</strong> (untimed) &mdash; respond based on your natural preferences</p><p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif">&#8226; &nbsp;<strong>Reasoning exercises</strong> (approx. 30 min) &mdash; no preparation needed</p><p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif">The assessment link will be sent separately. Please complete it within 5 days. If you have any questions, just reply to this email.</p><p style="margin:20px 0 2px;font-family:Arial,Helvetica,sans-serif">Best regards,</p><p style="margin:0;font-weight:bold;font-family:Arial,Helvetica,sans-serif">{{recruiter_name}}</p><p style="margin:2px 0 0;font-size:13px;color:#6b7280;font-family:Arial,Helvetica,sans-serif">{{recruiter_title}} &middot; Sovos</p>',
    sort_order:9}
 ];
 var _etTemplates = [];      // THE single source — populated once by _etLoad()
@@ -2022,8 +2022,11 @@ function _etLoad() {
         var plainTextOnes = [];
         _etTemplates = res.data.map(function(t) {
           var def = defByName[(t.name||'').toLowerCase()];
-          if (def && !(t.body||'').trim().startsWith('<')) {
-            plainTextOnes.push({id:t.id, def:def, sort_order:t.sort_order});
+          // Always use the latest built-in HTML body for default templates (ensures Outlook-safe version)
+          // Only custom templates (no matching default) use the Supabase body
+          if (def) {
+            var needsUpgrade = !(t.body||'').trim().startsWith('<') || (t.body||'').indexOf('border-radius') !== -1;
+            if (needsUpgrade) plainTextOnes.push({id:t.id, def:def, sort_order:t.sort_order});
             return {id:t.id, name:t.name, type:t.type||def.type, subject:t.subject||def.subject, body:def.body, sort_order:t.sort_order||def.sort_order};
           }
           return t;
@@ -9227,44 +9230,43 @@ function _copyHtmlToClipboard(fullHtml, plainText) {
 }
 
 function _wrapEmailHtml(bodyHtml) {
-  // Table-based layout — Outlook uses Word renderer, requires tables not divs/flexbox
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
-    '<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:Arial,Helvetica,sans-serif">' +
-    '<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f5f9">' +
+  // Fully Outlook-safe: table-based, pixel line-height, no border-radius, font-family on every cell
+  return '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">' +
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head>' +
+    '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1.0"/>' +
+    '</head>' +
+    '<body style="margin:0;padding:0;background-color:#f1f5f9;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f5f9" style="background-color:#f1f5f9">' +
       '<tr><td align="center" style="padding:32px 16px">' +
+        '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff">' +
 
-        '<table width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="max-width:600px">' +
+          // Top blue bar
+          '<tr><td bgcolor="#1a56db" height="4" style="height:4px;font-size:0;line-height:0;background-color:#1a56db">&nbsp;</td></tr>' +
 
-          // Top blue accent bar
-          '<tr><td bgcolor="#1a56db" height="4" style="font-size:4px;line-height:4px">&nbsp;</td></tr>' +
-
-          // Header: Sovos wordmark + Talent Acquisition
-          '<tr><td style="padding:22px 32px 18px;border-bottom:1px solid #e5e7eb;background-color:#ffffff">' +
-            '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
-              '<td style="vertical-align:middle">' +
-                '<span style="font-size:20px;font-weight:700;color:#111827;font-family:Arial,Helvetica,sans-serif;letter-spacing:-.3px">Sovos</span>' +
-                '&nbsp;&nbsp;' +
-                '<span style="font-size:11px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;font-weight:400;text-transform:uppercase;letter-spacing:.5px">Talent Acquisition</span>' +
-              '</td>' +
+          // Header
+          '<tr><td bgcolor="#ffffff" style="padding:20px 32px 16px 32px;border-bottom:1px solid #e5e7eb;background-color:#ffffff">' +
+            '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
+              '<td style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;color:#111827;vertical-align:middle">Sovos</td>' +
+              '<td style="width:10px"></td>' +
+              '<td style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#6b7280;font-weight:normal;vertical-align:middle">TALENT ACQUISITION</td>' +
             '</tr></table>' +
           '</td></tr>' +
 
-          // Body content
-          '<tr><td style="padding:32px;font-size:14px;line-height:1.85;color:#374151;font-family:Arial,Helvetica,sans-serif;background-color:#ffffff">' +
+          // Body
+          '<tr><td bgcolor="#ffffff" style="padding:32px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#374151;background-color:#ffffff">' +
             bodyHtml +
           '</td></tr>' +
 
-          // Divider row
-          '<tr><td bgcolor="#e5e7eb" height="1" style="font-size:1px;line-height:1px">&nbsp;</td></tr>' +
+          // Divider
+          '<tr><td bgcolor="#e5e7eb" height="1" style="height:1px;font-size:0;line-height:0;background-color:#e5e7eb">&nbsp;</td></tr>' +
 
           // Footer
-          '<tr><td bgcolor="#f9fafb" style="padding:18px 32px">' +
-            '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
-              '<td style="font-size:11px;color:#9ca3af;font-family:Arial,Helvetica,sans-serif;line-height:1.6">' +
-                '<span style="color:#374151;font-weight:600">Sovos</span> &nbsp;&middot;&nbsp; Global Tax &amp; Compliance Technology<br>' +
-                '<span style="font-size:10px;color:#d1d5db">Sent via Hiro &nbsp;&middot;&nbsp; Please do not reply directly to this message</span>' +
-              '</td>' +
-            '</tr></table>' +
+          '<tr><td bgcolor="#f9fafb" style="padding:16px 32px;background-color:#f9fafb">' +
+            '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#9ca3af">' +
+              '<strong style="color:#374151;font-weight:600">Sovos</strong> &nbsp;&middot;&nbsp; Global Tax &amp; Compliance Technology<br>' +
+              '<span style="font-size:10px;color:#d1d5db">Sent via Hiro &nbsp;&middot;&nbsp; Please do not reply directly to this message</span>' +
+            '</p>' +
           '</td></tr>' +
 
         '</table>' +
@@ -9275,15 +9277,29 @@ function _wrapEmailHtml(bodyHtml) {
 
 function _downloadEml(toEmail, subject, bodyHtml, fromEmail) {
   var from = fromEmail || (currentUser ? currentUser.email : '') || '';
-  var eml = [
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    'To: ' + toEmail,
-    from ? 'From: ' + from : '',
-    'Subject: ' + subject,
-    '',
-    _wrapEmailHtml(bodyHtml)
-  ].filter(function(l){ return l !== ''; }).join('\r\n');
+  var fullHtml = _wrapEmailHtml(bodyHtml);
+  var plainText = bodyHtml.replace(/<br\s*\/?>/gi,'\n').replace(/<\/p>/gi,'\n').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/\s*\n\s*/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  var boundary = 'HiroBoundary_' + Date.now();
+  var eml = 'MIME-Version: 1.0\r\n' +
+    'X-Unsent: 1\r\n' +
+    'Content-Type: multipart/alternative; boundary="' + boundary + '"\r\n' +
+    'To: ' + toEmail + '\r\n' +
+    (from ? 'From: ' + from + '\r\n' : '') +
+    'Subject: ' + subject + '\r\n' +
+    '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Type: text/plain; charset=UTF-8\r\n' +
+    'Content-Transfer-Encoding: 8bit\r\n' +
+    '\r\n' +
+    plainText + '\r\n' +
+    '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Type: text/html; charset=UTF-8\r\n' +
+    'Content-Transfer-Encoding: 8bit\r\n' +
+    '\r\n' +
+    fullHtml + '\r\n' +
+    '\r\n' +
+    '--' + boundary + '--';
   var blob = new Blob([eml], {type: 'message/rfc822'});
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
@@ -9293,24 +9309,38 @@ function _downloadEml(toEmail, subject, bodyHtml, fromEmail) {
   a.click();
   document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
-  toast('EML file downloaded — double-click to open &amp; send in Outlook');
+  toast('Click the .eml file in your browser bar to open in Outlook compose mode');
 }
 
 function _cfpDownloadEml(email, subject, bodyHtml) {
-  // Get subject/body from compose panel if not passed in
   if (!subject) subject = document.getElementById('cfp-compose-subject') ? document.getElementById('cfp-compose-subject').value : '';
   if (!bodyHtml) bodyHtml = _getCfpBodyHtml();
   var from = currentUser ? currentUser.email : '';
   var fullHtml = _wrapEmailHtml(bodyHtml);
-  var eml = [
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    'To: ' + email,
-    from ? 'From: ' + from : '',
-    'Subject: ' + subject,
-    '',
-    fullHtml
-  ].filter(function(l){ return l !== ''; }).join('\r\n');
+  // Plain text fallback for the multipart envelope
+  var plainText = bodyHtml.replace(/<br\s*\/?>/gi,'\n').replace(/<\/p>/gi,'\n').replace(/<\/tr>/gi,'\n').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').replace(/&#10003;/g,'✓').replace(/&#8226;/g,'•').replace(/\s*\n\s*/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  var boundary = 'HiroBoundary_' + Date.now();
+  // X-Unsent: 1 tells Outlook to open in compose/send mode (not read mode)
+  var eml = 'MIME-Version: 1.0\r\n' +
+    'X-Unsent: 1\r\n' +
+    'Content-Type: multipart/alternative; boundary="' + boundary + '"\r\n' +
+    'To: ' + email + '\r\n' +
+    (from ? 'From: ' + from + '\r\n' : '') +
+    'Subject: ' + subject + '\r\n' +
+    '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Type: text/plain; charset=UTF-8\r\n' +
+    'Content-Transfer-Encoding: 8bit\r\n' +
+    '\r\n' +
+    plainText + '\r\n' +
+    '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Type: text/html; charset=UTF-8\r\n' +
+    'Content-Transfer-Encoding: 8bit\r\n' +
+    '\r\n' +
+    fullHtml + '\r\n' +
+    '\r\n' +
+    '--' + boundary + '--';
   var blob = new Blob([eml], {type: 'message/rfc822'});
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
@@ -9320,7 +9350,6 @@ function _cfpDownloadEml(email, subject, bodyHtml) {
   a.click();
   document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
-  // Show a prominent instruction modal
   var ex = document.getElementById('_hiro-eml-toast');
   if (ex) ex.remove();
   var tip = document.createElement('div');
@@ -9330,9 +9359,9 @@ function _cfpDownloadEml(email, subject, bodyHtml) {
     '<div style="display:flex;align-items:flex-start;gap:12px">' +
       '<span style="font-size:24px;flex-shrink:0">📨</span>' +
       '<div>' +
-        '<b style="font-size:14px">Email downloaded!</b><br>' +
-        'Double-click <b>' + a.download + '</b> in your Downloads folder — Outlook will open it with full formatting ready to send.<br>' +
-        '<span style="color:#94a3b8;font-size:11px;margin-top:4px;display:block">Want 1-click sending? Set up Power Automate in <b>Settings → Integrations</b>.</span>' +
+        '<b style="font-size:14px">Opening in Outlook</b><br>' +
+        'Click <b>' + a.download + '</b> in your browser download bar — Outlook opens in compose mode, ready to send.<br>' +
+        '<span style="color:#94a3b8;font-size:11px;margin-top:4px;display:block">For 1-click sending without downloads, set up Power Automate in <b>Settings → Integrations</b>.</span>' +
       '</div>' +
       '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">&times;</button>' +
     '</div>';
