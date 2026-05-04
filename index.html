@@ -7496,7 +7496,8 @@ function parseJdHtml(html, filename='') {
     const tag=el.tagName.toUpperCase();
     const text=el.textContent.trim();
     if(!text) continue;
-    if(isBoilerplate(text)) continue;
+    // Don't boilerplate-check UL/OL at the container level — check individual items instead
+    if(tag!=='UL'&&tag!=='OL'&&isBoilerplate(text)) continue;
     if(isEndSection(text)){ section='end'; break; }
 
     // Tables — used in Sovos templates for metadata header rows and section headers
