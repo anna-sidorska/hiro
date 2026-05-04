@@ -3354,7 +3354,7 @@ async function viewRoleDetail(roleId) {
 
   let roleJd=null,intake=null,wfSteps=[],jdApprovals=[],activityLog=[],interviews=[];
   const ext=await Promise.allSettled([
-    sb.from('job_descriptions').select('id,title,content,competencies,updated_at').eq('role_id',roleId).order('updated_at',{ascending:false}).limit(1).maybeSingle(),
+    sb.from('job_descriptions').select('id,title,competencies,updated_at,department,level,region,summary').eq('role_id',roleId).order('updated_at',{ascending:false}).limit(1).maybeSingle(),
     sb.from('role_intake').select('*').eq('role_id',roleId).maybeSingle(),
     sb.from('role_workflow_steps').select('*').eq('role_id',roleId).order('created_at'),
     sb.from('role_jd_approvals').select('*').eq('role_id',roleId).order('created_at',{ascending:false}),
@@ -3691,7 +3691,7 @@ function _rdS1Html(d) {
           ${apBadge}
         </div>
         <div style="display:flex;gap:6px">
-          ${roleJd?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>`:`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>`}
+          ${roleJd?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>`:`<div style="display:flex;gap:6px"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openLinkJdModal('${roleId}')">Link from Library</button></div>`}
           ${roleJd&&apStatus!=='approved'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Submit for Approval</button>`:''}
         </div>
       </div>
@@ -4648,9 +4648,10 @@ async function _rdGenerateLinkedInPost(roleId) {
 async function _submitJdApproval(roleId,jdId) {
   if(!jdId){toast('No JD linked to this role','err');return;}
   const uid=(await sb.auth.getUser()).data.user?.id;
-  const {data:jd}=await sb.from('job_descriptions').select('title,content').eq('id',jdId).maybeSingle();
+  const {data:jd}=await sb.from('job_descriptions').select('title,summary,responsibilities,requirements').eq('id',jdId).maybeSingle();
   const version=((_rdData.jdApprovals||[]).length)+1;
-  const {data:ap,error}=await sb.from('role_jd_approvals').insert({role_id:roleId,jd_id:jdId,jd_version:version,jd_snapshot:jd?.content||null,status:'pending',submitted_by:uid,submitted_at:new Date().toISOString()}).select().single();
+  const snapshot=jd?`${jd.summary||''}\n\nResponsibilities:\n${jd.responsibilities||''}\n\nRequirements:\n${jd.requirements||''}`.trim():null;
+  const {data:ap,error}=await sb.from('role_jd_approvals').insert({role_id:roleId,jd_id:jdId,jd_version:version,jd_snapshot:snapshot||null,status:'pending',submitted_by:uid,submitted_at:new Date().toISOString()}).select().single();
   if(error){toast('Error: '+error.message,'err');return;}
   _rdData.jdApprovals=[ap,...(_rdData.jdApprovals||[])];
   try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' submitted for approval'});}catch(e){}
