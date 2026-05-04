@@ -4329,11 +4329,17 @@ async function _rdSaveMeeting(roleId) {
   const link=document.getElementById('mtg-link')?.value.trim();
   if(!date){toast('Pick a meeting date first','err');return;}
   const notesMeta=`TIME:${time||'TBD'} LINK:${link||''}`;
-  const {error}=await sb.from('role_intake').upsert({
-    role_id:roleId, intake_date:date, intake_attendees:attendees||null,
+  const payload={intake_date:date, intake_attendees:attendees||null,
     intake_notes:((_rdData.intake?.intake_notes||'').split('\n---MTG---\n')[0]||'')+'\n---MTG---\n'+notesMeta,
-    updated_at:new Date().toISOString()
-  },{onConflict:'role_id'});
+    updated_at:new Date().toISOString()};
+  let error;
+  if(_rdData.intake?.id){
+    ({error}=await sb.from('role_intake').update(payload).eq('id',_rdData.intake.id));
+  } else {
+    const res=await sb.from('role_intake').insert({role_id:roleId,...payload}).select('id').maybeSingle();
+    error=res.error;
+    if(res.data?.id){if(!_rdData.intake)_rdData.intake={role_id:roleId};_rdData.intake.id=res.data.id;}
+  }
   if(error){toast('Error: '+error.message,'err');return;}
   if(!_rdData.intake) _rdData.intake={role_id:roleId};
   _rdData.intake.intake_date=date;
