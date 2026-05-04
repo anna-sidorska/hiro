@@ -6,6 +6,7 @@
 <title>Hiro · TA Ops</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
@@ -3616,10 +3617,14 @@ function _rdS1Html(d) {
           </div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-outline btn-sm" onclick="_rdBookIntakeCalendar('${roleId}')">📅 Download .ics (Outlook)</button>
-          <button class="btn btn-primary btn-sm" onclick="_rdSaveMeeting('${roleId}')">Save &amp; Mark Scheduled</button>
+          <button class="btn btn-outline btn-sm" onclick="_rdBookIntakeCalendar('${roleId}')">📅 Download .ics</button>
+          <button class="btn btn-primary btn-sm" onclick="_rdSaveMeeting('${roleId}')">${_outlookAccount ? '📅 Save & Add to Outlook' : 'Save & Mark Scheduled'}</button>
         </div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:8px">Outlook calendar integration coming soon — for now download the .ics file and attach in Outlook</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px">
+          ${_outlookAccount
+            ? '✅ Outlook connected as <strong>' + (_outlookAccount.name||_outlookAccount.username) + '</strong> — event will be created in your calendar. For invites, enter attendees as <em>email@sovos.com</em> or <em>Name &lt;email&gt;</em>.'
+            : 'Connect Outlook in <a href="#" onclick="openSettingsModal(\'integrations\');return false" style="color:var(--brand)">Settings → Integrations</a> to create events directly in your calendar.'}
+        </div>
       </div>
     </div>
 
@@ -4345,7 +4350,20 @@ async function _rdSaveMeeting(roleId) {
   _rdData.intake.intake_date=date;
   _rdData.intake.intake_attendees=attendees;
   await _wfCompleteStep(roleId,'intake_meeting');
-  toast('Meeting saved ✓');
+  // If Outlook connected, create calendar event automatically
+  if(_outlookAccount) {
+    const role=_rdData.role||{};
+    const dur=parseInt(document.getElementById('mtg-duration')?.value||'60');
+    const created=await _outlookCreateEvent({
+      title:`Intake Meeting – ${role.title||'Role'}`,
+      date, time, durationMins:dur,
+      attendees, location:link,
+      description:`Intake meeting for ${role.title||'role'} at Sovos.${link?' Teams: '+link:''}`
+    });
+    toast(created ? 'Meeting saved & added to Outlook ✓' : 'Saved to Hiro (Outlook event failed)');
+  } else {
+    toast('Meeting saved ✓');
+  }
   _rdStage('s1');
 }
 
@@ -8878,7 +8896,22 @@ function _settingsRenderIntegrations() {
     '<button class="btn btn-sm" style="background:#1a56db;color:#fff;border:none" onclick="var v=document.getElementById(\'int-pa-webhook\').value.trim();localStorage.setItem(\'hiro_pa_webhook\',v);toast(v?\'Power Automate webhook saved — Send Email will now use your PA flow ✓\':\'PA webhook cleared\');_settingsRenderIntegrations()">Save Webhook URL</button>' +
     '</div>';
 
-  html += intItem('outlook','Outlook / Microsoft 365','📧',{tenant_id:'Tenant ID',client_id:'Client ID'});
+  // ── Outlook / Microsoft 365 (MSAL OAuth) ──
+  var olUser = _outlookAccount ? _outlookAccount.username : null;
+  var olName = _outlookAccount ? (_outlookAccount.name || olUser) : null;
+  html += '<div style="border:1.5px solid ' + (olUser ? 'var(--green)' : 'var(--border)') + ';border-radius:var(--r-lg);padding:14px;margin-bottom:10px' + (olUser ? ';background:var(--green-bg)' : '') + '">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+    '<span style="font-size:15px">📅</span>' +
+    '<div style="font-weight:600;font-size:13px;flex:1">Outlook Calendar (Microsoft 365)</div>' +
+    (olUser ? '<span class="tag tag-green" style="font-size:10px">Connected</span>' : '<span class="tag tag-gray" style="font-size:10px">Not connected</span>') +
+    '</div>' +
+    (olUser ?
+      '<div style="font-size:12px;color:var(--text-2);margin-bottom:10px">Signed in as <strong>' + olName + '</strong> (' + olUser + ')<br>Intake meetings will be created directly in your Outlook calendar with invites sent to attendees.</div>' +
+      '<button class="btn btn-outline btn-sm" onclick="_outlookDisconnect()">Disconnect</button>' :
+      '<div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Connect to create intake meetings directly in Outlook and send calendar invites. Uses Microsoft OAuth — your credentials never leave the browser.</div>' +
+      '<button class="btn btn-sm" style="background:#0078d4;color:#fff;border:none;display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:600" onclick="_outlookConnect()"><svg width="16" height="16" viewBox="0 0 23 23" fill="none"><rect x="1" y="1" width="10" height="10" fill="#F25022"/><rect x="12" y="1" width="10" height="10" fill="#7FBA00"/><rect x="1" y="12" width="10" height="10" fill="#00A4EF"/><rect x="12" y="12" width="10" height="10" fill="#FFB900"/></svg> Sign in with Microsoft</button>'
+    ) +
+    '</div>';
   html += intItem('criteria','Criteria Corp (EPP/CCAT)','🧠',{api_key:'API Key',company_id:'Company ID'});
   html += intItem('docusign','DocuSign','✍️',{account_id:'Account ID',integration_key:'Integration Key',user_id:'User ID'});
   html += intItem('fadv','First Advantage (Background Checks)','🔍',{api_key:'API Key',package_id:'Package ID'});
@@ -8891,6 +8924,120 @@ function _settingsRenderIntegrations() {
   html += intItem('cvlibrary','CV-Library','🟠',{api_key:'API Key'});
   container.innerHTML = html;
 }
+
+// ── OUTLOOK / MICROSOFT GRAPH ─────────────────
+const _MSAL_CLIENT_ID = '7595fde5-1817-469e-a544-35df17f77fbe';
+const _MSAL_TENANT_ID = 'afc1e6f9-afe0-467b-bee8-0d13411821be';
+const _MSAL_SCOPES = ['User.Read','Calendars.ReadWrite'];
+let _msalInstance = null;
+let _outlookAccount = null;
+
+function _msalInit() {
+  if (_msalInstance) return _msalInstance;
+  if (typeof msal === 'undefined') { console.warn('MSAL not loaded'); return null; }
+  _msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId: _MSAL_CLIENT_ID,
+      authority: 'https://login.microsoftonline.com/' + _MSAL_TENANT_ID,
+      redirectUri: window.location.origin + window.location.pathname.replace(/\/$/,'') + '/'
+    },
+    cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
+  });
+  _msalInstance.handleRedirectPromise().then(resp => {
+    if (resp && resp.account) { _outlookAccount = resp.account; if (document.getElementById('settings-integrations-content')) _settingsRenderIntegrations(); }
+  }).catch(e => console.error('MSAL redirect error', e));
+  const accounts = _msalInstance.getAllAccounts();
+  if (accounts.length > 0) _outlookAccount = accounts[0];
+  return _msalInstance;
+}
+
+async function _outlookConnect() {
+  const instance = _msalInit();
+  if (!instance) { toast('MSAL library not loaded','err'); return; }
+  try {
+    const resp = await instance.loginPopup({ scopes: _MSAL_SCOPES, prompt: 'select_account' });
+    _outlookAccount = resp.account;
+    toast('Outlook connected as ' + resp.account.username + ' ✓');
+    _settingsRenderIntegrations();
+  } catch(e) {
+    if (e.errorCode !== 'user_cancelled') toast('Outlook login failed: ' + (e.message||e.errorCode), 'err');
+  }
+}
+
+async function _outlookDisconnect() {
+  const instance = _msalInit();
+  if (!instance || !_outlookAccount) return;
+  try { await instance.logoutPopup({ account: _outlookAccount }); } catch(e) {}
+  _outlookAccount = null;
+  toast('Outlook disconnected');
+  _settingsRenderIntegrations();
+}
+
+async function _outlookGetToken() {
+  const instance = _msalInit();
+  if (!instance || !_outlookAccount) return null;
+  try {
+    const resp = await instance.acquireTokenSilent({ scopes: _MSAL_SCOPES, account: _outlookAccount });
+    return resp.accessToken;
+  } catch(e) {
+    try {
+      const resp = await instance.acquireTokenPopup({ scopes: _MSAL_SCOPES });
+      _outlookAccount = resp.account;
+      return resp.accessToken;
+    } catch(e2) { toast('Could not get Outlook token','err'); return null; }
+  }
+}
+
+async function _outlookCreateEvent({title, date, time, durationMins, attendees, location, description}) {
+  const token = await _outlookGetToken();
+  if (!token) return false;
+  const start = new Date(date + 'T' + (time||'09:00') + ':00');
+  const end = new Date(start.getTime() + (durationMins||60) * 60000);
+  const toIso = d => d.toISOString().replace(/\.\d{3}Z$/,'');
+  // Parse attendees — support "Name <email>" or plain "email@" or just names
+  const attendeeList = (attendees||'').split(/[,;]/).map(a => a.trim()).filter(Boolean).map(a => {
+    const m = a.match(/^(.+)<([^>]+)>$/);
+    if (m) return { emailAddress: { name: m[1].trim(), address: m[2].trim() }, type: 'required' };
+    if (a.includes('@')) return { emailAddress: { name: a.split('@')[0], address: a }, type: 'required' };
+    return { emailAddress: { name: a, address: '' }, type: 'required' };
+  }).filter(a => a.emailAddress.address); // Graph requires valid email to send invites
+  const event = {
+    subject: title,
+    start: { dateTime: toIso(start), timeZone: 'UTC' },
+    end: { dateTime: toIso(end), timeZone: 'UTC' },
+    location: { displayName: location||'' },
+    body: { contentType: 'text', content: description||'' },
+    attendees: attendeeList,
+    isOnlineMeeting: false
+  };
+  const res = await fetch('https://graph.microsoft.com/v1.0/me/calendar/events', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(event)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    toast('Outlook error: ' + (err.error?.message || res.status), 'err');
+    return false;
+  }
+  return true;
+}
+
+async function _outlookReadCalendar(startDate, endDate) {
+  const token = await _outlookGetToken();
+  if (!token) return null;
+  const s = encodeURIComponent(startDate + 'T00:00:00Z');
+  const e = encodeURIComponent(endDate + 'T23:59:59Z');
+  const res = await fetch(`https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${s}&endDateTime=${e}&$select=subject,start,end,organizer,onlineMeeting&$top=50&$orderby=start/dateTime`, {
+    headers: { 'Authorization': 'Bearer ' + token, 'Prefer': 'outlook.timezone="UTC"' }
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.value || [];
+}
+
+// Call on app boot so existing sessions are restored
+document.addEventListener('DOMContentLoaded', () => { try { _msalInit(); } catch(e) {} });
 
 // ── SETTINGS: GDPR tab ────────────────────────
 async function _settingsRenderGdpr() {
