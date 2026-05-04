@@ -3899,33 +3899,124 @@ function _rdS3Html(d) {
 // STAGE 4 — INTERVIEWS
 // ══════════════════════════════════════════════
 function _rdS4Html(d) {
-  const {roleId,apps,interviews}=d;
-  const interviewApps=apps.filter(a=>['interview_1','interview_2','interview_final','assessment'].includes(a.stage));
+  const {roleId,apps,interviews,wfSteps}=d;
+  const sm={};(wfSteps||[]).forEach(s=>{sm[s.step_key]=s;});
+  const done=k=>sm[k]?.status==='completed';
+
+  // Interview stage candidates
+  const intStages=['interview_1','interview_2','interview_final','assessment','first_interview','second_interview','final_interview','panel','screening'];
+  const interviewApps=apps.filter(a=>intStages.includes(a.stage));
+
+  // Interviews for this role's candidates
+  const appIds=new Set(apps.map(a=>a.id));
+  const roleIvs=(interviews||[]).filter(i=>appIds.has(i.application_id));
+  const now=new Date();
+  const upcoming=roleIvs.filter(i=>i.status!=='cancelled'&&new Date(i.scheduled_at)>=now).sort((a,b)=>new Date(a.scheduled_at)-new Date(b.scheduled_at));
+  const past=roleIvs.filter(i=>i.status!=='cancelled'&&new Date(i.scheduled_at)<now).sort((a,b)=>new Date(b.scheduled_at)-new Date(a.scheduled_at));
+
+  const thS='padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--surface-2)';
+
+  const ivRow=iv=>{
+    const a=apps.find(x=>x.id===iv.application_id);
+    const c=a?.candidates;
+    const isPast=new Date(iv.scheduled_at)<now;
+    const statusColor=iv.status==='completed'?'var(--green-text)':iv.status==='cancelled'?'var(--red-text)':isPast?'var(--amber-text)':'var(--brand)';
+    const statusBg=iv.status==='completed'?'var(--green-bg)':iv.status==='cancelled'?'var(--red-bg)':isPast?'var(--amber-bg)':'var(--brand-light)';
+    const statusLabel=iv.status==='completed'?'Done':iv.status==='cancelled'?'Cancelled':isPast?'Needs update':'Scheduled';
+    return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a?.id||''}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+      <td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name||'?'} ${c?.last_name||''}</div><div style="font-size:11px;color:var(--text-3)">${c?.current_title||''}</div></td>
+      <td style="padding:10px 12px"><span class="tag tag-blue" style="font-size:10px">${iv.interview_type||'Interview'}</span></td>
+      <td style="padding:10px 12px;font-size:12px;white-space:nowrap">${fmtDateTime(iv.scheduled_at)}</td>
+      <td style="padding:10px 12px;font-size:12px">${iv.duration_minutes||60} min</td>
+      <td style="padding:10px 12px;font-size:12px">${iv.location||'—'}</td>
+      <td style="padding:10px 12px"><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;color:${statusColor};background:${statusBg}">${statusLabel}</span></td>
+      <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="event.stopPropagation();openCandidateDrawer('${a?.id||''}')">Open →</button></td>
+    </tr>`;
+  };
+
+  const ivTable=(rows,empty)=>rows.length?`<table style="width:100%;border-collapse:collapse">
+    <thead><tr>${['Candidate','Type','When','Duration','Platform','Status',''].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(ivRow).join('')}</tbody>
+  </table>`:`<div class="card-body"><div class="text-muted">${empty}</div></div>`;
+
   return `
-    <div style="font-size:16px;font-weight:700;margin-bottom:14px">🗓 Stage 4: Interviews</div>
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-header">
-        <div class="card-title">Candidates in Interview Stages (${interviewApps.length})</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:700">🗓 Stage 4: Interviews</div>
+      <div style="display:flex;gap:6px">
+        ${!done('all_interviews_done')
+          ?`<button class="btn btn-outline btn-sm" onclick="_wfCompleteStep('${roleId}','all_interviews_done')">✓ Mark Interviews Done</button>`
+          :`<span class="tag tag-green" style="font-size:10px">Interviews complete</span><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','all_interviews_done')">Undo</button>`
+        }
         <button class="btn btn-primary btn-sm" onclick="openInterviewModal()">+ Schedule Interview</button>
       </div>
-      ${interviewApps.length?`<table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:var(--surface-2)">
-          ${['Candidate','Stage','Fit ✦','Location',''].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--surface-2)">${h}</th>`).join('')}
-        </tr></thead>
-        <tbody>${interviewApps.map(a=>{const c=a.candidates;return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
-          <td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></td>
-          <td style="padding:10px 12px">${stageTag(a.stage)}</td>
-          <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
-          <td style="padding:10px 12px;font-size:12px">${c?.location||'—'}</td>
-          <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td>
-        </tr>`;}).join('')}</tbody>
-      </table>`:`<div class="card-body"><div class="text-muted">No candidates in interview stages yet — advance candidates from Stage 3</div></div>`}
     </div>
-    <div class="card" style="border:2px dashed var(--border);background:transparent">
-      <div class="card-body" style="text-align:center;padding:24px">
-        <div style="font-size:24px;margin-bottom:8px">🗓</div>
-        <div style="font-weight:600;margin-bottom:4px">Interview scheduling &amp; feedback forms</div>
-        <div style="font-size:13px;color:var(--text-3)">Full interview panel management, scorecards and AI feedback analysis coming in the next build</div>
+
+    <!-- Summary stats -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      ${[
+        {label:'In Interview Process', val:interviewApps.length, color:'var(--brand)', bg:'var(--brand-light)'},
+        {label:'Interviews Scheduled', val:roleIvs.length, color:'var(--text)', bg:'var(--surface)'},
+        {label:'Upcoming', val:upcoming.length, color:'var(--green)', bg:'var(--green-bg)'},
+        {label:'Awaiting Feedback', val:past.filter(i=>i.status!=='completed').length, color:'var(--amber)', bg:'var(--amber-bg)'},
+      ].map(s=>`<div style="padding:12px 14px;border-radius:var(--r);background:${s.bg};border:1px solid var(--border)">
+        <div style="font-size:22px;font-weight:800;color:${s.color}">${s.val}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${s.label}</div>
+      </div>`).join('')}
+    </div>
+
+    <!-- Candidates in interview stages -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header">
+        <div class="card-title">Candidates in Interview Process (${interviewApps.length})</div>
+        <div style="font-size:11px;color:var(--text-3)">Click to open drawer → schedule interview or record feedback</div>
+      </div>
+      ${interviewApps.length?`<table style="width:100%;border-collapse:collapse">
+        <thead><tr>${['Candidate','Stage','Fit ✦','Location','Notice','HM',''].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+        <tbody>${interviewApps.map(a=>{
+          const c=a.candidates;
+          const hmCol=a.hm_decision==='approved'?'<span style="font-size:10px;color:var(--green-text);background:var(--green-bg);padding:2px 7px;border-radius:99px;font-weight:600">✓ Approved</span>':a.hm_decision==='rejected'?'<span style="font-size:10px;color:var(--red-text);background:var(--red-bg);padding:2px 7px;border-radius:99px;font-weight:600">✕ Rejected</span>':'<span style="font-size:10px;color:var(--text-3);background:var(--surface-2);padding:2px 7px;border-radius:99px;font-weight:600">Pending</span>';
+          return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+            <td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name||''} ${c?.last_name||''}</div><div style="font-size:11px;color:var(--text-3)">${c?.current_title||c?.email||''}</div></td>
+            <td style="padding:10px 12px">${stageTag(a.stage)}</td>
+            <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
+            <td style="padding:10px 12px;font-size:12px">${c?.location||'—'}</td>
+            <td style="padding:10px 12px;font-size:12px">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td>
+            <td style="padding:10px 12px">${hmCol}</td>
+            <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open →</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`:`<div class="card-body"><div class="text-muted">No candidates in interview stages yet — advance candidates from Pipeline (Stage 3)</div></div>`}
+    </div>
+
+    <!-- Upcoming interviews -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header">
+        <div class="card-title">📅 Upcoming Interviews (${upcoming.length})</div>
+      </div>
+      ${ivTable(upcoming,'No upcoming interviews — schedule one using the button above')}
+    </div>
+
+    <!-- Past interviews -->
+    ${past.length?`<div class="card" style="margin-bottom:12px">
+      <div class="card-header">
+        <div class="card-title" style="color:var(--text-3)">Past Interviews (${past.length})</div>
+        <div style="font-size:11px;color:var(--amber-text)">${past.filter(i=>i.status!=='completed').length} awaiting feedback update</div>
+      </div>
+      ${ivTable(past,'No past interviews')}
+    </div>`:''}
+
+    <!-- Interview tips -->
+    <div class="card" style="background:var(--brand-light);border:1px solid var(--brand)">
+      <div class="card-body" style="display:flex;gap:14px;align-items:flex-start">
+        <div style="font-size:20px;flex-shrink:0">💡</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--brand);margin-bottom:4px">Interview workflow tips</div>
+          <div style="font-size:12px;color:var(--text-2);line-height:1.6">
+            Schedule interviews from the candidate drawer → open any candidate → click "📅 Schedule Interview".<br>
+            Generate feedback links from the drawer too — interviewers get a secure link to submit structured feedback.<br>
+            HM decision is tracked per candidate and visible in the column above.
+          </div>
+        </div>
       </div>
     </div>`;
 }
@@ -3933,60 +4024,278 @@ function _rdS4Html(d) {
 // ══════════════════════════════════════════════
 // STAGE 5 — OFFER
 // ══════════════════════════════════════════════
+async function _rdS5MoveToHired(appId,roleId) {
+  if(!confirm('Mark this candidate as Hired?')) return;
+  const {error}=await sb.from('applications').update({stage:'hired'}).eq('id',appId);
+  if(error){toast('Error: '+error.message,'err');return;}
+  try{const uid=(await sb.auth.getUser()).data.user?.id;await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'candidate_hired',p_description:'Candidate hired from Offer stage'});}catch(e){}
+  toast('🎉 Marked as Hired!');
+  viewRoleDetail(roleId);
+}
+
+async function _rdS5DeclineOffer(appId,roleId) {
+  if(!confirm('Mark offer as declined? Candidate will return to pipeline.')) return;
+  const {error}=await sb.from('applications').update({stage:'rejected',hm_decision:'rejected'}).eq('id',appId);
+  if(error){toast('Error: '+error.message,'err');return;}
+  toast('Offer declined — candidate removed from offer stage');
+  viewRoleDetail(roleId);
+}
+
 function _rdS5Html(d) {
-  const {roleId,apps}=d;
-  const offerApps=apps.filter(a=>['offer'].includes(a.stage));
+  const {roleId,apps,wfSteps}=d;
+  const sm={};(wfSteps||[]).forEach(s=>{sm[s.step_key]=s;});
+  const done=k=>sm[k]?.status==='completed';
+  const offerApps=apps.filter(a=>a.stage==='offer');
   const hired=apps.filter(a=>a.stage==='hired');
-  return `
-    <div style="font-size:16px;font-weight:700;margin-bottom:14px">💼 Stage 5: Offer</div>
-    ${hired.length?`<div class="card" style="margin-bottom:12px;border:1.5px solid var(--green)"><div class="card-body"><div style="font-size:14px;font-weight:600;color:var(--green-text)">🎉 ${hired.length} candidate${hired.length>1?'s':''} hired!</div>${hired.map(a=>`<div style="font-size:13px;color:var(--text-2);margin-top:4px">${a.candidates?.first_name} ${a.candidates?.last_name}</div>`).join('')}</div></div>`:''}
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-header">
-        <div class="card-title">Candidates at Offer Stage (${offerApps.length})</div>
+
+  const offerCard=a=>{
+    const c=a.candidates;
+    const offeredSal=a.offer_salary;
+    const expectedSal=c?.salary_expectation;
+    const currency=a.offer_currency||'USD';
+    const fmtSal=(v,cur)=>v?cur+' '+Number(v).toLocaleString():'—';
+    const salDiff=offeredSal&&expectedSal?Math.round(((offeredSal-expectedSal)/expectedSal)*100):null;
+    const salColor=salDiff===null?'var(--text-3)':salDiff>=0?'var(--green-text)':'var(--amber-text)';
+    const salBg=salDiff===null?'var(--surface-2)':salDiff>=0?'var(--green-bg)':'var(--amber-bg)';
+    return `<div class="card" style="margin-bottom:12px;border:1.5px solid var(--border)">
+      <div class="card-header" style="background:var(--surface-2)">
+        <div>
+          <div style="font-size:14px;font-weight:700">${c?.first_name||''} ${c?.last_name||''}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">${c?.current_title||''} ${c?.location?'· '+c.location:''}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-outline btn-sm" onclick="openCandidateDrawer('${a.id}')">View Profile</button>
+          <button class="btn btn-outline btn-sm" onclick="openOfferModal('${a.id}','${(c?.first_name||'')+' '+(c?.last_name||'')}')">✏️ Edit Offer</button>
+          <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="_rdS5DeclineOffer('${a.id}','${roleId}')">✕ Decline</button>
+          <button class="btn btn-success btn-sm" onclick="_rdS5MoveToHired('${a.id}','${roleId}')">🎉 Mark Hired</button>
+        </div>
       </div>
-      ${offerApps.length?`<table style="width:100%;border-collapse:collapse"><thead><tr style="background:var(--surface-2)">${['Candidate','Salary Exp.','Notice','HM Decision',''].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border)">${h}</th>`).join('')}</tr></thead><tbody>${offerApps.map(a=>{const c=a.candidates;return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''"><td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}</div></td><td style="padding:10px 12px;font-size:12px">${c?.salary_expectation?'€'+Number(c.salary_expectation).toLocaleString():'—'}</td><td style="padding:10px 12px;font-size:12px">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td><td style="padding:10px 12px">${a.hm_decision==='approved'?'<span class="tag tag-green" style="font-size:10px">Approved</span>':a.hm_decision==='rejected'?'<span class="tag tag-red" style="font-size:10px">Rejected</span>':'<span class="tag tag-amber" style="font-size:10px">Pending</span>'}</td><td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td></tr>`;}).join('')}</tbody></table>`:`<div class="card-body"><div class="text-muted">No candidates at offer stage yet</div></div>`}
-    </div>
-    <div class="card" style="border:2px dashed var(--border);background:transparent">
-      <div class="card-body" style="text-align:center;padding:24px">
-        <div style="font-size:24px;margin-bottom:8px">💼</div>
-        <div style="font-weight:600;margin-bottom:4px">Offer workflow coming next</div>
-        <div style="font-size:13px;color:var(--text-3)">Offer letters, counter-offer flow, acceptance emails, rejected → restart pipeline</div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:4px">Offered Salary</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${offeredSal?currency+' '+Number(offeredSal).toLocaleString():'<span style="color:var(--text-3)">Not recorded</span>'}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:4px">Candidate Expected</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${fmtSal(expectedSal,'')}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:4px">Variance</div>
+            <div style="font-size:13px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-block;background:${salBg};color:${salColor}">${salDiff!==null?(salDiff>=0?'+':'')+salDiff+'%':'—'}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:4px">Notice Period</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${c?.notice_period_days?c.notice_period_days+' days':'—'}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:4px">Start Date</div>
+            <div style="font-size:13px;font-weight:600">${a.offer_start_date?fmtDate(a.offer_start_date):'<span style="color:var(--text-3)">Not set</span>'}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:4px">Offer Expires</div>
+            <div style="font-size:13px;font-weight:600">${a.offer_expiry_date?fmtDate(a.offer_expiry_date):'<span style="color:var(--text-3)">Not set</span>'}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:4px">HM Sign-off</div>
+            <div>${a.hm_decision==='approved'?'<span style="font-size:12px;font-weight:600;color:var(--green-text)">✓ Approved</span>':a.hm_decision==='rejected'?'<span style="font-size:12px;font-weight:600;color:var(--red-text)">✕ Rejected</span>':'<span style="font-size:12px;font-weight:600;color:var(--amber-text)">⏳ Awaiting</span>'}</div>
+          </div>
+        </div>
+        ${a.offer_notes?`<div style="margin-top:12px;padding:10px 12px;background:var(--surface-2);border-radius:var(--r);font-size:12px;color:var(--text-2)"><strong>Notes:</strong> ${a.offer_notes}</div>`:''}
       </div>
     </div>`;
+  };
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:700">💼 Stage 5: Offer</div>
+      <div style="display:flex;gap:6px">
+        ${done('offer_accepted')
+          ?`<span class="tag tag-green" style="font-size:10px">✓ Offer accepted</span><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','offer_accepted')">Undo</button>`
+          :(offerApps.length?`<button class="btn btn-outline btn-sm" onclick="_wfCompleteStep('${roleId}','offer_accepted')">✓ Mark Offer Accepted</button>`:'')
+        }
+      </div>
+    </div>
+
+    <!-- Hired banner -->
+    ${hired.length?`<div class="card" style="margin-bottom:14px;border:1.5px solid var(--green);background:var(--green-bg)">
+      <div class="card-body" style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:28px">🎉</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--green-text)">${hired.length} candidate${hired.length>1?'s':''} hired!</div>
+          <div style="font-size:12px;color:var(--green-text);margin-top:2px">${hired.map(a=>`${a.candidates?.first_name||''} ${a.candidates?.last_name||''}`).join(', ')} · Head to Stage 6 for onboarding</div>
+        </div>
+        <button class="btn btn-outline btn-sm" style="margin-left:auto;border-color:var(--green);color:var(--green-text)" onclick="_rdStage('s6')">Go to Onboarding →</button>
+      </div>
+    </div>`:''}
+
+    <!-- Offer cards -->
+    ${offerApps.length
+      ? offerApps.map(offerCard).join('')
+      : `<div class="card" style="margin-bottom:12px">
+          <div class="card-body" style="text-align:center;padding:32px">
+            <div style="font-size:28px;margin-bottom:8px">💼</div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:6px">No candidates at offer stage yet</div>
+            <div style="font-size:13px;color:var(--text-3);max-width:380px;margin:0 auto">Advance a final-round candidate to "Offer" stage from their profile, then record the offer details here.</div>
+          </div>
+        </div>`
+    }
+
+    <!-- Shortlist from pipeline -->
+    ${apps.filter(a=>a.stage==='final_interview'||a.stage==='interview_final').length?`
+    <div class="card" style="margin-bottom:12px;border:1px solid var(--border)">
+      <div class="card-header">
+        <div class="card-title">Final Round Candidates — Ready to Offer?</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>${['Candidate','Stage','Salary Exp.','Fit ✦','HM',''].map(h=>`<th style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--surface-2)">${h}</th>`).join('')}</tr></thead>
+        <tbody>${apps.filter(a=>a.stage==='final_interview'||a.stage==='interview_final').map(a=>{
+          const c=a.candidates;
+          return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+            <td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name||''} ${c?.last_name||''}</div></td>
+            <td style="padding:10px 12px">${stageTag(a.stage)}</td>
+            <td style="padding:10px 12px;font-size:12px">${c?.salary_expectation?'€'+Number(c.salary_expectation).toLocaleString():'—'}</td>
+            <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
+            <td style="padding:10px 12px">${a.hm_decision==='approved'?'<span style="font-size:10px;color:var(--green-text)">✓ Approved</span>':'<span style="font-size:10px;color:var(--text-3)">Pending</span>'}</td>
+            <td style="padding:10px 12px;text-align:right"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="event.stopPropagation();openOfferModal('${a.id}','${(c?.first_name||'')+' '+(c?.last_name||'')}')">Make Offer</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`:''}`;
 }
 
 // ══════════════════════════════════════════════
 // STAGE 6 — ONBOARDING
 // ══════════════════════════════════════════════
+function _rdS6ToggleTask(roleId,key) {
+  if(!_rdData._customWf) _rdData._customWf={};
+  const fullKey='ob_'+key;
+  _rdData._customWf[fullKey]=!_rdData._customWf[fullKey];
+  // Re-render stage 6 in place
+  const el=document.getElementById('rd-stage-content');
+  if(el) el.innerHTML=_rdS6Html(_rdData);
+}
+
 function _rdS6Html(d) {
-  const hired=d.apps.filter(a=>a.stage==='hired');
-  return `
-    <div style="font-size:16px;font-weight:700;margin-bottom:14px">🚀 Stage 6: Onboarding</div>
-    ${hired.length===0?`<div class="card" style="margin-bottom:12px;border:1.5px solid var(--amber)"><div class="card-body"><div style="font-size:13px;color:var(--amber-text)">⏳ No hired candidates yet — complete Stage 5 first</div></div></div>`:''}
-    ${hired.map(a=>`<div class="card" style="margin-bottom:12px;border:1.5px solid var(--green)">
-      <div class="card-header"><div class="card-title">🎉 ${a.candidates?.first_name} ${a.candidates?.last_name}</div></div>
-      <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        ${[
-          {label:'Jira (IT Setup)', icon:'🎫', desc:'Create IT onboarding ticket', url:'https://your-jira.atlassian.net/jira/software/projects', color:'#0052CC'},
-          {label:'First Advantage', icon:'🔍', desc:'Background check request', url:'https://fadv.com', color:'#e44d26'},
-          {label:'ADP (Payroll)', icon:'💰', desc:'Set up in payroll system', url:'https://workforcenow.adp.com', color:'#d40000'},
-          {label:'Document Request', icon:'📄', desc:'Send doc request email', url:'#', color:'var(--brand)'},
-        ].map(item=>`<div style="padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span style="font-size:18px">${item.icon}</span>
-            <span style="font-size:13px;font-weight:600">${item.label}</span>
+  const {roleId,apps,wfSteps}=d;
+  const sm={};(wfSteps||[]).forEach(s=>{sm[s.step_key]=s;});
+  const done=k=>sm[k]?.status==='completed';
+  const cw=d._customWf||{};
+  const obDone=k=>!!cw['ob_'+k];
+
+  const hired=apps.filter(a=>a.stage==='hired');
+
+  const taskItem=(key,label,desc,extraBtn='')=>{
+    const isDone=obDone(key);
+    return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <button onclick="_rdS6ToggleTask('${roleId}','${key}')" style="width:20px;height:20px;border-radius:4px;border:2px solid ${isDone?'var(--green)':'var(--border-strong)'};background:${isDone?'var(--green)':'var(--surface)'};cursor:pointer;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">${isDone?'✓':''}</button>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:${isDone?'var(--text-3)':'var(--text)'};${isDone?'text-decoration:line-through':''}">${label}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:1px">${desc}</div>
+      </div>
+      ${extraBtn}
+    </div>`;
+  };
+
+  const hiredCard=a=>{
+    const c=a.candidates;
+    const name=`${c?.first_name||''} ${c?.last_name||''}`.trim();
+    const startDate=a.offer_start_date;
+    const salary=a.offer_salary?`${a.offer_currency||'USD'} ${Number(a.offer_salary).toLocaleString()}`:'Not recorded';
+
+    const preBoardingTasks=[
+      ['contract_'+a.id.slice(0,8), 'Contract signed & returned', 'Receive signed contract from candidate'],
+      ['rtw_'+a.id.slice(0,8), 'Right to Work / work authorisation verified', 'Collect and verify eligibility documents'],
+      ['docs_'+a.id.slice(0,8), 'Personal documents collected', 'ID, bank details, emergency contact'],
+      ['ref_'+a.id.slice(0,8), 'References checked', 'At least 2 references completed'],
+    ];
+
+    const systemTasks=[
+      ['it_'+a.id.slice(0,8), 'IT onboarding ticket raised', 'Laptop, email, software access requested in Jira', `<a href="https://sovos.atlassian.net/jira" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none;flex-shrink:0">Open Jira →</a>`],
+      ['bgcheck_'+a.id.slice(0,8), 'Background check initiated', 'First Advantage — consent obtained and check submitted', `<a href="https://fadv.com" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none;flex-shrink:0">First Advantage →</a>`],
+      ['payroll_'+a.id.slice(0,8), 'Added to payroll system', 'ADP setup — salary, bank details, start date confirmed', `<a href="https://workforcenow.adp.com" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none;flex-shrink:0">Open ADP →</a>`],
+      ['hris_'+a.id.slice(0,8), 'Added to HRIS', 'Workday / HR system profile created and manager assigned', ''],
+    ];
+
+    const day1Tasks=[
+      ['buddy_'+a.id.slice(0,8), 'Onboarding buddy assigned', 'Buddy intro email sent before day 1'],
+      ['agenda_'+a.id.slice(0,8), 'Day 1 agenda sent', 'Calendar invites sent for orientation, team intro, tech setup'],
+      ['announce_'+a.id.slice(0,8), 'Team announcement sent', 'Internal Slack / Teams announcement scheduled'],
+    ];
+
+    const totalTasks=[...preBoardingTasks,...systemTasks,...day1Tasks].length;
+    const completedTasks=[...preBoardingTasks,...systemTasks,...day1Tasks].filter(([k])=>obDone(k)).length;
+    const pct=Math.round((completedTasks/totalTasks)*100);
+
+    return `<div class="card" style="margin-bottom:16px;border:1.5px solid var(--green)">
+      <!-- Header -->
+      <div class="card-header" style="background:linear-gradient(135deg,var(--green-bg),#d1fae5)">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:14px;font-weight:700;color:var(--green-text)">🎉 ${name}</div>
+            <div style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green);color:#fff;font-weight:600">${completedTasks}/${totalTasks} tasks done</div>
           </div>
-          <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">${item.desc}</div>
-          <a href="${item.url}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">Open ${item.label} →</a>
-        </div>`).join('')}
+          <div style="font-size:11px;color:var(--green-text);margin-top:3px">
+            ${startDate?`Start date: <strong>${fmtDate(startDate)}</strong>`:'Start date not confirmed'}
+            ${salary?` · Salary: <strong>${salary}</strong>`:''}
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--green-text)" onclick="openCandidateDrawer('${a.id}')">View Profile</button>
       </div>
-    </div>`).join('')}
-    <div class="card" style="border:2px dashed var(--border);background:transparent">
-      <div class="card-body" style="text-align:center;padding:24px">
-        <div style="font-size:24px;margin-bottom:8px">🚀</div>
-        <div style="font-weight:600;margin-bottom:4px">Full onboarding workflow coming next</div>
-        <div style="font-size:13px;color:var(--text-3)">Jira API, First Advantage background check API, ADP integration, document collection — all in the next build</div>
+
+      <!-- Progress bar -->
+      <div style="height:4px;background:var(--border);position:relative">
+        <div style="height:4px;width:${pct}%;background:var(--green);transition:width .3s"></div>
       </div>
+
+      <div class="card-body" style="padding-top:16px">
+
+        <!-- Pre-boarding -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px">📋 Pre-boarding</div>
+        ${preBoardingTasks.map(([k,l,d])=>taskItem(k,l,d)).join('')}
+
+        <!-- Systems -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:16px 0 8px">⚙️ Systems Setup</div>
+        ${systemTasks.map(([k,l,d,btn])=>taskItem(k,l,d,btn)).join('')}
+
+        <!-- Day 1 -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:16px 0 8px">🚀 Day 1 Prep</div>
+        ${day1Tasks.map(([k,l,d])=>taskItem(k,l,d)).join('')}
+
+        <!-- Mark done -->
+        <div style="margin-top:16px;display:flex;gap:8px">
+          ${done('onboarding_complete')
+            ?`<span class="tag tag-green">✓ Onboarding complete</span><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','onboarding_complete')">Undo</button>`
+            :`<button class="btn btn-primary" onclick="_wfCompleteStep('${roleId}','onboarding_complete')">✓ Mark Onboarding Complete</button>`
+          }
+        </div>
+      </div>
+    </div>`;
+  };
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:700">🚀 Stage 6: Onboarding</div>
+      ${hired.length?`<div style="font-size:12px;color:var(--text-3)">${hired.length} hired candidate${hired.length>1?'s':''}</div>`:''}
+    </div>
+
+    ${hired.length===0
+      ?`<div class="card" style="margin-bottom:12px">
+          <div class="card-body" style="text-align:center;padding:40px">
+            <div style="font-size:32px;margin-bottom:10px">⏳</div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:6px">No hired candidates yet</div>
+            <div style="font-size:13px;color:var(--text-3);max-width:360px;margin:0 auto">Complete Stage 5 (Offer) by marking a candidate as hired — their onboarding checklist will appear here.</div>
+            <button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="_rdStage('s5')">← Go to Offer Stage</button>
+          </div>
+        </div>`
+      : hired.map(hiredCard).join('')
+    }
+
+    <!-- GDPR note -->
+    <div style="margin-top:8px;padding:10px 14px;background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--r);font-size:12px;color:var(--amber-text)">
+      ⚠️ <strong>GDPR:</strong> Checklist state is session-only and resets on page reload. Use your HRIS to permanently track onboarding tasks.
     </div>`;
 }
 
