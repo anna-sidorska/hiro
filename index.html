@@ -3522,6 +3522,12 @@ function _rdStage(key) {
   else if(key==='s6') el.innerHTML=_rdS6Html(_rdData);
 }
 
+// Re-render current stage after data changes (called from workflow/JD/intake actions)
+// tab: 'intake' | 'jd' | 'workflow' — all live in Stage 1
+function _rdSwitchTab(tab) {
+  _rdStage(_rdData._stage || 's1');
+}
+
 // ══════════════════════════════════════════════
 // STAGE 1 — INTAKE
 // ══════════════════════════════════════════════
