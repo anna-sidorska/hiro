@@ -7466,13 +7466,15 @@ function parseJdHtml(html, filename='') {
   const dom=new DOMParser().parseFromString(html,'text/html');
 
   // Boilerplate to skip (Sovos standard template sections)
-  const isBoilerplate=t=>/build your future|don.t worry if|if you.re seeking a career|as a global leader, sovos|at sovos, we.re dedicated|our purpose-built|our teams operate|sovos is a global provider|more than 100,000|equal opportunity employer|the tools to enhance your life|flexible time.off|bi.weekly meeting|mentoring programs|globally recognized training|company background|founded in 1979|bolstered by a robust/i.test(t);
+  const isBoilerplate=t=>/build your future|don.t worry if|if you.re seeking a career|as a global leader, sovos|at sovos, we.re dedicated|our purpose-built|our teams operate|sovos is a global provider|more than 100,000|equal opportunity employer|the tools to enhance your life|flexible time.off|bi.weekly meeting|mentoring programs|globally recognized training|company background|founded in 1979|bolstered by a robust|nothing in this job description restricts|essential job functions/i.test(t);
 
   // Broad section header detection — covers many JD formats
-  const isSummaryHeader=t=>/^(position overview|role overview|about the role|about this role|role summary|job summary|overview|the role\b|about the position|who we.re looking for|about you$)/i.test(t);
-  const isRespHeader=t=>/^(more specifically|the work you.ll do|the work you will|key responsibilities|job responsibilities|responsibilities\b|you will[:\s]|role responsibilities|in this role|what you will do|your responsibilities|accountabilities|essential duties|primary responsibilities|what you.ll be doing|day to day|what the role involves)/i.test(t);
-  const isReqHeader=t=>/^(what we need from you|requirements\b|key requirements|what you.ll need|qualifications\b|skills and experience|experience required|what you bring|ideal candidate|minimum qualifications|must.have|preferred qualifications|skills required|education and experience|what we.re looking for|the ideal candidate)/i.test(t);
+  const isSummaryHeader=t=>/^(position summary|position overview|role overview|about the role|about this role|role summary|job summary|overview|the role\b|about the position|who we.re looking for|about you$)/i.test(t);
+  const isRespHeader=t=>/^(more specifically|the work you.ll do|the work you will|key position responsibilities|key responsibilities|job responsibilities|responsibilities\b|you will[:\s]|role responsibilities|in this role|what you will do|your responsibilities|accountabilities|essential duties|primary responsibilities|what you.ll be doing|day to day|what the role involves)/i.test(t);
+  const isReqHeader=t=>/^(what we need from you|requirements\b|key requirements|what you.ll need|qualifications\b|minimum position qualifications|minimum qualifications|skills and experience|experience required|what you bring|ideal candidate|must.have|preferred qualifications|skills required|education and experience|what we.re looking for|the ideal candidate)/i.test(t);
   const isEndSection=t=>/^(what does sovos offer|company background|equal opportunity employer|flexible time.off|about sovos|benefits\b)/i.test(t);
+  // Metadata table patterns (Title/Dept/Exemption header rows) — skip entirely
+  const isMetadataTable=t=>/^(title[:\s]|department[:\s]|dept[:\s]|exemption|reports to|job code|band|grade|location[:\s])/i.test(t);
 
   // Detect a paragraph that is actually a bullet item (manually typed bullet char)
   // Covers: · • - * — and numbered lists like "1." "1)"
@@ -7496,6 +7498,19 @@ function parseJdHtml(html, filename='') {
     if(!text) continue;
     if(isBoilerplate(text)) continue;
     if(isEndSection(text)){ section='end'; break; }
+
+    // Tables — used in Sovos templates for metadata header rows and section headers
+    if(tag==='TABLE') {
+      const firstCell=(el.querySelector('td,th')?.textContent||'').trim();
+      if(isMetadataTable(firstCell)) continue; // skip Title/Dept/Exemption tables
+      const tableText=el.textContent.trim().replace(/\s+/g,' ');
+      if(isBoilerplate(tableText)) continue;
+      if(isEndSection(tableText)){ section='end'; break; }
+      if(isSummaryHeader(tableText) && tableText.length<80){ section='summary'; continue; }
+      if(isRespHeader(tableText) && tableText.length<100){ section='resp'; continue; }
+      if(isReqHeader(tableText) && tableText.length<100){ section='req'; continue; }
+      continue; // unknown table — skip
+    }
 
     // Proper Word lists — mammoth converts these to <ul>/<ol><li>
     if(tag==='UL'||tag==='OL') {
