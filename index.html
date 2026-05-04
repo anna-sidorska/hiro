@@ -7806,12 +7806,7 @@ async function saveJd(andPack=false) {
 }
 
 async function openInterviewPack(jdId) {
-  const {data:jd}=await sb.from('job_descriptions').select('*').eq('id',jdId).maybeSingle();
-  if(!jd){toast('JD not found','err');return;}
-  document.getElementById('ip-modal-title').textContent=jd.title+' — Interview Pack';
-  document.getElementById('ip-modal-sub').textContent=(jd.department?jd.department+' · ':'')+(jd.level||'')+(jd.region?' · '+jd.region:'');
-  document.getElementById('ip-modal-body').innerHTML=generateInterviewPackHtml(jd);
-  openModal('modal-interview-pack');
+  window.open('https://sovosstructuredinterviews.com', '_blank');
 }
 
 function _autoCompetencies(jd){
