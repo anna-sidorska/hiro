@@ -908,6 +908,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         </div>
       </div>
       <div class="form-group"><label>Hiring Manager</label><select id="er-hm"></select></div>
+      <div class="form-group"><label>HM Email <span style="font-size:11px;color:var(--text-3);font-weight:400">(for Smart Scheduler — overrides profile email)</span></label><input id="er-hm-email" type="email" placeholder="hiring.manager@company.com" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit"></div>
       <div class="form-group"><label>Job Description / Notes</label>
         <textarea id="er-desc" rows="3" placeholder="Key responsibilities, requirements, notes for the team..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;resize:vertical"></textarea>
       </div>
@@ -4355,7 +4356,7 @@ async function _rdFindMeetingSlots(roleId) {
   const webhook = localStorage.getItem('hiro_pa_slots_webhook');
   if (!webhook) { toast('Set up the Find Slots webhook in Settings â Integrations','err'); openSettingsModal('integrations'); return; }
   const d = _rdData;
-  const hmEmail = d.role?.profiles?.email;
+  const hmEmail = localStorage.getItem('hiro_hm_email_'+roleId) || d.role?.profiles?.email;
   if (!hmEmail) { toast('No HM email found for this role â check the role\'s HM assignment','err'); return; }
   const from = document.getElementById('slots-from')?.value;
   const to   = document.getElementById('slots-to')?.value;
@@ -4784,6 +4785,7 @@ async function openEditRoleModal(roleId) {
   const {data:managers}=await sb.from('profiles').select('id,full_name').in('role',['manager','admin']).order('full_name');
   const hmSel=document.getElementById('er-hm');
   if(hmSel) hmSel.innerHTML='<option value="">No hiring manager</option>'+(managers||[]).map(m=>`<option value="${m.id}" ${r.hiring_manager_id===m.id?'selected':''}>${m.full_name}</option>`).join('');
+  const hmEmailInp=document.getElementById('er-hm-email'); if(hmEmailInp) hmEmailInp.value=localStorage.getItem('hiro_hm_email_'+r.id)||'';
   document.getElementById('er-title').value=r.title||'';
   document.getElementById('er-dept').value=r.department||'';
   document.getElementById('er-loc').value=r.location||'';
@@ -4812,7 +4814,7 @@ async function submitEditRole() {
     location:document.getElementById('er-loc').value.trim()||null,
     region:document.getElementById('er-region').value||null,
     work_type:document.getElementById('er-worktype').value||null,
-    priority:document.getElementById('er-priority').value||'medium',
+    priority:document.getElementById('er-priority').value||null,
     status:document.getElementById('er-status').value,
     headcount:parseInt(document.getElementById('er-headcount').value)||1,
     target_start_date:document.getElementById('er-start').value||null,
@@ -4824,7 +4826,7 @@ async function submitEditRole() {
   }).eq('id',_editingRoleId);
   if(error){toast('Error: '+error.message,'err');return;}
   await auditLog('update','role',_editingRoleId,{title});
-  toast('Role updated'); closeModal('modal-edit-role');
+  const hmEmailVal=document.getElementById('er-hm-email')?.value.trim(); if(hmEmailVal){localStorage.setItem('hiro_hm_email_'+_editingRoleId,hmEmailVal);}else{localStorage.removeItem('hiro_hm_email_'+_editingRoleId);} toast('Role updated'); closeModal('modal-edit-role');
   if(currentPage==='roles') renderRoles();
 }
 
