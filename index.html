@@ -3611,7 +3611,7 @@ function _rdS1Html(d) {
           <div id="slots-result" style="margin-top:8px"></div>
         </div>` : `
         <div style="margin-bottom:12px;padding:7px 12px;background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--r);font-size:11px;color:var(--text-3)">
-          ⚡ <a href="#" onclick="openSettingsModal('integrations');return false" style="color:var(--brand)">Connect PA â Find Slots</a> to check HM calendar availability automatically
+          ⚡ <a href="#" onclick="openSettingsModal('integrations');return false" style="color:var(--brand)">Connect PA → Find Slots</a> to check HM calendar availability automatically
         </div>`}
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
@@ -4351,10 +4351,10 @@ function _rdActivityPanel() {
 }
 
 // ── MEETING BOOKING ───────────────────────────
-// ââ MEETING BOOKING âââââââââââââââââââââââââââ
+// ── MEETING BOOKING ───────────────────────────
 async function _rdFindMeetingSlots(roleId) {
   const webhook = localStorage.getItem('hiro_pa_slots_webhook');
-  if (!webhook) { toast('Set up the Find Slots webhook in Settings â Integrations','err'); openSettingsModal('integrations'); return; }
+  if (!webhook) { toast('Set up the Find Slots webhook in Settings → Integrations','err'); openSettingsModal('integrations'); return; }
   const d = _rdData;
   const hmEmail = localStorage.getItem('hiro_hm_email_'+roleId) || d.role?.profiles?.email;
   if (!hmEmail) { toast('No HM email found for this role → check the role\'s HM assignment','err'); return; }
@@ -4365,7 +4365,7 @@ async function _rdFindMeetingSlots(roleId) {
   const btn = document.getElementById('find-slots-btn');
   const result = document.getElementById('slots-result');
   if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
-  if (result) result.innerHTML = '<div style="font-size:12px;color:var(--text-3)">Checking calendarsâ¦</div>';
+  if (result) result.innerHTML = '<div style="font-size:12px;color:var(--text-3)">Checking calendars…</div>';
   try {
     const resp = await fetch(webhook, {
       method: 'POST',
@@ -4382,10 +4382,10 @@ async function _rdFindMeetingSlots(roleId) {
     result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">Click a slot to pre-fill date &amp; time:</div>' +
       suggestions.slice(0,5).map(s => {
         const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
-        const label = start.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) + ' Â· ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+        const label = start.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
         const dateVal = start.toISOString().slice(0,10);
         const timeVal = start.toTimeString().slice(0,5);
-        return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled â')">${label}</button>`;
+        return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled ✓')">${label}</button>`;
       }).join('');
   } catch(e) {
     result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error reaching PA webhook') + '</div>';
@@ -8995,7 +8995,7 @@ function _settingsRenderIntegrations() {
           var paSlotsUrl = localStorage.getItem('hiro_pa_slots_webhook') || '';
           var slotsConnected = !!paSlotsUrl;
           return '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">⚡ Find Meeting Slots (Smart Scheduler)</div>' +
-            '<div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Create a PA flow: HTTP trigger â Office 365 "Find meeting times (V2)" â Response. Paste the HTTP POST URL below. <strong>Set "Anyone" in the trigger.</strong></div>' +
+            '<div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Create a PA flow: HTTP trigger → Office 365 "Find meeting times (V2)" → Response. Paste the HTTP POST URL below. <strong>Set "Anyone" in the trigger.</strong></div>' +
             '<div style="display:flex;gap:8px;margin-bottom:8px">' +
             '<input id="int-pa-slots" type="text" value="' + paSlotsUrl.replace(/"/g,'&quot;') + '" placeholder="https://...powerplatform.com/.../invoke?..." style="flex:1;padding:6px 10px;border:1.5px solid ' + (slotsConnected?'var(--green)':'var(--border)') + ';border-radius:var(--r);font-size:12px;font-family:inherit">' +
             '<button class="btn btn-sm" style="background:#1a56db;color:#fff;border:none;white-space:nowrap" onclick="var v=document.getElementById(\'int-pa-slots\').value.trim();localStorage.setItem(\'hiro_pa_slots_webhook\',v);toast(v?\'Find Slots webhook saved ✓\':\'Cleared\');_settingsRenderIntegrations()">Save</button>' +
