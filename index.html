@@ -3594,9 +3594,9 @@ function _rdS1Html(d) {
         </div>
       </div>
       <div class="card-body">
-                ${slotsWebhook ? `
+                ${(slotsWebhook || _outlookAccount) ? `
         <div style="margin-bottom:14px;padding:10px 14px;background:var(--brand-light);border:1.5px solid #bfdbfe;border-radius:var(--r)">
-          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:8px">⚡ Smart Scheduler → Check Calendars</div>
+          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:8px">⚡ Smart Scheduler → Check HM Calendars</div>
           <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
             <div>
               <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">From</label>
@@ -3611,7 +3611,7 @@ function _rdS1Html(d) {
           <div id="slots-result" style="margin-top:8px"></div>
         </div>` : `
         <div style="margin-bottom:12px;padding:7px 12px;background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--r);font-size:11px;color:var(--text-3)">
-          ⚡ <a href="#" onclick="openSettingsModal('integrations');return false" style="color:var(--brand)">Connect PA → Find Slots</a> to check HM calendar availability automatically
+          ⚡ <a href="#" onclick="openSettingsModal('integrations');return false" style="color:var(--brand)">Connect Outlook</a> to check HM calendar availability automatically
         </div>`}
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
@@ -3987,9 +3987,9 @@ function _rdS4Html(d) {
     </div>
 
     <!-- Smart Scheduler for interviews -->
-    ${localStorage.getItem('hiro_pa_slots_webhook')?`
+    ${(_outlookAccount || localStorage.getItem('hiro_pa_slots_webhook'))?`
     <div id="s4-scheduler" style="margin-bottom:14px;padding:14px 16px;background:var(--brand-light);border:1.5px solid #bfdbfe;border-radius:var(--r)">
-      <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:10px">⚡ Smart Scheduler → Check Interviewer Availability</div>
+      <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:10px">⚡ Smart Scheduler → Interview Availability</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">From</label>
@@ -4007,9 +4007,15 @@ function _rdS4Html(d) {
         </div>
         <button class="btn btn-primary btn-sm" onclick="_s4FindSlots('${roleId}')">Find Slots</button>
       </div>
-      <div style="margin-bottom:8px">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">Interviewer email(s) — comma separated</label>
-        <input type="email" id="s4-slots-attendees" placeholder="interviewer@sovos.com, another@sovos.com" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">Interviewer email(s)</label>
+          <input type="text" id="s4-slots-attendees" placeholder="interviewer@sovos.com, another@sovos.com" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">Candidate email (for self-schedule link)</label>
+          <input type="email" id="s4-candidate-email" placeholder="candidate@email.com" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);box-sizing:border-box">
+        </div>
       </div>
       <div id="s4-slots-result" style="font-size:12px;color:var(--text-2)"></div>
     </div>`:''}
@@ -4382,33 +4388,40 @@ function _rdActivityPanel() {
 // ── MEETING BOOKING ───────────────────────────
 async function _rdFindMeetingSlots(roleId) {
   const webhook = localStorage.getItem('hiro_pa_slots_webhook');
-  if (!webhook) { toast('Set up the Find Slots webhook in Settings → Integrations','err'); openSettingsModal('integrations'); return; }
   const d = _rdData;
   const hmEmail = localStorage.getItem('hiro_hm_email_'+roleId) || d.role?.profiles?.email;
   if (!hmEmail) { toast('No HM email found for this role → check the role\'s HM assignment','err'); return; }
+  if (!_outlookAccount && !webhook) { toast('Connect Outlook or set up a Find Slots webhook in Settings → Integrations','err'); openSettingsModal('integrations'); return; }
   const from = document.getElementById('slots-from')?.value;
   const to   = document.getElementById('slots-to')?.value;
-  const duration = parseInt(document.getElementById('mtg-duration')?.value || '60');
+  const duration = parseInt(document.getElementById('mtg-duration')?.value || '30');
   if (!from || !to) { toast('Pick a date range first','err'); return; }
   const btn = document.getElementById('find-slots-btn');
   const result = document.getElementById('slots-result');
   if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
   if (result) result.innerHTML = '<div style="font-size:12px;color:var(--text-3)">Checking calendars…</div>';
   try {
-    const resp = await fetch(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hm_email: hmEmail, duration_mins: duration, start_date: from, end_date: to })
-    });
-    if (!resp.ok) { throw new Error('PA returned ' + resp.status + ' → check your webhook URL in Settings'); }
-    const data = await resp.json();
-    const suggestions = data.meetingTimeSuggestions || [];
+    let suggestions = [];
+    if (_outlookAccount) {
+      // Prefer direct Graph API when Outlook is connected
+      suggestions = await _graphFindMeetingTimes(hmEmail, duration, from, to);
+    } else {
+      // Fallback: Power Automate webhook
+      const resp = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hm_email: hmEmail, duration_mins: duration, start_date: from, end_date: to })
+      });
+      if (!resp.ok) throw new Error('PA returned ' + resp.status + ' → check your webhook URL in Settings');
+      const data = await resp.json();
+      suggestions = data.meetingTimeSuggestions || [];
+    }
     if (!suggestions.length) {
       result.innerHTML = '<div style="font-size:12px;color:var(--amber)">No available slots found in that range. Try extending the date window.</div>';
       return;
     }
     result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">Click a slot to pre-fill date &amp; time:</div>' +
-      suggestions.slice(0,5).map(s => {
+      suggestions.slice(0,8).map(s => {
         const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
         const label = start.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
         const dateVal = start.toISOString().slice(0,10);
@@ -4416,16 +4429,20 @@ async function _rdFindMeetingSlots(roleId) {
         return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled ✓')">${label}</button>`;
       }).join('');
   } catch(e) {
-    result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error reaching PA webhook') + '</div>';
+    result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error finding slots') + '</div>';
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Find Slots'; }
   }
 }
 
 
+// Stored in memory during session: slots found for self-schedule
+window._s4LastSlots = null;
+window._s4LastDuration = 60;
+
 async function _s4FindSlots(roleId) {
   const webhook = localStorage.getItem('hiro_pa_slots_webhook');
-  if (!webhook) { toast('Set up the Find Slots webhook in Settings → Integrations','err'); return; }
+  if (!_outlookAccount && !webhook) { toast('Connect Outlook or set up a Find Slots webhook in Settings → Integrations','err'); return; }
   const attendeesRaw = document.getElementById('s4-slots-attendees')?.value.trim();
   if (!attendeesRaw) { toast('Enter at least one interviewer email','err'); return; }
   const from = document.getElementById('s4-slots-from')?.value;
@@ -4435,28 +4452,98 @@ async function _s4FindSlots(roleId) {
   const result = document.getElementById('s4-slots-result');
   if (result) result.innerHTML = '<div style="font-size:12px;color:var(--text-3)">Checking interviewer calendars…</div>';
   try {
-    const resp = await fetch(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hm_email: attendeesRaw, duration_mins: duration, start_date: from, end_date: to })
-    });
-    if (!resp.ok) throw new Error('PA returned ' + resp.status);
-    const data = await resp.json();
-    const suggestions = data.meetingTimeSuggestions || [];
+    let suggestions = [];
+    if (_outlookAccount) {
+      suggestions = await _graphFindMeetingTimes(attendeesRaw, duration, from, to);
+    } else {
+      const resp = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hm_email: attendeesRaw, duration_mins: duration, start_date: from, end_date: to })
+      });
+      if (!resp.ok) throw new Error('PA returned ' + resp.status);
+      const data = await resp.json();
+      suggestions = data.meetingTimeSuggestions || [];
+    }
     if (!suggestions.length) {
-      result.innerHTML = '<div style="font-size:12px;color:var(--amber)">No free slots found in that range — try extending the window or reducing duration.</div>';
+      result.innerHTML = '<div style="font-size:12px;color:var(--amber)">No free slots found — try extending the window or reducing duration.</div>';
       return;
     }
-    result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">Click a slot to copy date & time:</div>' +
-      suggestions.slice(0,8).map(s => {
-        const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
-        const label = start.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-        const dateVal = start.toISOString().slice(0,10);
-        const timeVal = start.toTimeString().slice(0,5);
-        return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="navigator.clipboard?.writeText('${dateVal} ${timeVal}');toast('${label} copied — paste into the interview scheduler ✓')">${label}</button>`;
-      }).join('');
+    // Store for self-schedule
+    const slots = suggestions.slice(0,8).map(s => {
+      const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
+      return { iso: start.toISOString(), label: start.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) };
+    });
+    window._s4LastSlots = { slots, attendees: attendeesRaw, roleId };
+    window._s4LastDuration = duration;
+    const candidateEmail = document.getElementById('s4-candidate-email')?.value.trim();
+    result.innerHTML =
+      '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">Available slots (' + slots.length + ' found):</div>' +
+      '<div style="margin-bottom:10px">' +
+      slots.map(s => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:99px;font-size:12px">${s.label}</span>`).join('') +
+      '</div>' +
+      (candidateEmail
+        ? `<button class="btn btn-primary btn-sm" onclick="_s4SendSelfSchedule('${roleId}')">📨 Send Self-Schedule Link to ${candidateEmail}</button>`
+        : '<div style="font-size:11px;color:var(--text-3)">Enter candidate email above to send a self-schedule link.</div>'
+      );
   } catch(e) {
-    if (result) result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error reaching webhook') + '</div>';
+    if (result) result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error finding slots') + '</div>';
+  }
+}
+
+async function _s4SendSelfSchedule(roleId) {
+  const candidateEmail = document.getElementById('s4-candidate-email')?.value.trim();
+  if (!candidateEmail) { toast('Enter candidate email first','err'); return; }
+  if (!window._s4LastSlots || window._s4LastSlots.roleId !== roleId) { toast('Find slots first','err'); return; }
+  const { slots, attendees } = window._s4LastSlots;
+  const duration = window._s4LastDuration;
+  const role = _rdData?.role;
+  const result = document.getElementById('s4-slots-result');
+  if (result) result.innerHTML = '<div style="font-size:12px;color:var(--text-3)">Creating booking link…</div>';
+  try {
+    // Store booking link in Supabase
+    const uid = (await sb.auth.getUser()).data.user?.id;
+    const { data: booking, error } = await sb.from('booking_links').insert({
+      role_id: roleId,
+      candidate_email: candidateEmail,
+      interviewer_emails: attendees,
+      slots: slots,
+      duration_mins: duration,
+      status: 'pending',
+      created_by: uid
+    }).select('id').maybeSingle();
+    if (error) {
+      // Table might not exist — show SQL
+      if (error.code === '42P01') {
+        result.innerHTML = '<div style="font-size:12px;color:var(--red)">Run this SQL in Supabase dashboard first:<br><code style="font-size:10px;display:block;margin-top:6px;padding:8px;background:var(--surface);border-radius:4px;white-space:pre-wrap">CREATE TABLE booking_links (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  role_id UUID REFERENCES roles(id) ON DELETE CASCADE,\n  candidate_email TEXT NOT NULL,\n  interviewer_emails TEXT,\n  slots JSONB NOT NULL DEFAULT \'[]\',\n  duration_mins INT DEFAULT 60,\n  status TEXT DEFAULT \'pending\',\n  selected_slot JSONB,\n  booked_at TIMESTAMPTZ,\n  created_by UUID,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\nALTER TABLE booking_links ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "auth_all" ON booking_links FOR ALL TO authenticated USING (true) WITH CHECK (true);\nCREATE POLICY "anon_read" ON booking_links FOR SELECT TO anon USING (true);\nCREATE POLICY "anon_book" ON booking_links FOR UPDATE TO anon USING (status=\'pending\');</code></div>';
+        return;
+      }
+      throw new Error(error.message);
+    }
+    const bookId = booking.id;
+    const bookingUrl = window.location.origin + window.location.pathname + '?book=' + bookId;
+    // Send email via Outlook
+    const roleTitleSafe = (role?.title || 'role at Sovos').replace(/</g,'&lt;');
+    const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px">
+<p>Hi,</p>
+<p>Thank you for your interest in the <strong>${roleTitleSafe}</strong> position at Sovos. We'd love to schedule an interview with you.</p>
+<p>Please click the button below to choose a time that works for you:</p>
+<p style="margin:24px 0"><a href="${bookingUrl}" style="background:#1a56db;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Choose Your Interview Time</a></p>
+<p style="font-size:13px;color:#6b7280">If the button doesn't work, copy and paste this link into your browser:<br><a href="${bookingUrl}" style="color:#1a56db">${bookingUrl}</a></p>
+<p style="margin-top:24px">Best regards,<br><strong>${_outlookAccount?.name || 'Sovos Talent Acquisition'}</strong></p>
+</div>`;
+    let emailSent = false;
+    if (_outlookAccount) {
+      emailSent = await _outlookSendMail(candidateEmail, `Interview Scheduling – ${roleTitleSafe} at Sovos`, emailHtml);
+    }
+    // Log activity
+    try { await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'self_schedule_sent',p_description:'Self-schedule link sent to '+candidateEmail}); } catch(e) {}
+    result.innerHTML =
+      '<div style="padding:10px 12px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);font-size:12px;color:var(--green-text)">' +
+      (emailSent ? '✅ Email sent to ' + candidateEmail : '📋 Booking link created (copy below to send manually)') +
+      '<br><div style="margin-top:6px"><a href="' + bookingUrl + '" target="_blank" style="color:var(--brand);font-size:11px;word-break:break-all">' + bookingUrl + '</a></div></div>';
+  } catch(e) {
+    if (result) result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error creating booking link') + '</div>';
   }
 }
 
@@ -9084,7 +9171,7 @@ function _settingsRenderIntegrations() {
 // ── OUTLOOK / MICROSOFT GRAPH ─────────────────
 const _MSAL_CLIENT_ID = '7595fde5-1817-469e-a544-35df17f77fbe';
 const _MSAL_TENANT_ID = 'afc1e6f9-afe0-467b-bee8-0d13411821be';
-const _MSAL_SCOPES = ['User.Read','Calendars.ReadWrite'];
+const _MSAL_SCOPES = ['User.Read','Calendars.ReadWrite','Calendars.ReadWrite.Shared','Mail.Send'];
 let _msalInstance = null;
 let _outlookAccount = null;
 
@@ -9097,7 +9184,7 @@ function _msalInit() {
       authority: 'https://login.microsoftonline.com/' + _MSAL_TENANT_ID,
       redirectUri: window.location.origin + window.location.pathname.replace(/\/$/,'') + '/'
     },
-    cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
   });
   _msalInstance.handleRedirectPromise().then(resp => {
     if (resp && resp.account) { _outlookAccount = resp.account; if (document.getElementById('settings-integrations-content')) _settingsRenderIntegrations(); }
@@ -9192,8 +9279,153 @@ async function _outlookReadCalendar(startDate, endDate) {
   return data.value || [];
 }
 
+// ── GRAPH: find meeting times (free/busy across attendees) ───────────────────
+async function _graphFindMeetingTimes(attendeeEmailsCsv, durationMins, from, to) {
+  const token = await _outlookGetToken();
+  if (!token) throw new Error('Outlook not connected — sign in via Settings → Integrations');
+  const attendees = attendeeEmailsCsv.split(/[,;]/).map(e => e.trim()).filter(Boolean).map(e => ({
+    type: 'required',
+    emailAddress: { address: e.includes('<') ? e.match(/<([^>]+)>/)[1] : e }
+  }));
+  if (!attendees.length) throw new Error('No attendee emails provided');
+  const body = {
+    attendees,
+    timeConstraint: {
+      activityDomain: 'work',
+      timeSlots: [{ start: { dateTime: from + 'T07:00:00', timeZone: 'UTC' }, end: { dateTime: to + 'T18:00:00', timeZone: 'UTC' } }]
+    },
+    meetingDuration: 'PT' + durationMins + 'M',
+    maxCandidates: 10,
+    minimumAttendeePercentage: 100,
+    isOrganizerOptional: false,
+    returnSuggestionReasons: true
+  };
+  const res = await fetch('https://graph.microsoft.com/v1.0/me/findMeetingTimes', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'Prefer': 'outlook.timezone="UTC"' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error('Graph error: ' + (err.error?.message || 'HTTP ' + res.status));
+  }
+  const data = await res.json();
+  return data.meetingTimeSuggestions || [];
+}
+
+// ── GRAPH: send email via Outlook ────────────────────────────────────────────
+async function _outlookSendMail(toEmail, subject, htmlBody) {
+  const token = await _outlookGetToken();
+  if (!token) return false;
+  const res = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: { contentType: 'HTML', content: htmlBody },
+        toRecipients: [{ emailAddress: { address: toEmail } }]
+      },
+      saveToSentItems: true
+    })
+  });
+  return res.ok || res.status === 202;
+}
+
+// ── CANDIDATE BOOKING PAGE (?book=UUID) ──────────────────────────────────────
+async function _initBookingPage(bookId) {
+  // Replace entire body with booking UI — no auth needed, runs as anon
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:#f8fafc;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;font-family:Arial,Helvetica,sans-serif">
+      <div style="width:100%;max-width:520px">
+        <div style="text-align:center;margin-bottom:32px">
+          <div style="font-size:28px;font-weight:800;color:#1a56db;margin-bottom:4px">Sovos</div>
+          <div style="font-size:13px;color:#6b7280">Talent Acquisition</div>
+        </div>
+        <div id="book-card" style="background:#fff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:32px">
+          <div style="font-size:14px;color:#6b7280">Loading available times…</div>
+        </div>
+      </div>
+    </div>`;
+  const card = document.getElementById('book-card');
+  try {
+    const { data: booking, error } = await sb.from('booking_links').select('*').eq('id', bookId).maybeSingle();
+    if (error || !booking) { card.innerHTML = '<div style="color:#dc2626;font-size:14px">This booking link is invalid or has expired.</div>'; return; }
+    if (booking.status === 'booked') {
+      const sel = booking.selected_slot;
+      const dt = sel ? new Date(sel.iso) : null;
+      card.innerHTML = `
+        <div style="text-align:center">
+          <div style="font-size:40px;margin-bottom:12px">✅</div>
+          <div style="font-size:18px;font-weight:700;color:#111;margin-bottom:8px">Interview Already Booked</div>
+          ${dt ? `<div style="font-size:15px;color:#1a56db;font-weight:600">${dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} at ${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+          <div style="font-size:13px;color:#6b7280;margin-top:12px">You'll receive a calendar invite confirmation shortly.</div>
+        </div>`;
+      return;
+    }
+    const slots = booking.slots || [];
+    if (!slots.length) { card.innerHTML = '<div style="color:#d97706;font-size:14px">No time slots available. Please contact your recruiter.</div>'; return; }
+    card.innerHTML = `
+      <h2 style="font-size:20px;font-weight:700;color:#111;margin:0 0 6px">Choose Your Interview Time</h2>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 24px">Select a time that works for you. You'll receive a confirmation email once booked.</p>
+      <div id="book-slots" style="display:flex;flex-direction:column;gap:10px">
+        ${slots.map((s,i) => {
+          const dt = new Date(s.iso);
+          const dayStr = dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+          const timeStr = dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+          return `<button onclick="_bookSlot('${bookId}',${i})" style="width:100%;padding:14px 18px;background:#fff;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;text-align:left;transition:all .15s;font-family:Arial,Helvetica,sans-serif" onmouseover="this.style.borderColor='#1a56db';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#e5e7eb';this.style.background='#fff'">
+            <div style="font-weight:600;color:#111;font-size:14px">${dayStr}</div>
+            <div style="color:#1a56db;font-size:13px;margin-top:2px">${timeStr} · ${booking.duration_mins} min</div>
+          </button>`;
+        }).join('')}
+      </div>
+      <p style="font-size:11px;color:#9ca3af;margin-top:20px;text-align:center">If none of these times work, please reply to the invitation email to request alternatives.</p>`;
+    // Expose booking data for _bookSlot
+    window._bookingData = booking;
+  } catch(e) {
+    card.innerHTML = '<div style="color:#dc2626;font-size:14px">Error loading booking: ' + (e.message||'unknown') + '</div>';
+  }
+}
+
+async function _bookSlot(bookId, slotIndex) {
+  const booking = window._bookingData;
+  if (!booking) return;
+  const slot = booking.slots[slotIndex];
+  if (!slot) return;
+  // Disable all slot buttons
+  document.querySelectorAll('#book-slots button').forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+  const card = document.getElementById('book-card');
+  try {
+    const { error } = await sb.from('booking_links').update({
+      status: 'booked',
+      selected_slot: slot,
+      booked_at: new Date().toISOString()
+    }).eq('id', bookId).eq('status', 'pending');
+    if (error) throw new Error(error.message);
+    const dt = new Date(slot.iso);
+    card.innerHTML = `
+      <div style="text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">🎉</div>
+        <h2 style="font-size:20px;font-weight:700;color:#111;margin:0 0 8px">You're booked!</h2>
+        <div style="font-size:16px;color:#1a56db;font-weight:600;margin-bottom:4px">${dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+        <div style="font-size:15px;color:#374151;margin-bottom:20px">${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} · ${booking.duration_mins} min</div>
+        <div style="font-size:13px;color:#6b7280;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px">
+          The recruitment team has been notified and will send a calendar invite to <strong>${booking.candidate_email}</strong> shortly.
+        </div>
+      </div>`;
+  } catch(e) {
+    card.innerHTML = '<div style="color:#dc2626;font-size:14px">Booking failed: ' + (e.message||'unknown') + '. Please contact your recruiter.</div>';
+  }
+}
+
 // Call on app boot so existing sessions are restored
-document.addEventListener('DOMContentLoaded', () => { try { _msalInit(); } catch(e) {} });
+document.addEventListener('DOMContentLoaded', () => {
+  try { _msalInit(); } catch(e) {}
+  // Check for ?book=UUID candidate booking page
+  const urlParams = new URLSearchParams(window.location.search);
+  const bookId = urlParams.get('book');
+  if (bookId) { _initBookingPage(bookId); }
+});
 
 
 // ── SETTINGS: GDPR tab ────────────────────────
