@@ -3596,7 +3596,7 @@ function _rdS1Html(d) {
       <div class="card-body">
                 ${slotsWebhook ? `
         <div style="margin-bottom:14px;padding:10px 14px;background:var(--brand-light);border:1.5px solid #bfdbfe;border-radius:var(--r)">
-          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:8px">⚡ Smart Scheduler â Check Calendars</div>
+          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:8px">⚡ Smart Scheduler → Check Calendars</div>
           <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
             <div>
               <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">From</label>
@@ -3626,7 +3626,7 @@ function _rdS1Html(d) {
           <div>
             <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Duration</label>
             <select id="mtg-duration" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px">
-              <option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option>
+              <option value="30" selected>30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="90">90 min</option>
             </select>
           </div>
         </div>
@@ -4357,7 +4357,7 @@ async function _rdFindMeetingSlots(roleId) {
   if (!webhook) { toast('Set up the Find Slots webhook in Settings â Integrations','err'); openSettingsModal('integrations'); return; }
   const d = _rdData;
   const hmEmail = localStorage.getItem('hiro_hm_email_'+roleId) || d.role?.profiles?.email;
-  if (!hmEmail) { toast('No HM email found for this role â check the role\'s HM assignment','err'); return; }
+  if (!hmEmail) { toast('No HM email found for this role → check the role\'s HM assignment','err'); return; }
   const from = document.getElementById('slots-from')?.value;
   const to   = document.getElementById('slots-to')?.value;
   const duration = parseInt(document.getElementById('mtg-duration')?.value || '60');
@@ -4372,7 +4372,7 @@ async function _rdFindMeetingSlots(roleId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hm_email: hmEmail, duration_mins: duration, start_date: from, end_date: to })
     });
-    if (!resp.ok) { throw new Error('PA returned ' + resp.status + ' â check your webhook URL in Settings'); }
+    if (!resp.ok) { throw new Error('PA returned ' + resp.status + ' → check your webhook URL in Settings'); }
     const data = await resp.json();
     const suggestions = data.meetingTimeSuggestions || [];
     if (!suggestions.length) {
