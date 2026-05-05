@@ -3562,7 +3562,10 @@ function _rdS1Html(d) {
   };
   const sec=(title,icon,body,extra='')=>`<div class="card" style="margin-bottom:12px"><div class="card-header"><div class="card-title">${icon} ${title}</div>${extra}</div><div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${body}</div></div>`;
   const full=html=>`<div style="grid-column:1/-1">${html}</div>`;
-
+  const slotsWebhook=localStorage.getItem('hiro_pa_slots_webhook');
+  const _sToday=new Date();
+  const _sFrom=new Date(_sToday.getTime()+86400000).toISOString().slice(0,10);
+  const _sTo=new Date(_sToday.getTime()+7*86400000).toISOString().slice(0,10);
   return `
     <!-- Stage 1 header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -3590,6 +3593,26 @@ function _rdS1Html(d) {
         </div>
       </div>
       <div class="card-body">
+                ${slotsWebhook ? `
+        <div style="margin-bottom:14px;padding:10px 14px;background:var(--brand-light);border:1.5px solid #bfdbfe;border-radius:var(--r)">
+          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:8px">â¡ Smart Scheduler â Check Calendars</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">From</label>
+              <input type="date" id="slots-from" value="${_sFrom}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">To</label>
+              <input type="date" id="slots-to" value="${_sTo}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)">
+            </div>
+            <button class="btn btn-primary btn-sm" id="find-slots-btn" onclick="_rdFindMeetingSlots('${roleId}')">Find Slots</button>
+          </div>
+          <div id="slots-result" style="margin-top:8px"></div>
+        </div>` : `
+        <div style="margin-bottom:12px;padding:7px 12px;background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--r);font-size:11px;color:var(--text-3)">
+          â¡ <a href="#" onclick="openSettingsModal('integrations');return false" style="color:var(--brand)">Connect PA â Find Slots</a> to check HM calendar availability automatically
+        </div>`}
+
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
           <div>
             <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Date</label>
@@ -4327,6 +4350,50 @@ function _rdActivityPanel() {
 }
 
 // ── MEETING BOOKING ───────────────────────────
+// ââ MEETING BOOKING âââââââââââââââââââââââââââ
+async function _rdFindMeetingSlots(roleId) {
+  const webhook = localStorage.getItem('hiro_pa_slots_webhook');
+  if (!webhook) { toast('Set up the Find Slots webhook in Settings â Integrations','err'); openSettingsModal('integrations'); return; }
+  const d = _rdData;
+  const hmEmail = d.role?.profiles?.email;
+  if (!hmEmail) { toast('No HM email found for this role â check the role\'s HM assignment','err'); return; }
+  const from = document.getElementById('slots-from')?.value;
+  const to   = document.getElementById('slots-to')?.value;
+  const duration = parseInt(document.getElementById('mtg-duration')?.value || '60');
+  if (!from || !to) { toast('Pick a date range first','err'); return; }
+  const btn = document.getElementById('find-slots-btn');
+  const result = document.getElementById('slots-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+  if (result) result.innerHTML = '<div style="font-size:12px;color:var(--text-3)">Checking calendarsâ¦</div>';
+  try {
+    const resp = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hm_email: hmEmail, duration_mins: duration, start_date: from, end_date: to })
+    });
+    if (!resp.ok) { throw new Error('PA returned ' + resp.status + ' â check your webhook URL in Settings'); }
+    const data = await resp.json();
+    const suggestions = data.meetingTimeSuggestions || [];
+    if (!suggestions.length) {
+      result.innerHTML = '<div style="font-size:12px;color:var(--amber)">No available slots found in that range. Try extending the date window.</div>';
+      return;
+    }
+    result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">Click a slot to pre-fill date &amp; time:</div>' +
+      suggestions.slice(0,5).map(s => {
+        const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
+        const label = start.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) + ' Â· ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+        const dateVal = start.toISOString().slice(0,10);
+        const timeVal = start.toTimeString().slice(0,5);
+        return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled â')">${label}</button>`;
+      }).join('');
+  } catch(e) {
+    result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error reaching PA webhook') + '</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Find Slots'; }
+  }
+}
+
+
 async function _rdSaveMeeting(roleId) {
   const date=document.getElementById('mtg-date')?.value;
   const time=document.getElementById('mtg-time')?.value;
@@ -8911,32 +8978,19 @@ function _settingsRenderIntegrations() {
     '<button class="btn btn-sm" style="background:#1a56db;color:#fff;border:none" onclick="var v=document.getElementById(\'int-pa-webhook\').value.trim();localStorage.setItem(\'hiro_pa_webhook\',v);toast(v?\'Power Automate webhook saved — Send Email will now use your PA flow ✓\':\'PA webhook cleared\');_settingsRenderIntegrations()">Save Webhook URL</button>' +
     '</div>';
 
-  // ── Outlook / Microsoft 365 ──
-  var olUser = _outlookAccount ? _outlookAccount.username : null;
-  var olName = _outlookAccount ? (_outlookAccount.name || olUser) : null;
-  var paCalUrl = localStorage.getItem('hiro_pa_calendar_webhook') || '';
-  var paCalConnected = !!paCalUrl;
-  var olConnected = !!olUser;
-  html += '<div style="border:1.5px solid ' + (olConnected||paCalConnected ? 'var(--green)' : 'var(--border)') + ';border-radius:var(--r-lg);padding:14px;margin-bottom:10px' + (olConnected||paCalConnected ? ';background:var(--green-bg)' : '') + '">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
-    '<span style="font-size:15px">📅</span>' +
-    '<div style="font-weight:600;font-size:13px;flex:1">Outlook Calendar (Microsoft 365)</div>' +
-    (olConnected||paCalConnected ? '<span class="tag tag-green" style="font-size:10px">Connected</span>' : '<span class="tag tag-gray" style="font-size:10px">Not connected</span>') +
-    '</div>' +
-    // PA Calendar webhook option
-    '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">⚡ Option 1: Power Automate (recommended — works with Sovos IT restrictions)</div>' +
-    '<div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Create a PA flow with HTTP trigger → Office 365 Outlook → Create event. Paste the flow\'s HTTP POST URL below.</div>' +
-    '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-    '<input id="int-pa-calendar" type="text" value="' + paCalUrl.replace(/"/g,'&quot;') + '" placeholder="https://prod-XX.westeurope.logic.azure.com:443/workflows/..." style="flex:1;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit">' +
-    '<button class="btn btn-sm" style="background:#1a56db;color:#fff;border:none;white-space:nowrap" onclick="var v=document.getElementById(\'int-pa-calendar\').value.trim();localStorage.setItem(\'hiro_pa_calendar_webhook\',v);toast(v?\'PA calendar webhook saved ✓\':\'Cleared\');_settingsRenderIntegrations()">Save</button>' +
-    '</div>' +
-    // MSAL option
-    '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">🔐 Option 2: Direct Microsoft OAuth (requires IT to whitelist the app)</div>' +
-    (olUser ?
-      '<div style="font-size:12px;color:var(--text-2);margin-bottom:8px">Signed in as <strong>' + olName + '</strong> (' + olUser + ')</div><button class="btn btn-outline btn-sm" onclick="_outlookDisconnect()">Disconnect</button>' :
-      '<button class="btn btn-sm" style="background:#0078d4;color:#fff;border:none;display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:600" onclick="_outlookConnect()"><svg width="16" height="16" viewBox="0 0 23 23" fill="none"><rect x="1" y="1" width="10" height="10" fill="#F25022"/><rect x="12" y="1" width="10" height="10" fill="#7FBA00"/><rect x="1" y="12" width="10" height="10" fill="#00A4EF"/><rect x="12" y="12" width="10" height="10" fill="#FFB900"/></svg> Sign in with Microsoft</button>'
-    ) +
-    '</div>';
+            // PA Find Slots webhook
+        (function(){
+          var paSlotsUrl = localStorage.getItem('hiro_pa_slots_webhook') || '';
+          var slotsConnected = !!paSlotsUrl;
+          return '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">â¡ Find Meeting Slots (Smart Scheduler)</div>' +
+            '<div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Create a PA flow: HTTP trigger â Office 365 "Find meeting times (V2)" â Response. Paste the HTTP POST URL below. <strong>Set "Anyone" in the trigger.</strong></div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+            '<input id="int-pa-slots" type="text" value="' + paSlotsUrl.replace(/"/g,'&quot;') + '" placeholder="https://...powerplatform.com/.../invoke?..." style="flex:1;padding:6px 10px;border:1.5px solid ' + (slotsConnected?'var(--green)':'var(--border)') + ';border-radius:var(--r);font-size:12px;font-family:inherit">' +
+            '<button class="btn btn-sm" style="background:#1a56db;color:#fff;border:none;white-space:nowrap" onclick="var v=document.getElementById('int-pa-slots').value.trim();localStorage.setItem('hiro_pa_slots_webhook',v);toast(v?'Find Slots webhook saved â':'Cleared');_settingsRenderIntegrations()">Save</button>' +
+            '</div>';
+        })() +
+
+  html += intItem('outlook','Outlook / Microsoft 365','📧',{tenant_id:'Tenant ID',client_id:'Client ID'});
   html += intItem('criteria','Criteria Corp (EPP/CCAT)','🧠',{api_key:'API Key',company_id:'Company ID'});
   html += intItem('docusign','DocuSign','✍️',{account_id:'Account ID',integration_key:'Integration Key',user_id:'User ID'});
   html += intItem('fadv','First Advantage (Background Checks)','🔍',{api_key:'API Key',package_id:'Package ID'});
@@ -9063,6 +9117,7 @@ async function _outlookReadCalendar(startDate, endDate) {
 
 // Call on app boot so existing sessions are restored
 document.addEventListener('DOMContentLoaded', () => { try { _msalInit(); } catch(e) {} });
+
 
 // ── SETTINGS: GDPR tab ────────────────────────
 async function _settingsRenderGdpr() {
