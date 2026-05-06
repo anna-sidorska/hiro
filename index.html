@@ -3872,24 +3872,21 @@ function _rdS3Html(d) {
 
     <!-- Sourcing Tools -->
     <div class="card" style="margin-bottom:12px">
-      <div class="card-header"><div class="card-title">🔍 Sourcing Tools</div></div>
+      <div class="card-header">
+        <div class="card-title">🔍 Sourcing Tools</div>
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2GenSearchQueries('${roleId}')">⚡ Build Search Queries</button>
+      </div>
       <div class="card-body">
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Quick links to search for candidates based on this role</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${[
-            ['LinkedIn Recruiter', `https://www.linkedin.com/recruiter/search?keywords=${encodeURIComponent(v.confirmed_title||role.title||'')}&location=${encodeURIComponent(role.location||role.region||'')}`, '💼'],
-            ['LinkedIn Jobs Search', `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(v.confirmed_title||role.title||'')}&location=${encodeURIComponent(role.location||role.region||'')}`, '🔎'],
-            ['Indeed CV Search', `https://resumes.indeed.com/search?q=${encodeURIComponent(v.confirmed_title||role.title||'')}&l=${encodeURIComponent(role.location||'')}`, '🔵'],
-            ['Google X-Ray', `https://www.google.com/search?q=site:linkedin.com/in+${encodeURIComponent('"'+(v.target_titles||v.confirmed_title||role.title||'')+'"')}`, '🔍'],
-          ].map(([label,url,icon])=>`<a href="${url}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">${icon} ${label} →</a>`).join('')}
+        <div id="s2-query-box" style="display:none;margin-bottom:14px"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">💼 LinkedIn Recruiter →</button>
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenXRay('${roleId}')">🔍 Google X-Ray →</button>
+          <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">Source from Database</button>
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Find Past Candidates</button>
         </div>
-        ${v.target_companies?`<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Target Companies from Intake</div><div style="font-size:13px;color:var(--text-2);background:var(--surface-2);padding:8px 12px;border-radius:var(--r)">${v.target_companies.replace(/\n/g,'<br>')}</div></div>`:''}
-        ${v.target_titles?`<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Target Job Titles from Intake</div><div style="font-size:13px;color:var(--text-2);background:var(--surface-2);padding:8px 12px;border-radius:var(--r)">${v.target_titles.replace(/\n/g,'<br>')}</div></div>`:''}
-        <div style="margin-top:10px;display:flex;gap:6px">
-          <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
-          <button class="btn btn-outline btn-sm" onclick="openSourceModal('${roleId}')">Source from Database</button>
-          <button class="btn btn-outline btn-sm" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Find Past Candidates</button>
-        </div>
+        ${v.target_companies?`<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Target Companies</div><div style="font-size:12px;color:var(--text-2);background:var(--surface-2);padding:7px 10px;border-radius:var(--r)">${v.target_companies.replace(/\n/g,'<br>')}</div></div>`:''}
+        ${v.target_titles?`<div><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Target Titles</div><div style="font-size:12px;color:var(--text-2);background:var(--surface-2);padding:7px 10px;border-radius:var(--r)">${v.target_titles.replace(/\n/g,'<br>')}</div></div>`:''}
       </div>
     </div>
 
@@ -4885,6 +4882,61 @@ async function _wfUndoStep(roleId,stepKey) {
   const s=_rdData.wfSteps.find(x=>x.step_key===stepKey);
   if(s){s.status='pending';s.completed_at=null;}
   _rdSwitchTab('workflow');
+}
+
+// ── SOURCING QUERY BUILDER ────────────────────
+function _s2BuildQueries(roleId) {
+  const d = _rdData;
+  const role = d?.role || {};
+  const v = d?.intake || {};
+  const title = v.confirmed_title || role.title || '';
+  const location = role.location || role.region || '';
+  // Build title variations list
+  const rawTitles = v.target_titles || title;
+  const titles = rawTitles.split(/\n|,/).map(t => t.trim()).filter(Boolean).slice(0,5);
+  const skills = (v.skills_must_have||'').split(/\n|,/).map(s=>s.trim()).filter(Boolean).slice(0,3);
+  const companies = (v.target_companies||'').split(/\n|,/).map(c=>c.trim()).filter(Boolean).slice(0,4);
+  // LinkedIn Boolean query (natural language / keyword style)
+  const titleClause = titles.length > 1 ? '(' + titles.map(t=>`"${t}"`).join(' OR ') + ')' : titles[0] ? `"${titles[0]}"` : `"${title}"`;
+  const skillClause = skills.length ? skills.map(s=>`"${s}"`).join(' ') : '';
+  const liQuery = [titleClause, skillClause, location ? `"${location}"` : ''].filter(Boolean).join(' ');
+  // Google X-Ray (site:linkedin.com/in Boolean)
+  const companyClause = companies.length ? ' (' + companies.map(c=>`"${c}"`).join(' OR ') + ')' : '';
+  const xray = `site:linkedin.com/in ${titleClause}${skillClause?' '+skillClause:''}${location?' "'+location+'"':''}${companyClause} -jobs -apply -"job opportunities"`;
+  return { liQuery, xray, titles, skills, location };
+}
+
+function _s2GenSearchQueries(roleId) {
+  const box = document.getElementById('s2-query-box');
+  if (!box) return;
+  const { liQuery, xray } = _s2BuildQueries(roleId);
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:6px">LinkedIn Recruiter Query</div>
+        <div id="s2-li-query" style="font-size:12px;color:var(--text);font-family:monospace;white-space:pre-wrap;word-break:break-all;margin-bottom:8px">${liQuery.replace(/</g,'&lt;')}</div>
+        <button class="btn btn-outline btn-sm" style="font-size:11px;width:100%" onclick="navigator.clipboard.writeText(document.getElementById('s2-li-query').textContent);toast('LinkedIn query copied ✓')">📋 Copy</button>
+      </div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:6px">Google X-Ray Query</div>
+        <div id="s2-xray-query" style="font-size:12px;color:var(--text);font-family:monospace;white-space:pre-wrap;word-break:break-all;margin-bottom:8px">${xray.replace(/</g,'&lt;')}</div>
+        <button class="btn btn-outline btn-sm" style="font-size:11px;width:100%" onclick="navigator.clipboard.writeText(document.getElementById('s2-xray-query').textContent);toast('X-Ray query copied ✓')">📋 Copy</button>
+      </div>
+    </div>`;
+}
+
+function _s2OpenLinkedInRecruiter(roleId) {
+  const { liQuery } = _s2BuildQueries(roleId);
+  navigator.clipboard.writeText(liQuery).catch(()=>{});
+  // Open LinkedIn Talent Solutions search — user pastes the copied query
+  window.open('https://www.linkedin.com/talent/search', '_blank');
+  toast('Query copied — paste it into LinkedIn Recruiter search ✓');
+}
+
+function _s2OpenXRay(roleId) {
+  const { xray } = _s2BuildQueries(roleId);
+  window.open('https://www.google.com/search?q=' + encodeURIComponent(xray), '_blank');
 }
 
 // ── LINKEDIN POST GENERATOR ────────────────────
@@ -10885,8 +10937,8 @@ async function loadCfpCommunications(candidateId, candidateEmail, candidateName,
     '</div></div>' +
     '<div style="display:flex;gap:8px;margin-bottom:12px">' +
     '<button class="btn btn-outline btn-sm" onclick="openIcsFormFromCfp(\'' + candidateId + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + (roleTitle||'').replace(/'/g,"\\'") + '\')">📅 Schedule Interview</button>' +
-    '<button class="btn btn-outline" onclick="_cfpDownloadEml(\'' + candidateEmail + '\')" title="Downloads a .eml file — double-click it in Downloads to open in Outlook with full formatting">📨 Download for Outlook</button>' +
-    '<button class="btn btn-primary" onclick="sendCfpEmail(\'' + candidateId + '\',\'' + candidateEmail + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + appId + '\')">Send Email</button>' +
+    '<button class="btn btn-outline" onclick="_cfpDownloadEml(\'' + candidateEmail + '\')" title="Downloads a .eml file — double-click it in Downloads to open in Outlook with full formatting">📨 Download .eml</button>' +
+    '<button class="btn btn-primary" onclick="sendCfpEmail(\'' + candidateId + '\',\'' + candidateEmail + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + appId + '\')">' + (_outlookAccount ? '📧 Send via Outlook' : 'Send Email') + '</button>' +
     '</div>' +
     '<div id="cfp-ics-form" style="display:none;background:var(--surface-2);border-radius:var(--r);padding:12px;margin-top:8px">' +
     '<div style="font-size:12px;font-weight:600;margin-bottom:10px">Schedule Interview — Download .ICS</div>' +
@@ -11272,7 +11324,18 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
   var pubKey = localStorage.getItem('hiro_ejs_pubkey');
   var sent = false;
 
-  if (paWebhook) {
+  if (_outlookAccount) {
+    // Outlook Graph API — direct send when Outlook is connected
+    try {
+      var ok = await _outlookSendMail(email, subject, _wrapEmailHtml(bodyHtml));
+      if (ok) { sent = true; toast('Email sent via Outlook ✓'); }
+      else throw new Error('Graph sendMail returned false');
+    } catch(e) {
+      toast('Outlook send failed (' + (e.message||'error') + ') — downloading EML instead', 'err');
+      _cfpDownloadEml(email, subject, bodyHtml);
+      sent = true;
+    }
+  } else if (paWebhook) {
     // Power Automate — sends real HTML email via your Outlook flow
     try {
       var paRes = await fetch(paWebhook, {
