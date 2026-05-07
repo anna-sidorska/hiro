@@ -3642,7 +3642,7 @@ function _rdS1Html(d) {
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-outline btn-sm" onclick="_rdBookIntakeCalendar('${roleId}')">📅 Download .ics</button>
-          <button class="btn btn-primary btn-sm" onclick="_rdSaveMeeting('${roleId}')">${_outlookAccount ? '📅 Save & Add to Outlook' : 'Save & Mark Scheduled'}</button>
+          <button class="btn btn-primary btn-sm" onclick="_rdSaveMeeting('${roleId}')">📅 ${_outlookAccount ? 'Schedule & Add to Outlook' : 'Schedule Meeting'}</button>
         </div>
         <div style="font-size:11px;color:var(--text-3);margin-top:8px">
           ${_outlookAccount
@@ -4545,68 +4545,67 @@ async function _s4SendSelfSchedule(roleId) {
 }
 
 async function _rdSaveMeeting(roleId) {
-  const date=document.getElementById('mtg-date')?.value;
-  const time=document.getElementById('mtg-time')?.value;
-  const attendees=document.getElementById('mtg-attendees')?.value.trim();
-  const link=document.getElementById('mtg-link')?.value.trim();
-  if(!date){toast('Pick a meeting date first','err');return;}
-  const notesMeta=`TIME:${time||'TBD'} LINK:${link||''}`;
-  const payload={intake_date:date, intake_attendees:attendees||null,
-    intake_notes:((_rdData.intake?.intake_notes||'').split('\n---MTG---\n')[0]||'')+'\n---MTG---\n'+notesMeta,
-    updated_at:new Date().toISOString()};
-  let error;
-  if(_rdData.intake?.id){
-    ({error}=await sb.from('role_intake').update(payload).eq('id',_rdData.intake.id));
-  } else {
-    const res=await sb.from('role_intake').insert({role_id:roleId,...payload}).select('id').maybeSingle();
-    error=res.error;
-    if(res.data?.id){if(!_rdData.intake)_rdData.intake={role_id:roleId};_rdData.intake.id=res.data.id;}
+  try {
+    const date=document.getElementById('mtg-date')?.value;
+    const time=document.getElementById('mtg-time')?.value;
+    const attendees=document.getElementById('mtg-attendees')?.value.trim();
+    const link=document.getElementById('mtg-link')?.value.trim();
+    if(!date){toast('Pick a meeting date first','err');return;}
+    if(!time){toast('Pick a meeting time first','err');return;}
+    const notesMeta='TIME:'+(time||'TBD')+' LINK:'+(link||'');
+    const payload={intake_date:date, intake_attendees:attendees||null,
+      intake_notes:((_rdData.intake?.intake_notes||'').split('\n---MTG---\n')[0]||'')+'\n---MTG---\n'+notesMeta,
+      updated_at:new Date().toISOString()};
+    let dbError;
+    if(_rdData.intake?.id){
+      ({error:dbError}=await sb.from('role_intake').update(payload).eq('id',_rdData.intake.id));
+    } else {
+      const res=await sb.from('role_intake').insert({role_id:roleId,...payload}).select('id').maybeSingle();
+      dbError=res.error;
+      if(res.data?.id){if(!_rdData.intake)_rdData.intake={role_id:roleId};_rdData.intake.id=res.data.id;}
+    }
+    if(dbError){toast('Save error: '+dbError.message,'err');return;}
+    if(!_rdData.intake) _rdData.intake={role_id:roleId};
+    _rdData.intake.intake_date=date;
+    _rdData.intake.intake_attendees=attendees;
+    await _wfCompleteStep(roleId,'intake_meeting',true);
+    const paCalWebhook=localStorage.getItem('hiro_pa_calendar_webhook');
+    const role=_rdData.role||{};
+    const dur=parseInt(document.getElementById('mtg-duration')?.value||'30');
+    const title='Intake Meeting – '+(role.title||'Role');
+    if(_outlookAccount) {
+      const created=await _outlookCreateEvent({title,date,time,durationMins:dur,attendees,location:link,description:'Intake meeting for '+(role.title||'role')+' at Sovos.'+(link?' Teams: '+link:'')});
+      if(created){_rdShowMeetingSaved(roleId,'Intake meeting saved and added to your Outlook calendar ✓');return;}
+    }
+    if(paCalWebhook) {
+      try {
+        await fetch(paCalWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,date,time,duration_mins:dur,attendees:attendees||'',location:link||''})});
+        _rdShowMeetingSaved(roleId,'Intake meeting saved and calendar event created ✓');return;
+      } catch(e){}
+    }
+    // Fallback: open Outlook via mailto with meeting details embedded
+    const dt=new Date(date+'T'+time+':00');
+    const dtStr=dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' at '+dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    const body='Hi,\n\nPlease find the details for our intake meeting below.\n\nDate: '+dtStr+'\nDuration: '+dur+' minutes'+(link?'\nJoin: '+link:'')+'\n\nPlease accept this invite to confirm your attendance.\n\nThanks';
+    const emailList=(attendees||'').split(/[,;]/).map(e=>e.trim()).filter(e=>e.includes('@'));
+    const mailto='mailto:'+emailList.join(',')+
+      '?subject='+encodeURIComponent(title)+
+      '&body='+encodeURIComponent(body);
+    window.open(mailto,'_blank');
+    _rdShowMeetingSaved(roleId,'Intake meeting saved ✓ — Outlook opened for you to send the invite');
+  } catch(e) {
+    toast('Unexpected error: '+(e.message||e),'err');
+    console.error('_rdSaveMeeting error',e);
   }
-  if(error){toast('Error: '+error.message,'err');return;}
-  if(!_rdData.intake) _rdData.intake={role_id:roleId};
-  _rdData.intake.intake_date=date;
-  _rdData.intake.intake_attendees=attendees;
-  await _wfCompleteStep(roleId,'intake_meeting',true);
-  // Create Outlook event via PA webhook (preferred) or direct MSAL
-  const paCalWebhook = localStorage.getItem('hiro_pa_calendar_webhook');
-  const role=_rdData.role||{};
-  const dur=parseInt(document.getElementById('mtg-duration')?.value||'60');
-  if(paCalWebhook) {
-    try {
-      await fetch(paCalWebhook, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          title:`Intake Meeting – ${role.title||'Role'}`,
-          date, time, duration_mins:dur,
-          attendees:attendees||'', location:link||'',
-          description:`Intake meeting for ${role.title||'role'} at Sovos.${link?' Teams: '+link:''}`
-        })
-      });
-      toast('Meeting saved & Outlook event created via PA ✓');
-    } catch(e) { toast('Saved to Hiro (PA calendar webhook failed)'); }
-  } else if(_outlookAccount) {
-    const created=await _outlookCreateEvent({
-      title:`Intake Meeting – ${role.title||'Role'}`,
-      date, time, durationMins:dur,
-      attendees, location:link,
-      description:`Intake meeting for ${role.title||'role'} at Sovos.${link?' Teams: '+link:''}`
-    });
-    toast(created ? 'Meeting saved & added to Outlook ✓' : 'Saved to Hiro (Outlook event failed)');
-  } else {
-    // No calendar integration — auto-download .ics so meeting gets into calendar
-    const dt2=new Date(date+'T'+(time||'09:00')+':00');
-    const end2=new Date(dt2.getTime()+dur*60000);
-    const fmt2=d=>d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-    const atStr=(attendees||'').split(',').map(e=>e.trim()).filter(Boolean).map(e=>`ATTENDEE;CN=${e}:mailto:${e}`).join('\r\n');
-    const ics2=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Hiro ATS//EN\r\nBEGIN:VEVENT\r\nDTSTART:${fmt2(dt2)}\r\nDTEND:${fmt2(end2)}\r\nSUMMARY:Intake Meeting – ${role.title||'Role'}\r\n${atStr?atStr+'\r\n':''}${link?'LOCATION:'+link+'\r\n':''}END:VEVENT\r\nEND:VCALENDAR`;
-    const blob2=new Blob([ics2],{type:'text/calendar'});
-    const a2=document.createElement('a');
-    a2.href=URL.createObjectURL(blob2);
-    a2.download=`intake-${(role.title||'meeting').replace(/\s+/g,'-').toLowerCase()}.ics`;
-    a2.click();
-    toast('Meeting saved ✓ — calendar invite downloaded');
-  }
+}
+
+function _rdShowMeetingSaved(roleId, msg) {
+  // Show prominent in-card success banner, not just a toast
+  const banner=document.createElement('div');
+  banner.style.cssText='position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:9999;background:#059669;color:#fff;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.18);max-width:480px;text-align:center';
+  banner.textContent=msg;
+  document.body.appendChild(banner);
+  setTimeout(()=>{banner.style.opacity='0';banner.style.transition='opacity .5s';setTimeout(()=>banner.remove(),500);},5000);
   _rdStage('s1');
 }
 
@@ -4929,14 +4928,26 @@ function _s2GenSearchQueries(roleId) {
 function _s2OpenLinkedInRecruiter(roleId) {
   const { liQuery } = _s2BuildQueries(roleId);
   navigator.clipboard.writeText(liQuery).catch(()=>{});
-  // Open LinkedIn Talent Solutions search — user pastes the copied query
-  window.open('https://www.linkedin.com/talent/search', '_blank');
-  toast('Query copied — paste it into LinkedIn Recruiter search ✓');
+  const opened = window.open('https://www.linkedin.com/talent/search', '_blank');
+  if (!opened) {
+    // Popup blocked — show the query prominently
+    _s2GenSearchQueries(roleId);
+    toast('Popup blocked — query is shown below, copy and paste into LinkedIn Recruiter', 'err');
+  } else {
+    toast('Query copied to clipboard — paste into LinkedIn Recruiter search ✓');
+  }
 }
 
 function _s2OpenXRay(roleId) {
   const { xray } = _s2BuildQueries(roleId);
-  window.open('https://www.google.com/search?q=' + encodeURIComponent(xray), '_blank');
+  const url = 'https://www.google.com/search?q=' + encodeURIComponent(xray);
+  const opened = window.open(url, '_blank');
+  if (!opened) {
+    // Popup blocked — navigate in same tab or copy URL
+    navigator.clipboard.writeText(url).catch(()=>{});
+    _s2GenSearchQueries(roleId);
+    toast('Popup blocked — X-Ray URL copied to clipboard', 'err');
+  }
 }
 
 // ── LINKEDIN POST GENERATOR ────────────────────
@@ -12460,9 +12471,22 @@ async function renderTeamUsers() {
     '</tr>';
   }).join('');
 
-  content.innerHTML = '<div class="card">' +
+  content.innerHTML = '<div class="card" style="margin-bottom:12px">' +
     '<div class="card-header"><span class="card-title">Team Members (' + users.length + ')</span>' +
-    '<div style="font-size:12px;color:var(--text-3)">Role changes take effect on next login</div></div>' +
+    '<button class="btn btn-primary btn-sm" onclick="_tuShowInvite()">+ Invite User</button></div>' +
+    '<div id="tu-invite-box" style="display:none;padding:16px;background:var(--brand-light);border-bottom:1px solid var(--border)">' +
+    '<div style="font-size:13px;font-weight:600;margin-bottom:8px">Invite a new user to Hiro</div>' +
+    '<div style="font-size:12px;color:var(--text-2);margin-bottom:10px">Hiro uses Supabase Authentication. To invite someone, go to your Supabase dashboard and send them a magic link — they sign in and their profile is created automatically.</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+    '<input id="tu-invite-email" type="email" placeholder="email@sovos.com" style="flex:1;min-width:200px;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit">' +
+    '<select id="tu-invite-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)">' +
+    '<option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management (read-only)</option><option value="admin">Admin</option>' +
+    '</select>' +
+    '<button class="btn btn-primary btn-sm" onclick="_tuCopyInviteSteps()">Copy Invite Steps</button>' +
+    '<a href="https://supabase.com/dashboard/project/zgecauwahfszpeungbfb/auth/users" target="_blank" class="btn btn-outline btn-sm">Open Supabase →</a>' +
+    '</div>' +
+    '<div id="tu-invite-note" style="margin-top:8px;font-size:11px;color:var(--text-3)">After they sign in, come back here to set their role.</div>' +
+    '</div>' +
     '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
     '<thead><tr style="background:var(--surface-2);font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">' +
     '<th style="padding:8px 16px;text-align:left">User</th><th style="padding:8px 16px;text-align:left">Role</th><th style="padding:8px 16px;text-align:left">Joined</th></tr></thead>' +
@@ -12474,6 +12498,27 @@ window._tuUpdateRole = async function(userId, newRole) {
   var upRes = await sb.from('profiles').update({role: newRole}).eq('id', userId);
   if (upRes.error) { toast('Could not update role: ' + upRes.error.message, 'err'); return; }
   toast('Role updated');
+};
+
+window._tuShowInvite = function() {
+  var box = document.getElementById('tu-invite-box');
+  if (box) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
+  var emailEl = document.getElementById('tu-invite-email');
+  if (emailEl && !emailEl.value) emailEl.value = 'sarah.doucette@sovos.com';
+};
+
+window._tuCopyInviteSteps = function() {
+  var email = (document.getElementById('tu-invite-email')?.value || '').trim();
+  var role = document.getElementById('tu-invite-role')?.value || 'management';
+  if (!email) { toast('Enter an email first','err'); return; }
+  var steps = '1. Go to: https://supabase.com/dashboard/project/zgecauwahfszpeungbfb/auth/users\n' +
+    '2. Click "Invite user"\n' +
+    '3. Enter email: ' + email + '\n' +
+    '4. They\'ll get a magic link to sign in\n' +
+    '5. Once they\'ve signed in, come back to Team & Users and set their role to: ' + role;
+  navigator.clipboard.writeText(steps).then(() => toast('Invite steps copied to clipboard ✓')).catch(() => {
+    document.getElementById('tu-invite-note').textContent = steps;
+  });
 };
 
 // ── MANAGEMENT VIEW (management role only) ────────────────────
