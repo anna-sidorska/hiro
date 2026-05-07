@@ -12482,8 +12482,7 @@ async function renderTeamUsers() {
     '<select id="tu-invite-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)">' +
     '<option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management (read-only)</option><option value="admin">Admin</option>' +
     '</select>' +
-    '<button class="btn btn-primary btn-sm" onclick="_tuCopyInviteSteps()">Copy Invite Steps</button>' +
-    '<a href="https://supabase.com/dashboard/project/zgecauwahfszpeungbfb/auth/users" target="_blank" class="btn btn-outline btn-sm">Open Supabase →</a>' +
+    '<button id="tu-send-invite-btn" class="btn btn-primary btn-sm" onclick="_tuSendInvite()">Send Invite</button>' +
     '</div>' +
     '<div id="tu-invite-note" style="margin-top:8px;font-size:11px;color:var(--text-3)">After they sign in, come back here to set their role.</div>' +
     '</div>' +
@@ -12507,18 +12506,31 @@ window._tuShowInvite = function() {
   if (emailEl && !emailEl.value) emailEl.value = 'sarah.doucette@sovos.com';
 };
 
-window._tuCopyInviteSteps = function() {
+window._tuSendInvite = async function() {
   var email = (document.getElementById('tu-invite-email')?.value || '').trim();
   var role = document.getElementById('tu-invite-role')?.value || 'management';
-  if (!email) { toast('Enter an email first','err'); return; }
-  var steps = '1. Go to: https://supabase.com/dashboard/project/zgecauwahfszpeungbfb/auth/users\n' +
-    '2. Click "Invite user"\n' +
-    '3. Enter email: ' + email + '\n' +
-    '4. They\'ll get a magic link to sign in\n' +
-    '5. Once they\'ve signed in, come back to Team & Users and set their role to: ' + role;
-  navigator.clipboard.writeText(steps).then(() => toast('Invite steps copied to clipboard ✓')).catch(() => {
-    document.getElementById('tu-invite-note').textContent = steps;
-  });
+  if (!email) { toast('Enter an email first', 'err'); return; }
+  var btn = document.getElementById('tu-send-invite-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  var note = document.getElementById('tu-invite-note');
+  try {
+    // Send magic link invite via Supabase OTP
+    var { error } = await sb.auth.signInWithOtp({
+      email: email,
+      options: { emailRedirectTo: window.location.href, shouldCreateUser: true }
+    });
+    if (error) throw error;
+    // Pre-create a placeholder profile with the right role so it's set when they sign in
+    // (won't have the UUID yet, but we store a pending record by email)
+    await sb.from('pending_invites').insert({ email: email, role: role, invited_by: (await sb.auth.getUser()).data.user?.id, invited_at: new Date().toISOString() }).maybeSingle().catch(()=>{});
+    if (note) note.innerHTML = '<span style="color:var(--green-text)">✅ Invite sent to <strong>' + email + '</strong> — they\'ll get a magic link to sign in. Once logged in, set their role to <strong>' + role + '</strong> in the table below.</span>';
+    toast('Invite sent to ' + email + ' ✓');
+  } catch(e) {
+    if (note) note.textContent = 'Error: ' + (e.message || e);
+    toast('Could not send invite: ' + (e.message || e), 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Invite'; }
+  }
 };
 
 // ── MANAGEMENT VIEW (management role only) ────────────────────
