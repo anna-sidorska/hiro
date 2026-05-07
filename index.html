@@ -8139,7 +8139,81 @@ async function saveJd(andPack=false) {
 }
 
 async function openInterviewPack(jdId) {
-  window.open('https://sovosstructuredinterviews.com', '_blank');
+  if (!jdId) { toast('No JD linked to this role — add a JD first','err'); return; }
+  const body = document.getElementById('ip-modal-body');
+  const titleEl = document.getElementById('ip-modal-title');
+  const subEl = document.getElementById('ip-modal-sub');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div> Loading interview pack...</div>';
+  openModal('modal-interview-pack');
+
+  const {data: jd, error} = await sb.from('job_descriptions').select('*').eq('id', jdId).maybeSingle();
+  if (error || !jd) { body.innerHTML = '<div class="empty"><div class="empty-icon">❌</div><div class="empty-title">Could not load JD</div></div>'; return; }
+
+  titleEl.textContent = 'Interview Pack — ' + (jd.title || 'Role');
+  if (subEl) subEl.textContent = (jd.department || '') + (jd.department && jd.region ? ' · ' : '') + (jd.region || '');
+
+  // Parse competencies
+  const rawComps = jd.competencies;
+  let allStageComps = {};
+  if (rawComps && typeof rawComps === 'object' && !Array.isArray(rawComps)) {
+    allStageComps = rawComps;
+  } else if (Array.isArray(rawComps)) {
+    allStageComps = { screening: rawComps, first_interview: rawComps };
+  }
+
+  const stageLabels = {screening:'Screening',first_interview:'First Interview',second_interview:'Second Interview',panel:'Panel Interview',cultural_fit:'Cultural Fit',final:'Final Round'};
+  const stageColors = {screening:'#2563eb',first_interview:'#7c3aed',second_interview:'#0891b2',panel:'#059669',cultural_fit:'#d97706',final:'#dc2626'};
+
+  let html = '';
+
+  // Role summary
+  if (jd.summary) {
+    html += '<div style="background:var(--brand-light);border-left:3px solid var(--brand);border-radius:var(--r);padding:12px 16px;margin-bottom:20px">';
+    html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--brand);margin-bottom:4px">Role Brief</div>';
+    html += '<div style="font-size:13px;color:var(--text-2);line-height:1.6">' + jd.summary + '</div>';
+    html += '</div>';
+  }
+
+  // Per-stage competency blocks
+  const stages = Object.keys(allStageComps).length ? Object.keys(allStageComps) : ['screening','first_interview'];
+  stages.forEach(function(stage) {
+    const comps = allStageComps[stage] || [];
+    if (!comps.length) return;
+    const color = stageColors[stage] || '#475569';
+    html += '<div style="margin-bottom:24px">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
+    html += '<span style="background:' + color + ';color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px">' + (stageLabels[stage]||stage) + '</span>';
+    html += '<span style="font-size:11px;color:var(--text-3)">' + comps.length + ' competenc' + (comps.length===1?'y':'ies') + '</span>';
+    html += '</div>';
+    comps.forEach(function(comp, ci) {
+      const cd = COMPETENCY_QUESTIONS[comp] || {q:['Describe your experience with '+comp], green:[], red:[]};
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px">';
+      html += '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">' + (ci+1) + '. ' + comp + '</div>';
+      cd.q.forEach(function(q, qi) {
+        html += '<div style="background:var(--surface-2);border-radius:6px;padding:10px 12px;margin-bottom:6px">';
+        html += '<div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:4px">Q' + (qi+1) + '</div>';
+        html += '<div style="font-size:12px;color:var(--text);line-height:1.5">' + q + '</div>';
+        const pPer = Math.ceil((cd.green||[]).length / (cd.q.length||1));
+        const g = (cd.green||[]).slice(qi*pPer,(qi+1)*pPer);
+        const r = (cd.red||[]).slice(qi*pPer,(qi+1)*pPer);
+        if (g.length || r.length) {
+          html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">';
+          if (g.length) { html += '<div style="background:#f0fdf4;border-radius:4px;padding:6px 8px">'; g.forEach(function(x){ html += '<div style="font-size:10px;color:#166534;margin-bottom:2px;padding-left:6px;border-left:2px solid #4ade80">' + x + '</div>'; }); html += '</div>'; }
+          if (r.length) { html += '<div style="background:#fef2f2;border-radius:4px;padding:6px 8px">'; r.forEach(function(x){ html += '<div style="font-size:10px;color:#991b1b;margin-bottom:2px;padding-left:6px;border-left:2px solid #f87171">' + x + '</div>'; }); html += '</div>'; }
+          html += '</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  if (!html) {
+    html = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No competencies set</div><div class="empty-sub">Add competencies to the JD to generate an interview pack</div></div>';
+  }
+
+  body.innerHTML = html;
 }
 
 function _autoCompetencies(jd){
@@ -10612,6 +10686,7 @@ var _candidatePrevPage = null;
 var _candidatePrevTitle = null;
 
 async function openCandidateFullPage(appId) {
+  _cfpCvViewerOpen = false; // reset cv viewer state for new candidate
   document.getElementById('page-title').textContent = 'Candidate';
   var sub = document.getElementById('page-sub');
   sub.textContent = '';
@@ -10671,51 +10746,106 @@ async function openCandidateFullPage(appId) {
   var _avatarColors = ['#2563eb','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#65a30d','#be185d'];
   var _avatarBg = _avatarColors[((c.first_name||'').charCodeAt(0)||(c.last_name||'').charCodeAt(0))%_avatarColors.length];
 
-  // Left column
-  var leftCol = '<div style="width:40%;flex-shrink:0">';
-  leftCol += '<div class="card" style="padding:28px 24px;text-align:center;margin-bottom:14px">';
-  leftCol += '<div style="width:92px;height:92px;border-radius:50%;background:' + _avatarBg + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:800;margin:0 auto 16px;box-shadow:0 0 0 4px #fff,0 0 0 6px ' + _avatarBg + '55,0 8px 24px ' + _avatarBg + '44;letter-spacing:-1px">' + initials + '</div>';
-  leftCol += '<div style="font-size:18px;font-weight:700;margin-bottom:4px">' + fullName + '</div>';
-  leftCol += '<div style="font-size:13px;color:var(--text-3);margin-bottom:12px">' + (app.roles ? app.roles.title : 'No active role') + '</div>';
-  if (c.email) leftCol += '<div style="font-size:13px;margin-bottom:4px">📧 <a href="mailto:' + c.email + '" style="color:var(--brand)">' + c.email + '</a></div>';
-  if (c.phone && _canSee('phone')) leftCol += '<div style="font-size:13px;margin-bottom:4px">📞 ' + c.phone + '</div>';
-  if (c.location) leftCol += '<div style="font-size:13px;margin-bottom:4px">📍 ' + c.location + '</div>';
-  if (c.linkedin_url && _canSee('linkedin')) leftCol += '<div style="font-size:13px;margin-bottom:4px">🔗 <a href="' + c.linkedin_url + '" target="_blank" style="color:var(--brand)">LinkedIn</a></div>';
+  // ── PIPELINE PROGRESS BAR ─────────────────────────────────────────────
+  var _progressStages = STAGES.filter(function(s){ return !['rejected'].includes(s.key); });
+  var _currStageIdx   = _progressStages.findIndex(function(s){ return s.key === app.stage; });
+  if (_currStageIdx < 0) _currStageIdx = 0;
+  var progressBar = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:18px;overflow-x:auto">';
+  progressBar += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:10px">Candidate Pipeline</div>';
+  progressBar += '<div style="display:flex;align-items:center;gap:0;min-width:max-content">';
+  _progressStages.forEach(function(s, i) {
+    var isPast    = i < _currStageIdx;
+    var isCurrent = i === _currStageIdx;
+    var dotColor  = isCurrent ? s.color : isPast ? '#94a3b8' : '#e2e8f0';
+    var textColor = isCurrent ? s.color : isPast ? '#64748b' : '#cbd5e1';
+    var fontWeight= isCurrent ? '700' : '500';
+    var dotBorder = isCurrent ? '2.5px solid ' + s.color : isPast ? '2px solid #94a3b8' : '2px solid #e2e8f0';
+    progressBar += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px">';
+    progressBar += '<div style="width:10px;height:10px;border-radius:50%;background:' + (isCurrent?s.color:isPast?'#94a3b8':'transparent') + ';border:' + dotBorder + ';position:relative">';
+    if (isCurrent) progressBar += '<div style="position:absolute;inset:-4px;border-radius:50%;background:' + s.color + '22;border:1px solid ' + s.color + '55"></div>';
+    progressBar += '</div>';
+    progressBar += '<div style="font-size:10px;font-weight:' + fontWeight + ';color:' + textColor + ';white-space:nowrap">' + s.label + '</div>';
+    progressBar += '</div>';
+    if (i < _progressStages.length - 1) {
+      progressBar += '<div style="flex:1;height:2px;background:' + (i < _currStageIdx ? '#94a3b8' : '#e2e8f0') + ';margin:0 4px;margin-bottom:14px;min-width:20px"></div>';
+    }
+  });
+  progressBar += '</div></div>';
+
+  // ── LEFT COLUMN ─────────────────────────────────────────────
+  var leftCol = '<div style="width:300px;flex-shrink:0">';
+
+  // Profile card
+  leftCol += '<div class="card" style="padding:24px;margin-bottom:12px">';
+  leftCol += '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">';
+  leftCol += '<div style="width:56px;height:56px;border-radius:14px;background:' + _avatarBg + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0;letter-spacing:-.5px">' + initials + '</div>';
+  leftCol += '<div><div style="font-size:17px;font-weight:700;letter-spacing:-.3px">' + fullName + '</div>';
+  leftCol += '<div style="font-size:12px;color:var(--text-3);margin-top:2px">' + (app.roles ? app.roles.title : 'No active role') + '</div>';
+  leftCol += '<div style="margin-top:6px">' + stageTag(app.stage) + '</div></div></div>';
+  // Contact info
+  leftCol += '<div style="display:flex;flex-direction:column;gap:6px">';
+  if (c.email) leftCol += '<a href="mailto:' + c.email + '" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--brand);text-decoration:none"><span>✉</span>' + c.email + '</a>';
+  if (c.phone && _canSee('phone')) leftCol += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)"><span>📞</span>' + c.phone + '</div>';
+  if (c.location) leftCol += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)"><span>📍</span>' + c.location + '</div>';
+  if (c.linkedin_url && _canSee('linkedin')) leftCol += '<a href="' + c.linkedin_url + '" target="_blank" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--brand);text-decoration:none"><span>🔗</span>LinkedIn Profile</a>';
+  leftCol += '</div>';
   leftCol += '</div>';
 
-  leftCol += '<div class="card" style="padding:16px;margin-bottom:14px">';
-  leftCol += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:12px">Details</div>';
+  // CV Viewer card
+  if (c.cv_url && _canSee('cv')) {
+    leftCol += '<div class="card" style="padding:16px;margin-bottom:12px">';
+    leftCol += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+    leftCol += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3)">📄 CV / Resume</div>';
+    leftCol += '</div>';
+    leftCol += '<div style="display:flex;gap:8px">';
+    leftCol += '<button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="_cfpToggleCvViewer(\'' + c.cv_url + '\')">View CV in Hiro</button>';
+    leftCol += '<button class="btn btn-outline btn-sm" title="Open in new tab" onclick="viewCv(\'' + c.cv_url + '\',this)">↗</button>';
+    leftCol += '</div>';
+    leftCol += '<div id="cfp-cv-viewer" style="display:none;margin-top:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">';
+    leftCol += '<div id="cfp-cv-inner" style="width:100%;min-height:400px;display:flex;align-items:center;justify-content:center;background:var(--surface-2)"><div class="spinner"></div></div>';
+    leftCol += '</div>';
+    leftCol += '</div>';
+  }
+
+  // Details card
+  leftCol += '<div class="card" style="padding:16px;margin-bottom:12px">';
+  leftCol += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:12px">Details</div>';
   if (_canSee('notice')) leftCol += field('Notice Period', c.notice_period_days ? c.notice_period_days + ' days' : '—');
   if (_canSee('salary')) leftCol += field('Salary Expectation', c.salary_expectation ? '€' + Number(c.salary_expectation).toLocaleString() : '—');
   if (_canSee('source')) leftCol += field('Source', c.source || '—');
-  leftCol += field('GDPR Consent', c.consent_given ? '✓ Given' : '⚠ Missing');
+  leftCol += field('GDPR Consent', c.consent_given ? '<span style="color:var(--green);font-weight:600">✓ Given</span>' : '<span style="color:var(--amber);font-weight:600">⚠ Missing</span>');
   leftCol += field('Added', fmtDate(c.created_at));
-
-  if (c.cv_url && _canSee('cv')) {
-    leftCol += '<div style="margin-top:12px"><button class="btn btn-outline btn-sm" onclick="viewCv(\'' + c.cv_url + '\',this)">📄 Download / View CV</button></div>';
-  }
-  if (_canSee('epp')) leftCol += buildEppSummary(c);
-  leftCol += '</div>';
-
-  // Stage + AI score quick card
+  // Stage selector
+  leftCol += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">';
+  leftCol += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:8px">Move Stage</div>';
   var stageOptions = STAGES.map(function(s){
-    return '<option value="' + s.key + '"' + (app.stage===s.key?' selected':'') + '>' + s.label + '</option>';
+    return '<option value=\"' + s.key + '\"' + (app.stage===s.key?' selected':'') + '>' + s.label + '</option>';
   }).join('');
-  leftCol += '<div class="card" style="padding:16px;margin-bottom:14px">';
-  leftCol += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px">Stage</div>';
-  leftCol += '<div style="display:flex;gap:8px"><select id="cfp-stage-select" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px">' + stageOptions + '</select>';
-  leftCol += '<button class="btn btn-primary btn-sm" onclick="updateStageFullPage(\'' + appId + '\')">Update</button></div>';
+  leftCol += '<div style="display:flex;gap:8px"><select id="cfp-stage-select" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:12px">' + stageOptions + '</select>';
+  leftCol += '<button class="btn btn-primary btn-sm" onclick="updateStageFullPage(\'' + appId + '\')">Save</button></div>';
+  leftCol += '</div>';
   if (app.fit_score != null) {
-    leftCol += '<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--text-3)">AI Fit:</span>' + _fitScoreBadge(app.fit_score) + '</div>';
-    if (app.fit_reasoning) leftCol += '<div style="font-size:11px;color:var(--text-2);margin-top:4px;white-space:pre-line">' + app.fit_reasoning.replace(/</g,'&lt;') + '</div>';
+    leftCol += '<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-3)">AI Fit Score:</span>' + _fitScoreBadge(app.fit_score) + '</div>';
+    if (app.fit_reasoning) leftCol += '<div style="font-size:11px;color:var(--text-2);margin-top:4px;white-space:pre-line;line-height:1.5">' + app.fit_reasoning.replace(/</g,'&lt;') + '</div>';
   }
   leftCol += '</div>';
+
+  // EPP card
+  if (_canSee('epp')) {
+    var eppHtml = buildEppSummary(c);
+    if (eppHtml) leftCol += '<div class="card" style="padding:16px;margin-bottom:12px">' + eppHtml + '</div>';
+  }
   leftCol += '</div>';
 
-  // Right column with tabs
+  // ── RIGHT COLUMN ─────────────────────────────────────────────
   var rightCol = '<div style="flex:1;min-width:0">';
+
+  // Lifecycle progress bar
+  rightCol += progressBar;
+
+  // Tab bar
   rightCol += '<div class="cfp-tab-bar">';
-  var tabs = ['Applications','Lifecycle','Communications','Evaluations','Notes'];
+  var tabs = ['Applications','Activity','Communications','Evaluations','Notes'];
   tabs.forEach(function(tab, i) {
     var isActive = i === 0;
     rightCol += '<button class="cfp-tab' + (isActive?' active':'') + '" data-tab="cfp-tab-' + i + '" onclick="switchCfpTab(this,\'cfp-tab-' + i + '\')">' + tab + '</button>';
@@ -10727,7 +10857,7 @@ async function openCandidateFullPage(appId) {
   rightCol += '<div id="cfp-applications"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
 
-  // Tab 1: Lifecycle
+  // Tab 1: Activity (formerly Lifecycle)
   rightCol += '<div id="cfp-tab-1" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-lifecycle"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
@@ -10746,7 +10876,7 @@ async function openCandidateFullPage(appId) {
   rightCol += '<div id="cfp-tab-4" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-notes-feed" style="margin-bottom:12px"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '<div style="display:flex;gap:8px"><textarea id="cfp-note-input" rows="2" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px;resize:vertical" placeholder="Add a note..."></textarea>';
-  rightCol += '<button class="btn btn-primary btn-sm" onclick="addNoteCfp(\'' + appId + '\')">Add</button></div>';
+  rightCol += '<button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="addCfpNote(\'' + appId + '\')">Add</button></div>';
   rightCol += '</div>';
 
   rightCol += '</div>';
@@ -10760,6 +10890,39 @@ async function openCandidateFullPage(appId) {
   loadCfpCommunications(c.id, c.email, fullName, appId, app.roles ? app.roles.title : '', app.stage);
   loadCfpEvaluations(c.id);
   loadCfpNotes(appId);
+}
+
+// ── INLINE CV VIEWER ─────────────────────────────────────────────────
+var _cfpCvViewerOpen = false;
+async function _cfpToggleCvViewer(cvUrl) {
+  var wrap = document.getElementById('cfp-cv-viewer');
+  var inner = document.getElementById('cfp-cv-inner');
+  if (!wrap || !inner) return;
+  if (_cfpCvViewerOpen) {
+    wrap.style.display = 'none';
+    _cfpCvViewerOpen = false;
+    return;
+  }
+  wrap.style.display = 'block';
+  _cfpCvViewerOpen = true;
+  inner.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  var url = cvUrl;
+  if (cvUrl.startsWith('storage:')) {
+    var path = cvUrl.replace('storage:','');
+    try {
+      var res = await sb.storage.from('candidate-cvs').createSignedUrl(path, 3600);
+      if (res.error || !res.data?.signedUrl) {
+        inner.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--red)">Could not load CV — check storage bucket is set up</div>';
+        return;
+      }
+      url = res.data.signedUrl;
+    } catch(e) {
+      inner.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--red)">Storage error: ' + e.message + '</div>';
+      return;
+    }
+  }
+  // Show in iframe
+  inner.innerHTML = '<iframe src="' + url + '" style="width:100%;height:520px;border:none;display:block" title="CV Viewer"></iframe>';
 }
 
 function switchCfpTab(btn, tabId) {
