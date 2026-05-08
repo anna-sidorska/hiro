@@ -4418,14 +4418,19 @@ async function _rdFindMeetingSlots(roleId) {
       result.innerHTML = '<div style="font-size:12px;color:var(--amber)">No available slots found in that range. Try extending the date window.</div>';
       return;
     }
-    result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">Click a slot to pre-fill date &amp; time:</div>' +
+    if (!suggestions.length) {
+      result.innerHTML = '<div style="font-size:12px;color:var(--amber)">No mutual free slots found in that range. Try extending the date window, or check calendars manually.</div>';
+      return;
+    }
+    result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">✓ Both free — click to pre-fill:</div>' +
       suggestions.slice(0,8).map(s => {
         const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
-        const label = start.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+        const label = start.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
         const pad = n => String(n).padStart(2,'0');
         const dateVal = start.getFullYear()+'-'+pad(start.getMonth()+1)+'-'+pad(start.getDate());
         const timeVal = pad(start.getHours())+':'+pad(start.getMinutes());
-        return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled ✓')">${label}</button>`;
+        const conf = s.confidence ? Math.round(s.confidence)+'%' : '';
+        return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled ✓')">${label}${conf?' <span style=\'font-size:10px;opacity:.6\'>(${conf})</span>':''}</button>`;
       }).join('');
   } catch(e) {
     result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error finding slots') + '</div>';
@@ -9416,8 +9421,8 @@ async function _graphFindMeetingTimes(attendeeEmailsCsv, durationMins, from, to)
       timeSlots: [{ start: { dateTime: from + 'T07:00:00', timeZone: userTz }, end: { dateTime: to + 'T19:00:00', timeZone: userTz } }]
     },
     meetingDuration: 'PT' + durationMins + 'M',
-    maxCandidates: 12,
-    minimumAttendeePercentage: 50,
+    maxCandidates: 10,
+    minimumAttendeePercentage: 100,
     isOrganizerOptional: false,
     returnSuggestionReasons: true
   };
