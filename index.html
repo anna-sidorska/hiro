@@ -3634,7 +3634,7 @@ function _rdS1Html(d) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <div>
             <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Attendees</label>
-            <input type="text" id="mtg-attendees" value="${(v.intake_attendees||role.profiles?.full_name||'').replace(/"/g,'&quot;')}" placeholder="${role.profiles?.full_name||'HM name, recruiter...'}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+            <input type="text" id="mtg-attendees" value="${(role.profiles?.email||localStorage.getItem('hiro_hm_email_'+roleId)||v.intake_attendees||role.profiles?.full_name||'').replace(/"/g,'&quot;')}" placeholder="${role.profiles?.email||role.profiles?.full_name||'HM email or name...'}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Teams / Meet Link (optional)</label>
@@ -5009,10 +5009,19 @@ async function openEditRoleModal(roleId) {
   _editingRoleId=roleId;
   const {data:r,error}=await sb.from('roles').select('*').eq('id',roleId).maybeSingle();
   if(error||!r){toast('Role not found','err');return;}
-  const {data:managers}=await sb.from('profiles').select('id,full_name').in('role',['manager','admin']).order('full_name');
+  const {data:managers}=await sb.from('profiles').select('id,full_name,email').in('role',['manager','admin']).order('full_name');
+  // Build email lookup map for auto-fill
+  window._hmEmailMap = {};
+  (managers||[]).forEach(m=>{ if(m.email) window._hmEmailMap[m.id]=m.email; });
   const hmSel=document.getElementById('er-hm');
-  if(hmSel) hmSel.innerHTML='<option value="">No hiring manager</option>'+(managers||[]).map(m=>`<option value="${m.id}" ${r.hiring_manager_id===m.id?'selected':''}>${m.full_name}</option>`).join('');
-  const hmEmailInp=document.getElementById('er-hm-email'); if(hmEmailInp) hmEmailInp.value=localStorage.getItem('hiro_hm_email_'+r.id)||'';
+  if(hmSel){
+    hmSel.innerHTML='<option value="">No hiring manager</option>'+(managers||[]).map(m=>`<option value="${m.id}" ${r.hiring_manager_id===m.id?'selected':''}>${m.full_name}</option>`).join('');
+    hmSel.onchange=function(){
+      const emailInp=document.getElementById('er-hm-email');
+      if(emailInp && window._hmEmailMap[this.value]) emailInp.value=window._hmEmailMap[this.value];
+    };
+  }
+  const hmEmailInp=document.getElementById('er-hm-email'); if(hmEmailInp) hmEmailInp.value=localStorage.getItem('hiro_hm_email_'+r.id)||(r.hiring_manager_id&&window._hmEmailMap?window._hmEmailMap[r.hiring_manager_id]:'')||'';
   document.getElementById('er-title').value=r.title||'';
   document.getElementById('er-dept').value=r.department||'';
   document.getElementById('er-loc').value=r.location||'';
@@ -5052,7 +5061,7 @@ async function submitEditRole() {
   }).eq('id',_editingRoleId);
   if(error){toast('Error: '+error.message,'err');return;}
   await auditLog('update','role',_editingRoleId,{title});
-  const hmEmailVal=document.getElementById('er-hm-email')?.value.trim(); if(hmEmailVal){localStorage.setItem('hiro_hm_email_'+_editingRoleId,hmEmailVal);}else{localStorage.removeItem('hiro_hm_email_'+_editingRoleId);} toast('Role updated'); closeModal('modal-edit-role');
+  const hmEmailVal=document.getElementById('er-hm-email')?.value.trim(); const hmIdVal=document.getElementById('er-hm')?.value; const autoEmail=!hmEmailVal&&hmIdVal&&window._hmEmailMap?window._hmEmailMap[hmIdVal]:''; const finalHmEmail=hmEmailVal||autoEmail; if(finalHmEmail){localStorage.setItem('hiro_hm_email_'+_editingRoleId,finalHmEmail);}else{localStorage.removeItem('hiro_hm_email_'+_editingRoleId);} toast('Role updated'); closeModal('modal-edit-role');
   if(currentPage==='roles') renderRoles();
 }
 
