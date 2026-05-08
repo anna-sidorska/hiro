@@ -4422,8 +4422,9 @@ async function _rdFindMeetingSlots(roleId) {
       suggestions.slice(0,8).map(s => {
         const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
         const label = start.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-        const dateVal = start.toISOString().slice(0,10);
-        const timeVal = start.toTimeString().slice(0,5);
+        const pad = n => String(n).padStart(2,'0');
+        const dateVal = start.getFullYear()+'-'+pad(start.getMonth()+1)+'-'+pad(start.getDate());
+        const timeVal = pad(start.getHours())+':'+pad(start.getMinutes());
         return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled ✓')">${label}</button>`;
       }).join('');
   } catch(e) {
@@ -4584,16 +4585,21 @@ async function _rdSaveMeeting(roleId) {
         _rdShowMeetingSaved(roleId,'Intake meeting saved and calendar event created ✓');return;
       } catch(e){}
     }
-    // Fallback: open Outlook via mailto with meeting details embedded
+    // Fallback: open Outlook Web App calendar with pre-filled event (much better than mailto)
     const dt=new Date(date+'T'+time+':00');
-    const dtStr=dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' at '+dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-    const body='Hi,\n\nPlease find the details for our intake meeting below.\n\nDate: '+dtStr+'\nDuration: '+dur+' minutes'+(link?'\nJoin: '+link:'')+'\n\nPlease accept this invite to confirm your attendance.\n\nThanks';
+    const endDt=new Date(dt.getTime()+dur*60000);
+    const _pad=n=>String(n).padStart(2,'0');
+    const fmtLocal=d=>d.getFullYear()+'-'+_pad(d.getMonth()+1)+'-'+_pad(d.getDate())+'T'+_pad(d.getHours())+':'+_pad(d.getMinutes())+':00';
     const emailList=(attendees||'').split(/[,;]/).map(e=>e.trim()).filter(e=>e.includes('@'));
-    const mailto='mailto:'+emailList.join(',')+
-      '?subject='+encodeURIComponent(title)+
-      '&body='+encodeURIComponent(body);
-    window.open(mailto,'_blank');
-    _rdShowMeetingSaved(roleId,'Intake meeting saved ✓ — Outlook opened for you to send the invite');
+    const owBody='Intake meeting for '+(role.title||'this role')+' at Sovos.'+(link?'\n\nJoin: '+link:'');
+    const owUrl='https://outlook.office.com/calendar/action/compose'
+      +'?subject='+encodeURIComponent(title)
+      +'&startdt='+encodeURIComponent(fmtLocal(dt))
+      +'&enddt='+encodeURIComponent(fmtLocal(endDt))
+      +'&body='+encodeURIComponent(owBody)
+      +(emailList.length?'&to='+encodeURIComponent(emailList.join(';')):'');
+    window.open(owUrl,'_blank');
+    _rdShowMeetingSaved(roleId,'Intake meeting saved ✓ — Outlook calendar opened to finalise the invite');
   } catch(e) {
     toast('Unexpected error: '+(e.message||e),'err');
     console.error('_rdSaveMeeting error',e);
@@ -9364,7 +9370,8 @@ async function _outlookCreateEvent({title, date, time, durationMins, attendees, 
     location: { displayName: location||'' },
     body: { contentType: 'text', content: description||'' },
     attendees: attendeeList,
-    isOnlineMeeting: false
+    isOnlineMeeting: true,
+    onlineMeetingProvider: 'teamsForBusiness'
   };
   const res = await fetch('https://graph.microsoft.com/v1.0/me/calendar/events', {
     method: 'POST',
@@ -9401,15 +9408,16 @@ async function _graphFindMeetingTimes(attendeeEmailsCsv, durationMins, from, to)
     emailAddress: { address: e.includes('<') ? e.match(/<([^>]+)>/)[1] : e }
   }));
   if (!attendees.length) throw new Error('No attendee emails provided');
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const body = {
     attendees,
     timeConstraint: {
       activityDomain: 'work',
-      timeSlots: [{ start: { dateTime: from + 'T07:00:00', timeZone: 'UTC' }, end: { dateTime: to + 'T18:00:00', timeZone: 'UTC' } }]
+      timeSlots: [{ start: { dateTime: from + 'T07:00:00', timeZone: userTz }, end: { dateTime: to + 'T19:00:00', timeZone: userTz } }]
     },
     meetingDuration: 'PT' + durationMins + 'M',
-    maxCandidates: 10,
-    minimumAttendeePercentage: 100,
+    maxCandidates: 12,
+    minimumAttendeePercentage: 50,
     isOrganizerOptional: false,
     returnSuggestionReasons: true
   };
