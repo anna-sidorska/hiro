@@ -8139,81 +8139,36 @@ async function saveJd(andPack=false) {
 }
 
 async function openInterviewPack(jdId) {
-  if (!jdId) { toast('No JD linked to this role — add a JD first','err'); return; }
-  const body = document.getElementById('ip-modal-body');
-  const titleEl = document.getElementById('ip-modal-title');
-  const subEl = document.getElementById('ip-modal-sub');
-  body.innerHTML = '<div class="loading"><div class="spinner"></div> Loading interview pack...</div>';
-  openModal('modal-interview-pack');
+  const INTERVIEWS_APP = 'https://sovosstructuredinterviews.replit.app/';
 
-  const {data: jd, error} = await sb.from('job_descriptions').select('*').eq('id', jdId).maybeSingle();
-  if (error || !jd) { body.innerHTML = '<div class="empty"><div class="empty-icon">❌</div><div class="empty-title">Could not load JD</div></div>'; return; }
-
-  titleEl.textContent = 'Interview Pack — ' + (jd.title || 'Role');
-  if (subEl) subEl.textContent = (jd.department || '') + (jd.department && jd.region ? ' · ' : '') + (jd.region || '');
-
-  // Parse competencies
-  const rawComps = jd.competencies;
-  let allStageComps = {};
-  if (rawComps && typeof rawComps === 'object' && !Array.isArray(rawComps)) {
-    allStageComps = rawComps;
-  } else if (Array.isArray(rawComps)) {
-    allStageComps = { screening: rawComps, first_interview: rawComps };
+  // If no JD — just open the app
+  if (!jdId) {
+    window.open(INTERVIEWS_APP, '_blank');
+    return;
   }
 
-  const stageLabels = {screening:'Screening',first_interview:'First Interview',second_interview:'Second Interview',panel:'Panel Interview',cultural_fit:'Cultural Fit',final:'Final Round'};
-  const stageColors = {screening:'#2563eb',first_interview:'#7c3aed',second_interview:'#0891b2',panel:'#059669',cultural_fit:'#d97706',final:'#dc2626'};
+  // Load JD to copy to clipboard for easy paste into the app
+  const {data: jd} = await sb.from('job_descriptions').select('title,summary,responsibilities,requirements,level').eq('id', jdId).maybeSingle();
 
-  let html = '';
+  if (jd) {
+    // Build a clean JD text block for clipboard
+    const parts = [
+      jd.title ? 'ROLE: ' + jd.title : '',
+      jd.level ? 'LEVEL: ' + jd.level : '',
+      jd.summary ? '\n' + jd.summary : '',
+      jd.responsibilities ? '\n\nRESPONSIBILITIES:\n' + jd.responsibilities : '',
+      jd.requirements ? '\n\nREQUIREMENTS:\n' + jd.requirements : '',
+    ].filter(Boolean).join('');
 
-  // Role summary
-  if (jd.summary) {
-    html += '<div style="background:var(--brand-light);border-left:3px solid var(--brand);border-radius:var(--r);padding:12px 16px;margin-bottom:20px">';
-    html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--brand);margin-bottom:4px">Role Brief</div>';
-    html += '<div style="font-size:13px;color:var(--text-2);line-height:1.6">' + jd.summary + '</div>';
-    html += '</div>';
+    try {
+      await navigator.clipboard.writeText(parts);
+      toast('JD copied to clipboard — paste into the "Job Description" field in the app ✓', 'info');
+    } catch(e) {
+      // Clipboard blocked — silently continue
+    }
   }
 
-  // Per-stage competency blocks
-  const stages = Object.keys(allStageComps).length ? Object.keys(allStageComps) : ['screening','first_interview'];
-  stages.forEach(function(stage) {
-    const comps = allStageComps[stage] || [];
-    if (!comps.length) return;
-    const color = stageColors[stage] || '#475569';
-    html += '<div style="margin-bottom:24px">';
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
-    html += '<span style="background:' + color + ';color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px">' + (stageLabels[stage]||stage) + '</span>';
-    html += '<span style="font-size:11px;color:var(--text-3)">' + comps.length + ' competenc' + (comps.length===1?'y':'ies') + '</span>';
-    html += '</div>';
-    comps.forEach(function(comp, ci) {
-      const cd = COMPETENCY_QUESTIONS[comp] || {q:['Describe your experience with '+comp], green:[], red:[]};
-      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px">';
-      html += '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">' + (ci+1) + '. ' + comp + '</div>';
-      cd.q.forEach(function(q, qi) {
-        html += '<div style="background:var(--surface-2);border-radius:6px;padding:10px 12px;margin-bottom:6px">';
-        html += '<div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:4px">Q' + (qi+1) + '</div>';
-        html += '<div style="font-size:12px;color:var(--text);line-height:1.5">' + q + '</div>';
-        const pPer = Math.ceil((cd.green||[]).length / (cd.q.length||1));
-        const g = (cd.green||[]).slice(qi*pPer,(qi+1)*pPer);
-        const r = (cd.red||[]).slice(qi*pPer,(qi+1)*pPer);
-        if (g.length || r.length) {
-          html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">';
-          if (g.length) { html += '<div style="background:#f0fdf4;border-radius:4px;padding:6px 8px">'; g.forEach(function(x){ html += '<div style="font-size:10px;color:#166534;margin-bottom:2px;padding-left:6px;border-left:2px solid #4ade80">' + x + '</div>'; }); html += '</div>'; }
-          if (r.length) { html += '<div style="background:#fef2f2;border-radius:4px;padding:6px 8px">'; r.forEach(function(x){ html += '<div style="font-size:10px;color:#991b1b;margin-bottom:2px;padding-left:6px;border-left:2px solid #f87171">' + x + '</div>'; }); html += '</div>'; }
-          html += '</div>';
-        }
-        html += '</div>';
-      });
-      html += '</div>';
-    });
-    html += '</div>';
-  });
-
-  if (!html) {
-    html = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No competencies set</div><div class="empty-sub">Add competencies to the JD to generate an interview pack</div></div>';
-  }
-
-  body.innerHTML = html;
+  window.open(INTERVIEWS_APP, '_blank');
 }
 
 function _autoCompetencies(jd){
