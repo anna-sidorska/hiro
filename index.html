@@ -5063,6 +5063,14 @@ async function submitEditRole() {
   await auditLog('update','role',_editingRoleId,{title});
   const hmEmailVal=document.getElementById('er-hm-email')?.value.trim(); const hmIdVal=document.getElementById('er-hm')?.value; const autoEmail=!hmEmailVal&&hmIdVal&&window._hmEmailMap?window._hmEmailMap[hmIdVal]:''; const finalHmEmail=hmEmailVal||autoEmail; if(finalHmEmail){localStorage.setItem('hiro_hm_email_'+_editingRoleId,finalHmEmail);}else{localStorage.removeItem('hiro_hm_email_'+_editingRoleId);} toast('Role updated'); closeModal('modal-edit-role');
   if(currentPage==='roles') renderRoles();
+  // If on role detail page, reload to reflect new HM + clear stale attendees
+  if(_rdData && _rdData.roleId===_editingRoleId) {
+    // Clear stale intake_attendees if HM email is now set, so it won't override
+    if(finalHmEmail && _rdData.intake?.id) {
+      await sb.from('role_intake').update({intake_attendees: finalHmEmail}).eq('id', _rdData.intake.id);
+    }
+    viewRoleDetail(_editingRoleId);
+  }
 }
 
 // ── INTERVIEWS ────────────────────────────────
