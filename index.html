@@ -4552,15 +4552,17 @@ async function _s4SendSelfSchedule(roleId) {
 }
 
 async function _rdSaveMeeting(roleId) {
+  const date=document.getElementById('mtg-date')?.value;
+  const time=document.getElementById('mtg-time')?.value;
+  const attendees=document.getElementById('mtg-attendees')?.value.trim();
+  const link=document.getElementById('mtg-link')?.value.trim();
+  if(!date){toast('Pick a meeting date first','err');return;}
+  if(!time){toast('Pick a meeting time first','err');return;}
+
+  // ── 1. Save to Hiro DB ──
   try {
-    const date=document.getElementById('mtg-date')?.value;
-    const time=document.getElementById('mtg-time')?.value;
-    const attendees=document.getElementById('mtg-attendees')?.value.trim();
-    const link=document.getElementById('mtg-link')?.value.trim();
-    if(!date){toast('Pick a meeting date first','err');return;}
-    if(!time){toast('Pick a meeting time first','err');return;}
     const notesMeta='TIME:'+(time||'TBD')+' LINK:'+(link||'');
-    const payload={intake_date:date, intake_attendees:attendees||null,
+    const payload={intake_date:date,intake_attendees:attendees||null,
       intake_notes:((_rdData.intake?.intake_notes||'').split('\n---MTG---\n')[0]||'')+'\n---MTG---\n'+notesMeta,
       updated_at:new Date().toISOString()};
     let dbError;
@@ -4572,50 +4574,54 @@ async function _rdSaveMeeting(roleId) {
       if(res.data?.id){if(!_rdData.intake)_rdData.intake={role_id:roleId};_rdData.intake.id=res.data.id;}
     }
     if(dbError){toast('Save error: '+dbError.message,'err');return;}
-    if(!_rdData.intake) _rdData.intake={role_id:roleId};
+    if(!_rdData.intake)_rdData.intake={role_id:roleId};
     _rdData.intake.intake_date=date;
     _rdData.intake.intake_attendees=attendees;
-    await _wfCompleteStep(roleId,'intake_meeting',true);
-    const paCalWebhook=localStorage.getItem('hiro_pa_calendar_webhook');
-    const role=_rdData.role||{};
-    const dur=parseInt(document.getElementById('mtg-duration')?.value||'30');
-    const title='Intake Meeting – '+(role.title||'Role');
-    if(_outlookAccount) {
-      const created=await _outlookCreateEvent({title,date,time,durationMins:dur,attendees,location:link,description:'Intake meeting for '+(role.title||'role')+' at Sovos.'+(link?' Teams: '+link:'')});
-      if(created){_rdShowMeetingSaved(roleId,'Intake meeting saved and added to your Outlook calendar ✓');return;}
-    }
-    if(paCalWebhook) {
-      try {
-        await fetch(paCalWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,date,time,duration_mins:dur,attendees:attendees||'',location:link||''})});
-        _rdShowMeetingSaved(roleId,'Intake meeting saved and calendar event created ✓');return;
-      } catch(e){}
-    }
-    // Fallback: generate ICS and download — opens Outlook desktop directly, no popup blocker issues
+  } catch(e){toast('Save error: '+(e.message||e),'err');return;}
+
+  // ── 2. Mark workflow step (non-blocking) ──
+  try { await _wfCompleteStep(roleId,'intake_meeting',true); } catch(e){}
+
+  const role=_rdData.role||{};
+  const dur=parseInt(document.getElementById('mtg-duration')?.value||'30');
+  const title='Intake Meeting – '+(role.title||'Role');
+  const desc='Intake meeting for '+(role.title||'this role')+' at Sovos.'+(link?'\nJoin: '+link:'');
+
+  // ── 3. ICS download — always triggered, opens Outlook with ready-to-send invite ──
+  try {
     const dt=new Date(date+'T'+time+':00');
     const endDt=new Date(dt.getTime()+dur*60000);
     const emailList=(attendees||'').split(/[,;]/).map(e=>e.trim()).filter(e=>e.includes('@'));
-    const fmtIcs=d=>{const p=n=>String(n).padStart(2,'0');return d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())+'T'+p(d.getUTCHours())+p(d.getUTCMinutes())+'00Z';};
+    const p=n=>String(n).padStart(2,'0');
+    const fmtIcs=d=>d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())+'T'+p(d.getUTCHours())+p(d.getUTCMinutes())+'00Z';
     const uid='hiro-'+roleId+'-'+Date.now()+'@sovos.com';
-    const attendeeLines=emailList.map(e=>'ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:'+e).join('\r\n');
-    const icsContent=[
-      'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Hiro ATS//Sovos//EN',
-      'METHOD:REQUEST',
+    const lines=[
+      'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Hiro ATS//Sovos//EN','METHOD:REQUEST',
       'BEGIN:VEVENT',
       'UID:'+uid,
       'DTSTART:'+fmtIcs(dt),
       'DTEND:'+fmtIcs(endDt),
       'SUMMARY:'+title,
-      'DESCRIPTION:Intake meeting for '+(role.title||'this role')+' at Sovos.'+(link?' Join: '+link:''),
-      attendeeLines,
+      'DESCRIPTION:'+desc.replace(/\n/g,'\\n'),
+      ...emailList.map(e=>'ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:'+e),
       'STATUS:CONFIRMED','SEQUENCE:0',
       'END:VEVENT','END:VCALENDAR'
-    ].filter(Boolean).join('\r\n');
-    const blob=new Blob([icsContent],{type:'text/calendar;charset=utf-8'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='intake-meeting.ics'; a.click();
-    _rdShowMeetingSaved(roleId,'Intake meeting saved ✓ — calendar invite downloaded, open it to send in Outlook');
-  } catch(e) {
-    toast('Unexpected error: '+(e.message||e),'err');
-    console.error('_rdSaveMeeting error',e);
+    ];
+    const blob=new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='intake-meeting.ics';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  } catch(e){console.warn('ICS error',e);}
+
+  // ── 4. Also create in Outlook via Graph if connected ──
+  if(_outlookAccount){
+    try {
+      await _outlookCreateEvent({title,date,time,durationMins:dur,attendees,location:link||'',description:desc});
+      _rdShowMeetingSaved(roleId,'Saved ✓ — invite downloaded and added to your Outlook calendar');
+    } catch(e){
+      _rdShowMeetingSaved(roleId,'Saved ✓ — invite file downloaded, open it in Outlook to send');
+    }
+  } else {
+    _rdShowMeetingSaved(roleId,'Saved ✓ — invite file downloaded, open it in Outlook to send to attendees');
   }
 }
 
@@ -9383,8 +9389,7 @@ async function _outlookCreateEvent({title, date, time, durationMins, attendees, 
     location: { displayName: location||'' },
     body: { contentType: 'text', content: description||'' },
     attendees: attendeeList,
-    isOnlineMeeting: true,
-    onlineMeetingProvider: 'teamsForBusiness'
+    isOnlineMeeting: false
   };
   const res = await fetch('https://graph.microsoft.com/v1.0/me/calendar/events', {
     method: 'POST',
