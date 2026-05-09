@@ -5092,19 +5092,43 @@ If you have any questions or would like to discuss before approving, feel free t
 Thanks in advance,
 Anna`;
 
-  // Trigger mailto via anchor click — most reliable cross-browser approach
-  const mailtoUrl='mailto:'+hmEmail
-    +'?subject='+encodeURIComponent('JD Approval Request: '+roleTitle)
-    +'&body='+encodeURIComponent(emailBody);
-  const a=document.createElement('a');
-  a.href=mailtoUrl;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // Show modal with pre-filled email content
+  const subject='JD Approval Request: '+roleTitle;
+  document.getElementById('jd-ap-email-to').value=hmEmail;
+  document.getElementById('jd-ap-email-subject').value=subject;
+  document.getElementById('jd-ap-email-link').value=approvalUrl;
+  document.getElementById('jd-ap-email-body').value=emailBody;
+  window._jdApEmailSubject=subject;
+  window._jdApEmailTo=hmEmail;
+  window._jdApEmailBody=emailBody;
+  openModal('modal-jd-approval-email');
 
   try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' sent to HM for approval'});}catch(e){}
-  toast('Approval email opened — send it to the HM ✓');
   viewRoleDetail(roleId);
+}
+
+function _apCopy(fieldId) {
+  const el=document.getElementById(fieldId);
+  if(!el) return;
+  navigator.clipboard.writeText(el.value).then(()=>{
+    const c=document.getElementById('jd-ap-copy-confirm');
+    if(c){c.textContent='Copied ✓';setTimeout(()=>{c.textContent='';},2000);}
+  }).catch(()=>{
+    el.select();document.execCommand('copy');
+    const c=document.getElementById('jd-ap-copy-confirm');
+    if(c){c.textContent='Copied ✓';setTimeout(()=>{c.textContent='';},2000);}
+  });
+}
+
+function _apOpenOutlook() {
+  const to=window._jdApEmailTo||'';
+  const subject=window._jdApEmailSubject||'';
+  const body=window._jdApEmailBody||'';
+  // Try OWA deep link — works for Office 365 accounts
+  const url='https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)
+    +'&subject='+encodeURIComponent(subject)
+    +'&body='+encodeURIComponent(body);
+  window.open(url,'_blank');
 }
 
 async function _undoJdApproval(roleId) {
@@ -13012,6 +13036,57 @@ async function renderSchedulingHub() {
 
 initApp();
 </script>
+
+<!-- JD APPROVAL EMAIL MODAL -->
+<div class="modal-overlay" id="modal-jd-approval-email">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title">📧 Send JD for HM Approval</div>
+      <button class="modal-close" onclick="closeModal('modal-jd-approval-email')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px">
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:16px">Copy the details below and paste into a new email in Outlook.</div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">To</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="jd-ap-email-to" readonly style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px">
+          <button class="btn btn-outline btn-sm" onclick="_apCopy('jd-ap-email-to')">Copy</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Subject</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="jd-ap-email-subject" readonly style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px">
+          <button class="btn btn-outline btn-sm" onclick="_apCopy('jd-ap-email-subject')">Copy</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Approval Link</div>
+          <button class="btn btn-outline btn-sm" onclick="_apCopy('jd-ap-email-link')">Copy Link</button>
+        </div>
+        <input id="jd-ap-email-link" readonly style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--brand);font-size:12px;box-sizing:border-box">
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Email Body</div>
+          <button class="btn btn-primary btn-sm" onclick="_apCopy('jd-ap-email-body')">📋 Copy Body</button>
+        </div>
+        <textarea id="jd-ap-email-body" readonly rows="9" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px;resize:none;font-family:inherit;line-height:1.5;box-sizing:border-box"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeModal('modal-jd-approval-email')">Close</button>
+        <button class="btn btn-primary" onclick="_apOpenOutlook()">Open Outlook Web ↗</button>
+      </div>
+      <div id="jd-ap-copy-confirm" style="text-align:center;font-size:12px;color:var(--green-text);margin-top:8px;min-height:18px"></div>
+    </div>
+  </div>
+</div>
 
 <!-- COMPOSE EMAIL MODAL -->
 <div class="modal-overlay" id="modal-compose-email">
