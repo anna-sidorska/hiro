@@ -3794,100 +3794,228 @@ function _rdPostAllBoards(roleId) {
   setTimeout(()=>{_wfCompleteStep(roleId,'job_posted');},400);
 }
 
+// ── SOVOS JOB POSTING TEMPLATE ──────────────────
+const SOVOS_INTRO = `Build your future with Sovos.
+
+If you're seeking a career where innovation meets impact, you've come to the right place. As a global leader, Sovos is transforming tax compliance from a business requirement to a force for growth while revolutionising how businesses navigate the ever-changing regulatory landscape.
+
+At Sovos, we're dedicated to more than just solving compliance challenges — we're committed to making a positive and lasting difference in everything we do. Our teams operate on the modern edge of digital technology, working not only to solve complex business challenges but also to enrich our personal, professional, and local communities.
+
+Our purpose-built systems provide the tools you need to thrive in a world where governments demand increased visibility, faster reporting and greater control over business processes. Excited about the possibilities? So are we!
+
+Don't worry if you don't check all the boxes — apply anyway! We're focused on hiring the right people, not just the "right" resume. It's not about what you've done elsewhere; it's all about what you're capable of doing here.`;
+
+const SOVOS_BENEFITS = `What Does Sovos Offer You?
+
+The tools to enhance your life - because we want you to enjoy your life outside of work and inside!
+
+• Flexible Time-Off
+• Bi-Weekly Meeting Free Days!
+• Mentoring Programs
+• Globally recognised Training and Development programs
+• Benefits`;
+
+const SOVOS_COMPANY = `Company Background
+
+Sovos is a global provider of tax, compliance and trust solutions and services that enable businesses to navigate an increasingly regulated world with true confidence. Purpose-built for always-on compliance capabilities, our scalable IT-driven solutions meet the demands of an evolving and complex global regulatory landscape. Sovos' cloud-based software platform provides an unparalleled level of integration with business applications and government compliance processes.
+
+More than 100,000 customers in 100+ countries — including half the Fortune 500 — trust Sovos for their compliance needs. Sovos annually processes more than three billion transactions across 19,000 global tax jurisdictions. Founded in 1979, Sovos has operations across the Americas and Europe, and is owned by Hg and TA Associates. For more information visit www.sovos.com.
+
+Sovos is an equal opportunity employer committed to providing an environment that celebrates diversity and where equal employment opportunities are available to all applicants and employees.`;
+
+function _s2GeneratePosting(d) {
+  const {role, intake, roleJd} = d;
+  const v = intake||{};
+  const jd = roleJd||{};
+  const title = v.confirmed_title||role.title||'[Role Title]';
+  const summary = jd.summary||'';
+  const responsibilities = (jd.responsibilities||'').trim();
+  const requirements = (jd.requirements||'').trim();
+
+  const fmtBullets = text => text.split('\n')
+    .map(l=>l.trim()).filter(Boolean)
+    .map(l=>l.startsWith('•')||l.startsWith('-')?l.replace(/^[-•]\s*/,'• ') : '• '+l)
+    .join('\n');
+
+  const workSection = `The Work You'll Do
+
+The ${title} ${summary||'will play a key role within the Sovos team.'}
+
+More specifically you will:
+
+${responsibilities ? fmtBullets(responsibilities) : '• [Add responsibilities]'}`;
+
+  const reqSection = `What We Need from You
+
+${requirements ? fmtBullets(requirements) : '• [Add requirements]'}`;
+
+  return [SOVOS_INTRO, workSection, reqSection, SOVOS_BENEFITS, SOVOS_COMPANY].join('\n\n---\n\n');
+}
+
 function _rdS2Html(d) {
   const {roleId,role,intake,wfSteps,roleJd}=d;
   const sm={};wfSteps.forEach(s=>{sm[s.step_key]=s;});
   const done=k=>sm[k]?.status==='completed';
   const v=intake||{};
 
-  // Build job title + location for pre-filling board links
-  const title=encodeURIComponent(v.confirmed_title||role.title||'');
-  const loc=encodeURIComponent(role.location||role.region||'');
+  const jobTitle=encodeURIComponent(v.confirmed_title||role.title||'');
+  const jobLoc=encodeURIComponent(v.remote_policy||role.location||role.region||'');
+  const hasJd=!!roleJd;
+
+  // Saved posting (localStorage)
+  const savedPosting=localStorage.getItem('hiro_posting_'+roleId)||'';
 
   const boards=[
-    {key:'linkedin',    label:'LinkedIn',           icon:'💼', color:'#0077b5', url:`https://www.linkedin.com/jobs/post/?f_title=${title}&f_location=${loc}`},
-    {key:'indeed',      label:'Indeed',             icon:'🔵', color:'#003A9B', url:`https://employers.indeed.com/p/post-job?title=${title}&location=${loc}`},
-    {key:'internal',    label:'Internal Careers',   icon:'🏢', color:'var(--brand)', url:'https://boards.greenhouse.io/'},
-    {key:'glassdoor',   label:'Glassdoor',          icon:'🟢', color:'#0caa41', url:`https://www.glassdoor.com/employer/jobListing/jobListingAdd.htm`},
+    {key:'linkedin', label:'LinkedIn',  icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#0077b5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>', color:'#0077b5',
+      url:`https://www.linkedin.com/jobs/post/?f_title=${jobTitle}&f_location=${jobLoc}`},
+    {key:'indeed',   label:'Indeed',    icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#003A9B"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-.35 5.13c1.63 0 2.52.95 2.52 2.28 0 1.34-.92 2.28-2.52 2.28-1.61 0-2.52-.94-2.52-2.28 0-1.33.9-2.28 2.52-2.28zm3.22 13.74h-2.74v-7.4h-1.32v-1.96h4.06v9.36z"/></svg>', color:'#003A9B',
+      url:`https://employers.indeed.com/p/post-job?title=${jobTitle}&location=${jobLoc}`},
+    {key:'glassdoor',label:'Glassdoor', icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#0caa41"><circle cx="12" cy="12" r="12"/><path fill="white" d="M12 5a7 7 0 100 14A7 7 0 0012 5zm0 11.5A4.5 4.5 0 1112 7.5a4.5 4.5 0 010 9z"/></svg>', color:'#0caa41',
+      url:'https://www.glassdoor.com/employer/jobListing/jobListingAdd.htm'},
   ];
-
-  const boardCard=(b)=>{
-    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">
-      <input type="checkbox" name="s2-board" value="${b.key}" data-url="${b.url}" checked style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer">
-      <span style="font-size:16px">${b.icon}</span>
-      <span style="font-size:13px;font-weight:600">${b.label}</span>
-      <a href="${b.url}" target="_blank" style="margin-left:auto;font-size:11px;color:var(--brand);text-decoration:none;flex-shrink:0" onclick="event.stopPropagation()">Open ↗</a>
-    </label>`;
-  };
 
   return `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-size:16px;font-weight:700">📢 Stage 2: Post Role</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${sBadge2(done('req_approved'),'Req Approved')}
+        ${sBadge2(done('posting_ready'),'Posting Ready')}
+        ${sBadge2(done('job_posted'),'Posted')}
+      </div>
     </div>
 
-    <!-- Req Approval -->
+    <!-- 2a: Req Approval -->
     <div class="card" style="margin-bottom:12px;${done('req_approved')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">Requisition Approval</div>
-          ${done('req_approved')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Approved</span>':'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">Pending</span>'}
+          <div class="card-title">2a · Requisition Approval</div>
+          ${done('req_approved')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Approved</span>':''}
         </div>
         ${done('req_approved')
           ?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','req_approved')">Undo</button>`
-          :`<button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','req_approved')">Mark Approved</button>`}
+          :`<button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','req_approved')">✓ Mark Approved</button>`}
       </div>
       <div class="card-body">
         <div style="font-size:13px;color:var(--text-2)">Confirm the requisition has been approved through your approval chain before posting publicly.</div>
       </div>
     </div>
 
-    <!-- Job Boards -->
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-header">
-        <div class="card-title">Post to Job Boards</div>
-        ${done('job_posted')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
-      </div>
-      <div class="card-body" style="display:grid;gap:8px">
-        ${boards.map(boardCard).join('')}
-        <div style="margin-top:4px;display:flex;gap:8px">
-          <input id="s2-custom-board-name" type="text" placeholder="Board name (e.g. Glassdoor PL)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
-          <input id="s2-custom-board-url" type="url" placeholder="URL" style="flex:2;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
-          <button class="btn btn-outline btn-sm" onclick="_rdAddCustomBoard()">+ Add</button>
-        </div>
-        <div id="s2-custom-boards"></div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-          ${done('job_posted')
-            ?`<div style="display:flex;gap:8px;align-items:center;width:100%">
-                <span style="font-size:12px;color:var(--green-text);font-weight:600">✓ Posted to selected boards</span>
-                <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px" onclick="_wfUndoStep('${roleId}','job_posted')">Undo</button>
-              </div>`
-            :`<button class="btn btn-primary" style="flex:1;padding:10px 0;font-size:13px;font-weight:600" onclick="_rdPostAllBoards('${roleId}')">🚀 Open All &amp; Mark Posted</button>`
-          }
-        </div>
-        ${done('job_posted')?`<div style="margin-top:6px;display:flex;gap:8px">
-          ${done('link_shared_hm')?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','link_shared_hm')">Undo link shared</button>`:`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','link_shared_hm')">✓ Share Job Link with HM</button>`}
-        </div>`:''}
-      </div>
-    </div>
-
-    <!-- LinkedIn Post -->
-    <div class="card" style="${done('linkedin_post')?'border:1.5px solid var(--green)':''}">
+    <!-- 2b: Job Posting -->
+    <div class="card" style="margin-bottom:12px;${done('posting_ready')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">LinkedIn Post</div>
-          ${done('linkedin_post')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
+          <div class="card-title">2b · Job Posting</div>
+          ${done('posting_ready')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Ready</span>':''}
         </div>
         <div style="display:flex;gap:6px">
-          ${!done('linkedin_post')?`<button class="btn btn-outline btn-sm" onclick="_rdGenerateLinkedInPost('${roleId}')">✦ Generate Post</button><button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','linkedin_post')">Mark Posted</button>`:`<button class="btn btn-ghost btn-sm" onclick="_wfUndoStep('${roleId}','linkedin_post')">Undo</button>`}
+          ${hasJd?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2RefreshPosting('${roleId}')">↺ Regenerate from JD</button>`:''}
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(document.getElementById('s2-posting-text').value).then(()=>toast('Posting copied ✓'))">📋 Copy All</button>
+          ${!done('posting_ready')
+            ?`<button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','posting_ready');this.closest('.card').style.border='1.5px solid var(--green)'">✓ Mark Ready</button>`
+            :`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','posting_ready')">Undo</button>`}
         </div>
       </div>
       <div class="card-body">
-        <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">Generate a compelling LinkedIn post, copy it, and post manually on your profile — tagging the hiring manager.</div>
+        ${!hasJd?`<div style="text-align:center;padding:16px;color:var(--text-3);font-size:13px">⚠️ Link a JD in Stage 1 first to auto-generate the posting.</div>`:`
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Auto-generated from your JD using the Sovos posting template. Edit directly before posting.</div>
+        <textarea id="s2-posting-text" rows="20" oninput="localStorage.setItem('hiro_posting_${roleId}',this.value)"
+          style="width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px;line-height:1.6;resize:vertical;font-family:inherit;box-sizing:border-box"
+        >${(savedPosting||_s2GeneratePosting(d)).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        `}
+      </div>
+    </div>
+
+    <!-- 2c: Post to Job Boards -->
+    <div class="card" style="margin-bottom:12px;${done('job_posted')?'border:1.5px solid var(--green)':''}">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="card-title">2c · Post to Job Boards</div>
+          ${done('job_posted')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
+        </div>
+        ${done('job_posted')
+          ?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','job_posted')">Undo</button>`
+          :`<button class="btn btn-primary btn-sm" onclick="_s2PostAll('${roleId}')">🚀 Post to All Boards</button>`}
+      </div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:12px">Each board opens in a new tab with title and location pre-filled. The job posting is copied to your clipboard so you can paste the description directly.</div>
+        <div style="display:grid;gap:8px">
+          ${boards.map(b=>`
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">
+            <div style="display:flex;align-items:center;gap:8px;flex:1">
+              ${b.icon}
+              <span style="font-size:13px;font-weight:600">${b.label}</span>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="_s2PostBoard('${roleId}','${b.key}','${b.url}',this)" style="font-size:11px">
+              ${localStorage.getItem('hiro_posted_'+roleId+'_'+b.key)?'✓ Posted':'Post →'}
+            </button>
+          </div>`).join('')}
+        </div>
+        ${done('job_posted')?'':`<div style="margin-top:10px;text-align:center"><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','job_posted')">✓ Mark All Posted</button></div>`}
+      </div>
+    </div>
+
+    <!-- 2d: LinkedIn Organic Post -->
+    <div class="card" style="${done('linkedin_post')?'border:1.5px solid var(--green)':''}">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="card-title">2d · LinkedIn Organic Post</div>
+          ${done('linkedin_post')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${!done('linkedin_post')
+            ?`<button class="btn btn-outline btn-sm" onclick="_rdGenerateLinkedInPost('${roleId}')">✦ Generate</button>
+               <button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','linkedin_post')">Mark Posted</button>`
+            :`<button class="btn btn-ghost btn-sm" onclick="_wfUndoStep('${roleId}','linkedin_post')">Undo</button>`}
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">Generate a short punchy post for your personal LinkedIn feed to attract passive candidates.</div>
         <div id="li-post-draft-${roleId}" style="display:none;padding:14px;background:var(--brand-light);border-radius:var(--r);border:1px solid var(--brand);font-size:13px;line-height:1.7;white-space:pre-wrap;position:relative">
-          <button style="position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:11px;cursor:pointer" onclick="navigator.clipboard.writeText(document.getElementById('li-post-draft-${roleId}').innerText.replace('Copy','').trim()).then(()=>toast('Copied!'))">Copy</button>
+          <button style="position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:11px;cursor:pointer;color:var(--text)" onclick="navigator.clipboard.writeText(document.getElementById('li-post-draft-${roleId}').innerText.replace('Copy','').trim()).then(()=>toast('Copied!'))">Copy</button>
         </div>
       </div>
     </div>`;
+}
+
+function sBadge2(isDone,label){
+  return isDone
+    ?`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ ${label}</span>`
+    :`<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-3);font-weight:600">${label}</span>`;
+}
+
+function _s2RefreshPosting(roleId) {
+  const ta=document.getElementById('s2-posting-text');
+  if(!ta) return;
+  const fresh=_s2GeneratePosting(_rdData);
+  ta.value=fresh;
+  localStorage.setItem('hiro_posting_'+roleId,fresh);
+  toast('Posting regenerated from JD ✓');
+}
+
+async function _s2PostBoard(roleId,boardKey,boardUrl,btn) {
+  // Copy posting to clipboard then open board
+  const posting=document.getElementById('s2-posting-text')?.value||localStorage.getItem('hiro_posting_'+roleId)||'';
+  if(posting){
+    try{ await navigator.clipboard.writeText(posting); }catch(e){}
+  }
+  window.open(boardUrl,'_blank');
+  localStorage.setItem('hiro_posted_'+roleId+'_'+boardKey,'1');
+  if(btn){ btn.textContent='✓ Posted'; btn.style.color='var(--green-text)'; btn.style.borderColor='var(--green)'; }
+  toast('Posting copied to clipboard — paste the description in '+boardKey+' ✓');
+}
+
+async function _s2PostAll(roleId) {
+  const posting=document.getElementById('s2-posting-text')?.value||localStorage.getItem('hiro_posting_'+roleId)||'';
+  if(posting){ try{ await navigator.clipboard.writeText(posting); }catch(e){} }
+  const boards=[
+    {key:'linkedin', url:`https://www.linkedin.com/jobs/post/?f_title=${encodeURIComponent(_rdData.intake?.confirmed_title||_rdData.role?.title||'')}&f_location=${encodeURIComponent(_rdData.role?.location||_rdData.role?.region||'')}`},
+    {key:'indeed',   url:`https://employers.indeed.com/p/post-job?title=${encodeURIComponent(_rdData.intake?.confirmed_title||_rdData.role?.title||'')}&location=${encodeURIComponent(_rdData.role?.location||_rdData.role?.region||'')}`},
+    {key:'glassdoor',url:'https://www.glassdoor.com/employer/jobListing/jobListingAdd.htm'},
+  ];
+  boards.forEach((b,i)=>{ setTimeout(()=>{ window.open(b.url,'_blank'); localStorage.setItem('hiro_posted_'+roleId+'_'+b.key,'1'); },i*400); });
+  setTimeout(()=>{ _wfCompleteStep(roleId,'job_posted'); _rdStage('s2'); },1600);
+  toast('Posting copied — all boards opening, paste the description in each ✓');
+}
 }
 
 // ══════════════════════════════════════════════
