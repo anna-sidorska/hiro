@@ -5049,8 +5049,7 @@ async function _markJdHmApproved(roleId,jdId) {
   // then opens pre-filled Outlook email with the approval link
   if(!jdId){toast('No JD linked to this role','err');return;}
 
-  // Open blank tab synchronously before any awaits (avoids popup blocker)
-  const outlookWin = window.open('about:blank','_blank');
+  // No popup needed — mailto triggered via anchor click after save
 
   const uid=(await sb.auth.getUser()).data.user?.id;
   const now=new Date().toISOString();
@@ -5068,10 +5067,7 @@ async function _markJdHmApproved(roleId,jdId) {
     approval_token:token
   }).select().single();
 
-  if(error){
-    if(outlookWin) outlookWin.close();
-    toast('Error creating approval: '+error.message,'err');return;
-  }
+  if(error){toast('Error creating approval: '+error.message,'err');return;}
   _rdData.jdApprovals=[ap,...(_rdData.jdApprovals||[]).filter(a=>a.id!==ap?.id)];
 
   // Build approval link + email
@@ -5096,12 +5092,15 @@ If you have any questions or would like to discuss before approving, feel free t
 Thanks in advance,
 Anna`;
 
-  // mailto: opens Outlook desktop with all fields pre-filled
-  const mailtoUrl='mailto:'+encodeURIComponent(hmEmail)
+  // Trigger mailto via anchor click — most reliable cross-browser approach
+  const mailtoUrl='mailto:'+hmEmail
     +'?subject='+encodeURIComponent('JD Approval Request: '+roleTitle)
     +'&body='+encodeURIComponent(emailBody);
-  if(outlookWin){ outlookWin.close(); } // close the blank tab
-  window.location.href=mailtoUrl;
+  const a=document.createElement('a');
+  a.href=mailtoUrl;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 
   try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' sent to HM for approval'});}catch(e){}
   toast('Approval email opened — send it to the HM ✓');
