@@ -4590,21 +4590,29 @@ async function _rdSaveMeeting(roleId) {
         _rdShowMeetingSaved(roleId,'Intake meeting saved and calendar event created ✓');return;
       } catch(e){}
     }
-    // Fallback: open Outlook Web App calendar with pre-filled event (much better than mailto)
+    // Fallback: generate ICS and download — opens Outlook desktop directly, no popup blocker issues
     const dt=new Date(date+'T'+time+':00');
     const endDt=new Date(dt.getTime()+dur*60000);
-    const _pad=n=>String(n).padStart(2,'0');
-    const fmtLocal=d=>d.getFullYear()+'-'+_pad(d.getMonth()+1)+'-'+_pad(d.getDate())+'T'+_pad(d.getHours())+':'+_pad(d.getMinutes())+':00';
     const emailList=(attendees||'').split(/[,;]/).map(e=>e.trim()).filter(e=>e.includes('@'));
-    const owBody='Intake meeting for '+(role.title||'this role')+' at Sovos.'+(link?'\n\nJoin: '+link:'');
-    const owUrl='https://outlook.office.com/calendar/action/compose'
-      +'?subject='+encodeURIComponent(title)
-      +'&startdt='+encodeURIComponent(fmtLocal(dt))
-      +'&enddt='+encodeURIComponent(fmtLocal(endDt))
-      +'&body='+encodeURIComponent(owBody)
-      +(emailList.length?'&to='+encodeURIComponent(emailList.join(';')):'');
-    window.open(owUrl,'_blank');
-    _rdShowMeetingSaved(roleId,'Intake meeting saved ✓ — Outlook calendar opened to finalise the invite');
+    const fmtIcs=d=>{const p=n=>String(n).padStart(2,'0');return d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())+'T'+p(d.getUTCHours())+p(d.getUTCMinutes())+'00Z';};
+    const uid='hiro-'+roleId+'-'+Date.now()+'@sovos.com';
+    const attendeeLines=emailList.map(e=>'ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:'+e).join('\r\n');
+    const icsContent=[
+      'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Hiro ATS//Sovos//EN',
+      'METHOD:REQUEST',
+      'BEGIN:VEVENT',
+      'UID:'+uid,
+      'DTSTART:'+fmtIcs(dt),
+      'DTEND:'+fmtIcs(endDt),
+      'SUMMARY:'+title,
+      'DESCRIPTION:Intake meeting for '+(role.title||'this role')+' at Sovos.'+(link?' Join: '+link:''),
+      attendeeLines,
+      'STATUS:CONFIRMED','SEQUENCE:0',
+      'END:VEVENT','END:VCALENDAR'
+    ].filter(Boolean).join('\r\n');
+    const blob=new Blob([icsContent],{type:'text/calendar;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='intake-meeting.ics'; a.click();
+    _rdShowMeetingSaved(roleId,'Intake meeting saved ✓ — calendar invite downloaded, open it to send in Outlook');
   } catch(e) {
     toast('Unexpected error: '+(e.message||e),'err');
     console.error('_rdSaveMeeting error',e);
@@ -9406,37 +9414,83 @@ async function _outlookReadCalendar(startDate, endDate) {
 
 // ── GRAPH: find meeting times (free/busy across attendees) ───────────────────
 async function _graphFindMeetingTimes(attendeeEmailsCsv, durationMins, from, to) {
+  // Uses getSchedule API — more reliable than findMeetingTimes.
+  // Treats tentative (1) as BUSY — only '0' (free) counts as available.
   const token = await _outlookGetToken();
   if (!token) throw new Error('Outlook not connected — sign in via Settings → Integrations');
-  const attendees = attendeeEmailsCsv.split(/[,;]/).map(e => e.trim()).filter(Boolean).map(e => ({
-    type: 'required',
-    emailAddress: { address: e.includes('<') ? e.match(/<([^>]+)>/)[1] : e }
-  }));
-  if (!attendees.length) throw new Error('No attendee emails provided');
+
+  // Resolve my own email
+  const meRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  const me = await meRes.json();
+  const myEmail = (me.mail || me.userPrincipalName || '').toLowerCase();
+
+  const attendeeEmails = attendeeEmailsCsv.split(/[,;]/).map(e => {
+    e = e.trim();
+    return (e.includes('<') ? e.match(/<([^>]+)>/)[1] : e).toLowerCase();
+  }).filter(Boolean);
+
+  // Include organiser so we check Anna's calendar too
+  const allEmails = [myEmail, ...attendeeEmails.filter(e => e !== myEmail)];
+  const intervalMins = 30; // 30-min granularity
+
   const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const body = {
-    attendees,
-    timeConstraint: {
-      activityDomain: 'work',
-      timeSlots: [{ start: { dateTime: from + 'T07:00:00', timeZone: userTz }, end: { dateTime: to + 'T19:00:00', timeZone: userTz } }]
-    },
-    meetingDuration: 'PT' + durationMins + 'M',
-    maxCandidates: 10,
-    minimumAttendeePercentage: 100,
-    isOrganizerOptional: false,
-    returnSuggestionReasons: true
+    schedules: allEmails,
+    startTime: { dateTime: from + 'T00:00:00', timeZone: 'UTC' },
+    endTime:   { dateTime: to   + 'T23:59:59', timeZone: 'UTC' },
+    availabilityViewInterval: intervalMins
   };
-  const res = await fetch('https://graph.microsoft.com/v1.0/me/findMeetingTimes', {
+
+  const res = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'Prefer': 'outlook.timezone="UTC"' },
-    body: JSON.stringify(body)
-  });
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+  , body: JSON.stringify(body) });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error('Graph error: ' + (err.error?.message || 'HTTP ' + res.status));
+    throw new Error('getSchedule error: ' + (err.error?.message || 'HTTP ' + res.status));
   }
   const data = await res.json();
-  return data.meetingTimeSuggestions || [];
+  const schedules = data.value || [];
+  if (!schedules.length) return [];
+
+  const slotsNeeded = Math.max(1, Math.ceil(durationMins / intervalMins));
+  const viewLen = Math.min(...schedules.map(s => (s.availabilityView || '').length));
+  const startMs = Date.parse(from + 'T00:00:00Z'); // midnight UTC on start date
+  const results = [];
+
+  for (let i = 0; i <= viewLen - slotsNeeded; i++) {
+    // Check slotsNeeded consecutive intervals — ALL people must be '0' (free)
+    // '1' = tentative → treated as BUSY, '2'= busy, '3'=OOF, '4'=working elsewhere
+    let allFree = true;
+    for (let j = i; j < i + slotsNeeded; j++) {
+      if (!schedules.every(s => (s.availabilityView || '')[j] === '0')) { allFree = false; break; }
+    }
+    if (!allFree) continue;
+
+    const slotStart = new Date(startMs + i * intervalMins * 60000);
+    const day = slotStart.getDay(); // local weekday
+    const hour = slotStart.getHours(); // local hour
+    const minOfDay = hour * 60 + slotStart.getMinutes();
+
+    // Only weekdays 08:00–17:00 local (so meeting ends by 18:00 at latest)
+    if (day === 0 || day === 6) continue;
+    if (minOfDay < 8 * 60 || minOfDay + durationMins > 18 * 60) continue;
+
+    const slotEnd = new Date(slotStart.getTime() + durationMins * 60000);
+    results.push({
+      meetingTimeSlot: {
+        start: { dateTime: slotStart.toISOString().slice(0, 19), timeZone: 'UTC' },
+        end:   { dateTime: slotEnd.toISOString().slice(0, 19),   timeZone: 'UTC' }
+      },
+      confidence: 100
+    });
+    if (results.length >= 10) break;
+    i += slotsNeeded - 1; // skip past this slot to avoid overlapping suggestions
+  }
+  return results;
 }
 
 // ── GRAPH: send email via Outlook ────────────────────────────────────────────
