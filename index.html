@@ -3725,7 +3725,8 @@ function _rdS1Html(d) {
                <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>`
             :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openLinkJdModal('${roleId}')">📚 Link from Library</button>
               <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>`}
-          ${roleJd&&apStatus!=='approved'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_submitJdApproval('${roleId}','${roleJd.id}')">Submit for Approval</button>`:''}
+          ${roleJd&&apStatus!=='approved'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">✓ Mark HM Approved</button>`:''}
+          ${roleJd&&apStatus==='approved'?`<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--text-3)" onclick="_undoJdApproval('${roleId}')">Undo Approval</button>`:''}
         </div>
       </div>
       <div class="card-body">
@@ -3762,11 +3763,12 @@ function _rdS1Html(d) {
             <div style="display:flex;flex-wrap:wrap;gap:4px">${roleJd.competencies.map(c=>`<span style="background:var(--brand-light);color:var(--brand-dark);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500">${c}</span>`).join('')}</div>
           </div>`:''}
           <!-- Approval block -->
-          ${jdApprovals.length?`<div style="padding:10px;background:var(--surface-2);border-radius:var(--r);font-size:13px;margin-top:6px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-weight:600">HM Approval</span>${apBadge}</div>
-            ${jdApprovals[0].comments?`<div style="font-size:12px;color:var(--text-2);margin-top:4px"><strong>Comments:</strong> ${jdApprovals[0].comments}</div>`:''}
-            ${jdApprovals[0].status==='pending'?`<div style="margin-top:10px"><textarea id="jd-ap-comments-${jdApprovals[0].id}" placeholder="Review comments..." rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;resize:none;font-family:inherit;box-sizing:border-box"></textarea><div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-primary btn-sm" onclick="_jdApprovalAction('${jdApprovals[0].id}','${roleId}','approved')">✓ Approve</button><button class="btn btn-outline btn-sm" style="color:var(--amber)" onclick="_jdApprovalAction('${jdApprovals[0].id}','${roleId}','changes_requested')">Request Changes</button></div></div>`:''}
-          </div>`:`<div style="font-size:12px;color:var(--text-3);margin-top:6px;padding:8px 10px;background:var(--surface-2);border-radius:var(--r)">Not yet submitted for HM approval</div>`}
+          <div style="margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:var(--r);display:flex;align-items:center;gap:10px">
+            <span style="font-size:12px;font-weight:600;color:var(--text-2)">HM Approval:</span>
+            ${apBadge}
+            ${jdApprovals.length&&jdApprovals[0].comments?`<span style="font-size:11px;color:var(--text-3);margin-left:4px">${jdApprovals[0].comments}</span>`:''}
+            ${jdApprovals.length&&jdApprovals[0].reviewed_at?`<span style="font-size:11px;color:var(--text-3);margin-left:auto">${fmtDate(jdApprovals[0].reviewed_at)}</span>`:''}
+          </div>
         `:`
           <div style="text-align:center;padding:20px 0">
             <div style="font-size:32px;margin-bottom:8px">📚</div>
@@ -5042,29 +5044,50 @@ async function _rdGenerateLinkedInPost(roleId) {
 }
 
 // ── JD APPROVAL ACTIONS ───────────────────────
-async function _submitJdApproval(roleId,jdId) {
+async function _markJdHmApproved(roleId,jdId) {
   if(!jdId){toast('No JD linked to this role','err');return;}
   const uid=(await sb.auth.getUser()).data.user?.id;
-  const {data:jd}=await sb.from('job_descriptions').select('title,summary,responsibilities,requirements').eq('id',jdId).maybeSingle();
+  const now=new Date().toISOString();
   const version=((_rdData.jdApprovals||[]).length)+1;
-  const snapshot=jd?`${jd.summary||''}\n\nResponsibilities:\n${jd.responsibilities||''}\n\nRequirements:\n${jd.requirements||''}`.trim():null;
-  const {data:ap,error}=await sb.from('role_jd_approvals').insert({role_id:roleId,jd_id:jdId,jd_version:version,jd_snapshot:snapshot||null,status:'pending',submitted_by:uid,submitted_at:new Date().toISOString()}).select().single();
+  // Upsert: if there's already a pending approval, update it; otherwise insert
+  const existing=(_rdData.jdApprovals||[]).find(a=>a.status==='pending');
+  let ap,error;
+  if(existing){
+    ({data:ap,error}=await sb.from('role_jd_approvals').update({status:'approved',reviewed_by:uid,reviewed_at:now}).eq('id',existing.id).select().single());
+  } else {
+    ({data:ap,error}=await sb.from('role_jd_approvals').insert({role_id:roleId,jd_id:jdId,jd_version:version,status:'approved',submitted_by:uid,submitted_at:now,reviewed_by:uid,reviewed_at:now}).select().single());
+  }
   if(error){toast('Error: '+error.message,'err');return;}
-  _rdData.jdApprovals=[ap,...(_rdData.jdApprovals||[])];
-  try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' submitted for approval'});}catch(e){}
-  toast('JD submitted for approval ✓');_rdSwitchTab('jd');
+  if(ap){_rdData.jdApprovals=[ap,...(_rdData.jdApprovals||[]).filter(a=>a.id!==ap.id)];}
+  try{await _wfCompleteStep(roleId,'jd_approved');}catch(e){}
+  try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_approved',p_description:'JD marked as approved by HM'});}catch(e){}
+  toast('JD marked as HM approved ✓');
+  viewRoleDetail(roleId);
+}
+
+async function _undoJdApproval(roleId) {
+  const approved=(_rdData.jdApprovals||[]).find(a=>a.status==='approved');
+  if(!approved){toast('No approval to undo','err');return;}
+  const {error}=await sb.from('role_jd_approvals').delete().eq('id',approved.id);
+  if(error){toast('Error: '+error.message,'err');return;}
+  _rdData.jdApprovals=(_rdData.jdApprovals||[]).filter(a=>a.id!==approved.id);
+  try{await _wfUndoStep(roleId,'jd_approved');}catch(e){}
+  toast('Approval removed');
+  viewRoleDetail(roleId);
+}
+
+async function _submitJdApproval(roleId,jdId) {
+  // Legacy — kept for compatibility, just calls mark approved now
+  await _markJdHmApproved(roleId,jdId);
 }
 
 async function _jdApprovalAction(approvalId,roleId,action) {
-  const comments=document.getElementById('jd-ap-comments-'+approvalId)?.value.trim()||null;
   const uid=(await sb.auth.getUser()).data.user?.id;
-  const {error}=await sb.from('role_jd_approvals').update({status:action,reviewed_by:uid,reviewed_at:new Date().toISOString(),comments}).eq('id',approvalId);
+  const {error}=await sb.from('role_jd_approvals').update({status:action,reviewed_by:uid,reviewed_at:new Date().toISOString()}).eq('id',approvalId);
   if(error){toast('Error: '+error.message,'err');return;}
-  const ap=(_rdData.jdApprovals||[]).find(a=>a.id===approvalId);
-  if(ap){ap.status=action;ap.comments=comments;ap.reviewed_at=new Date().toISOString();}
-  if(action==='approved'){await _wfCompleteStep(roleId,'jd_approved');}
-  toast(action==='approved'?'JD approved ✓':action==='changes_requested'?'Changes requested':'Done');
-  _rdSwitchTab('jd');
+  if(action==='approved'){try{await _wfCompleteStep(roleId,'jd_approved');}catch(e){}}
+  toast(action==='approved'?'JD approved ✓':'Done');
+  viewRoleDetail(roleId);
 }
 
 let _editingRoleId=null;
