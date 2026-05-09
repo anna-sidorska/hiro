@@ -4559,6 +4559,9 @@ async function _rdSaveMeeting(roleId) {
   if(!date){toast('Pick a meeting date first','err');return;}
   if(!time){toast('Pick a meeting time first','err');return;}
 
+  // Open blank tab NOW (synchronous, user-gesture) so popup blocker won't fire later
+  const outlookWin = window.open('about:blank','_blank');
+
   // ── 1. Save to Hiro DB ──
   try {
     const notesMeta='TIME:'+(time||'TBD')+' LINK:'+(link||'');
@@ -4573,11 +4576,17 @@ async function _rdSaveMeeting(roleId) {
       dbError=res.error;
       if(res.data?.id){if(!_rdData.intake)_rdData.intake={role_id:roleId};_rdData.intake.id=res.data.id;}
     }
-    if(dbError){toast('Save error: '+dbError.message,'err');return;}
+    if(dbError){
+      if(outlookWin) outlookWin.close();
+      toast('Save error: '+dbError.message,'err');return;
+    }
     if(!_rdData.intake)_rdData.intake={role_id:roleId};
     _rdData.intake.intake_date=date;
     _rdData.intake.intake_attendees=attendees;
-  } catch(e){toast('Save error: '+(e.message||e),'err');return;}
+  } catch(e){
+    if(outlookWin) outlookWin.close();
+    toast('Save error: '+(e.message||e),'err');return;
+  }
 
   // ── 2. Mark workflow step (non-blocking) ──
   try { await _wfCompleteStep(roleId,'intake_meeting',true); } catch(e){}
@@ -4585,44 +4594,33 @@ async function _rdSaveMeeting(roleId) {
   const role=_rdData.role||{};
   const dur=parseInt(document.getElementById('mtg-duration')?.value||'30');
   const title='Intake Meeting – '+(role.title||'Role');
-  const desc='Intake meeting for '+(role.title||'this role')+' at Sovos.'+(link?'\nJoin: '+link:'');
+  const desc='Intake meeting for '+(role.title||'this role')+' at Sovos.'+(link?'\r\nJoin: '+link:'');
 
-  // ── 3. ICS download — always triggered, opens Outlook with ready-to-send invite ──
+  // ── 3. Open Outlook Web compose — pre-filled, ready to send ──
   try {
-    const dt=new Date(date+'T'+time+':00');
-    const endDt=new Date(dt.getTime()+dur*60000);
+    const startLocal=date+'T'+time+':00';
+    const endDt=new Date(new Date(startLocal).getTime()+dur*60000);
+    const pad=n=>String(n).padStart(2,'0');
+    const endLocal=endDt.getFullYear()+'-'+pad(endDt.getMonth()+1)+'-'+pad(endDt.getDate())
+      +'T'+pad(endDt.getHours())+':'+pad(endDt.getMinutes())+':00';
     const emailList=(attendees||'').split(/[,;]/).map(e=>e.trim()).filter(e=>e.includes('@'));
-    const p=n=>String(n).padStart(2,'0');
-    const fmtIcs=d=>d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())+'T'+p(d.getUTCHours())+p(d.getUTCMinutes())+'00Z';
-    const uid='hiro-'+roleId+'-'+Date.now()+'@sovos.com';
-    const lines=[
-      'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Hiro ATS//Sovos//EN','METHOD:REQUEST',
-      'BEGIN:VEVENT',
-      'UID:'+uid,
-      'DTSTART:'+fmtIcs(dt),
-      'DTEND:'+fmtIcs(endDt),
-      'SUMMARY:'+title,
-      'DESCRIPTION:'+desc.replace(/\n/g,'\\n'),
-      ...emailList.map(e=>'ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:'+e),
-      'STATUS:CONFIRMED','SEQUENCE:0',
-      'END:VEVENT','END:VCALENDAR'
-    ];
-    const blob=new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='intake-meeting.ics';
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-  } catch(e){console.warn('ICS error',e);}
-
-  // ── 4. Also create in Outlook via Graph if connected ──
-  if(_outlookAccount){
-    try {
-      await _outlookCreateEvent({title,date,time,durationMins:dur,attendees,location:link||'',description:desc});
-      _rdShowMeetingSaved(roleId,'Saved ✓ — invite downloaded and added to your Outlook calendar');
-    } catch(e){
-      _rdShowMeetingSaved(roleId,'Saved ✓ — invite file downloaded, open it in Outlook to send');
-    }
-  } else {
-    _rdShowMeetingSaved(roleId,'Saved ✓ — invite file downloaded, open it in Outlook to send to attendees');
+    const params=new URLSearchParams({
+      subject: title,
+      startdt: startLocal,
+      enddt: endLocal,
+      body: desc+(link?'\r\nTeams link: '+link:''),
+      to: emailList.join(','),
+      ...(link?{location:link}:{})
+    });
+    const outlookUrl='https://outlook.office.com/calendar/0/action/compose?'+params.toString();
+    if(outlookWin){ outlookWin.location.href=outlookUrl; }
+    else { window.open(outlookUrl,'_blank'); }
+  } catch(e){
+    console.warn('Outlook compose error',e);
+    if(outlookWin) outlookWin.close();
   }
+
+  _rdShowMeetingSaved(roleId,'Saved ✓ — Outlook invite opened, add attendees and send');
 }
 
 function _rdShowMeetingSaved(roleId, msg) {
