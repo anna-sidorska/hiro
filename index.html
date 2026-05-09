@@ -5058,7 +5058,7 @@ async function _markJdHmApproved(roleId,jdId) {
 
   // Delete any existing pending approval first (clean slate)
   const existing=(_rdData.jdApprovals||[]).find(a=>a.status==='pending');
-  if(existing){ await sb.from('role_jd_approvals').delete().eq('id',existing.id).catch(()=>{}); }
+  if(existing){ try{ await sb.from('role_jd_approvals').delete().eq('id',existing.id); }catch(e){} }
 
   // Insert new pending record with token
   const {data:ap,error}=await sb.from('role_jd_approvals').insert({
