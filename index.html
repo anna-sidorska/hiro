@@ -3725,7 +3725,7 @@ function _rdS1Html(d) {
                <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>`
             :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openLinkJdModal('${roleId}')">📚 Link from Library</button>
               <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>`}
-          ${roleJd&&apStatus!=='approved'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">✓ Mark HM Approved</button>`:''}
+          ${roleJd&&apStatus!=='approved'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">📧 Send to HM for Approval</button>`:''}
           ${roleJd&&apStatus==='approved'?`<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--text-3)" onclick="_undoJdApproval('${roleId}')">Undo Approval</button>`:''}
         </div>
       </div>
@@ -5045,23 +5045,68 @@ async function _rdGenerateLinkedInPost(roleId) {
 
 // ── JD APPROVAL ACTIONS ───────────────────────
 async function _markJdHmApproved(roleId,jdId) {
+  // "Submit for HM Approval" — creates pending record with unique token,
+  // then opens pre-filled Outlook email with the approval link
   if(!jdId){toast('No JD linked to this role','err');return;}
+
+  // Open blank tab synchronously before any awaits (avoids popup blocker)
+  const outlookWin = window.open('about:blank','_blank');
+
   const uid=(await sb.auth.getUser()).data.user?.id;
   const now=new Date().toISOString();
   const version=((_rdData.jdApprovals||[]).length)+1;
-  // Upsert: if there's already a pending approval, update it; otherwise insert
+  const token=crypto.randomUUID();
+
+  // Delete any existing pending approval first (clean slate)
   const existing=(_rdData.jdApprovals||[]).find(a=>a.status==='pending');
-  let ap,error;
-  if(existing){
-    ({data:ap,error}=await sb.from('role_jd_approvals').update({status:'approved',reviewed_by:uid,reviewed_at:now}).eq('id',existing.id).select().single());
-  } else {
-    ({data:ap,error}=await sb.from('role_jd_approvals').insert({role_id:roleId,jd_id:jdId,jd_version:version,status:'approved',submitted_by:uid,submitted_at:now,reviewed_by:uid,reviewed_at:now}).select().single());
+  if(existing){ await sb.from('role_jd_approvals').delete().eq('id',existing.id).catch(()=>{}); }
+
+  // Insert new pending record with token
+  const {data:ap,error}=await sb.from('role_jd_approvals').insert({
+    role_id:roleId,jd_id:jdId,jd_version:version,
+    status:'pending',submitted_by:uid,submitted_at:now,
+    approval_token:token
+  }).select().single();
+
+  if(error){
+    if(outlookWin) outlookWin.close();
+    toast('Error creating approval: '+error.message,'err');return;
   }
-  if(error){toast('Error: '+error.message,'err');return;}
-  if(ap){_rdData.jdApprovals=[ap,...(_rdData.jdApprovals||[]).filter(a=>a.id!==ap.id)];}
-  try{await _wfCompleteStep(roleId,'jd_approved');}catch(e){}
-  try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_approved',p_description:'JD marked as approved by HM'});}catch(e){}
-  toast('JD marked as HM approved ✓');
+  _rdData.jdApprovals=[ap,...(_rdData.jdApprovals||[]).filter(a=>a.id!==ap?.id)];
+
+  // Build approval link + email
+  const approvalUrl=window.location.origin+window.location.pathname+'?approval='+token;
+  const role=_rdData.role||{};
+  const jd=_rdData.roleJd||{};
+  const hmEmail=localStorage.getItem('hiro_hm_email_'+roleId)||'';
+  const hmName=localStorage.getItem('hiro_hm_name_'+roleId)||'';
+  const roleTitle=jd.title||role.title||'the role';
+  const greeting=hmName?'Hi '+hmName.split(' ')[0]+',':'Hi,';
+
+  const emailBody=`${greeting}
+
+I'm reaching out to share the Job Description for ${roleTitle} and request your approval before we go live with the search.
+
+Please review the JD using the link below and click Approve or Request Changes directly on the page — no login needed.
+
+👉 Review & Approve: ${approvalUrl}
+
+If you have any questions or would like to discuss before approving, feel free to reply to this email or give me a call.
+
+Thanks in advance,
+Anna`;
+
+  const params=new URLSearchParams({
+    subject:`JD Approval Request: ${roleTitle}`,
+    to: hmEmail,
+    body: emailBody
+  });
+  const outlookUrl='https://outlook.office.com/mail/deeplink/compose?'+params.toString();
+  if(outlookWin){ outlookWin.location.href=outlookUrl; }
+  else { window.open(outlookUrl,'_blank'); }
+
+  try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' sent to HM for approval'});}catch(e){}
+  toast('Approval email opened — send it to the HM ✓');
   viewRoleDetail(roleId);
 }
 
@@ -8708,11 +8753,114 @@ function downloadEvalIcs() {
   });
 }
 
+// ── JD PUBLIC APPROVAL PAGE ───────────────────
+async function _showJdApprovalPage(token) {
+  const el = document.getElementById('eval-screen') || document.body;
+  el.style.cssText = 'display:flex;align-items:center;justify-content:center;min-height:100vh;background:#07101f;font-family:Inter,sans-serif';
+
+  const loading = `<div style="text-align:center;color:#eef4ff"><div style="width:36px;height:36px;border:3px solid rgba(0,196,238,.2);border-top-color:#00c4ee;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px"></div><div style="font-size:14px;color:rgba(255,255,255,.5)">Loading…</div></div>`;
+  el.innerHTML = loading;
+
+  let data;
+  try {
+    const res = await sb.rpc('get_jd_approval_by_token', { p_token: token });
+    data = res.data;
+  } catch(e) {
+    el.innerHTML = _apPageShell('<div style="text-align:center;padding:40px 0"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">Link not found</div><div style="color:rgba(255,255,255,.5);font-size:14px">This approval link is invalid or has expired.</div></div>');
+    return;
+  }
+
+  if (!data || data.error) {
+    el.innerHTML = _apPageShell(`<div style="text-align:center;padding:40px 0"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">Link not found</div><div style="color:rgba(255,255,255,.5);font-size:14px">${data?.error||'Invalid link'}</div></div>`);
+    return;
+  }
+
+  if (data.status === 'approved') {
+    el.innerHTML = _apPageShell(`<div style="text-align:center;padding:40px 0"><div style="font-size:48px;margin-bottom:12px">✅</div><div style="font-size:20px;font-weight:700;color:#34d399;margin-bottom:8px">Already Approved</div><div style="color:rgba(255,255,255,.5);font-size:14px">This JD has already been approved. Thank you!</div></div>`);
+    return;
+  }
+  if (data.status === 'changes_requested') {
+    el.innerHTML = _apPageShell(`<div style="text-align:center;padding:40px 0"><div style="font-size:48px;margin-bottom:12px">📝</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">Changes Already Requested</div><div style="color:rgba(255,255,255,.5);font-size:14px">Your feedback has been recorded. The recruiter will be in touch.</div></div>`);
+    return;
+  }
+
+  const jd = data.jd || {};
+  const fmtSection = (label, text) => text ? `
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">${label}</div>
+      <div style="font-size:14px;color:rgba(255,255,255,.8);line-height:1.7;white-space:pre-wrap">${text.replace(/</g,'&lt;')}</div>
+    </div>` : '';
+
+  const body = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:11px;font-weight:600;color:#00c4ee;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">Job Description for Review</div>
+      <div style="font-size:22px;font-weight:800;margin-bottom:4px">${jd.title||'Job Description'}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.4)">${[jd.department,jd.level,jd.region].filter(Boolean).join(' · ')}</div>
+    </div>
+    ${fmtSection('Overview', jd.summary)}
+    ${fmtSection('Responsibilities', jd.responsibilities)}
+    ${fmtSection('Requirements', jd.requirements)}
+
+    <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:24px;margin-top:8px">
+      <div style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:16px">Please review the job description above and indicate your decision below. You can add optional comments before submitting.</div>
+      <textarea id="ap-comments" placeholder="Optional comments (e.g. changes needed, questions for the recruiter)…" rows="3" style="width:100%;padding:12px 14px;border:1.5px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.05);color:#eef4ff;font-size:13px;resize:vertical;font-family:inherit;box-sizing:border-box;margin-bottom:14px"></textarea>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button onclick="_apSubmit('${token}','approved')" style="flex:1;min-width:140px;padding:13px 20px;background:#059669;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">✓ Approve JD</button>
+        <button onclick="_apSubmit('${token}','changes_requested')" style="flex:1;min-width:140px;padding:13px 20px;background:transparent;color:#fbbf24;border:1.5px solid #fbbf24;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">✏ Request Changes</button>
+      </div>
+      <div id="ap-feedback" style="margin-top:12px;font-size:13px;color:rgba(255,255,255,.5)"></div>
+    </div>`;
+
+  el.innerHTML = _apPageShell(body);
+}
+
+function _apPageShell(content) {
+  return `<div style="width:100%;max-width:680px;margin:0 auto;padding:32px 20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px">
+      <div style="width:32px;height:32px;background:linear-gradient(135deg,#00c4ee,#6366f1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">H</div>
+      <span style="font-size:15px;font-weight:700;color:#eef4ff">Hiro</span>
+      <span style="margin-left:8px;font-size:12px;padding:2px 10px;border-radius:99px;background:rgba(0,196,238,.12);color:#00c4ee;font-weight:600">JD Approval Request</span>
+    </div>
+    <div style="background:#0e1b30;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:28px 32px;color:#eef4ff">
+      ${content}
+    </div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:rgba(255,255,255,.25)">Hiro ATS · Sovos · This link was sent by your recruiter</div>
+  </div>`;
+}
+
+async function _apSubmit(token, action) {
+  const comments = document.getElementById('ap-comments')?.value.trim() || null;
+  const fb = document.getElementById('ap-feedback');
+  if (fb) fb.textContent = 'Submitting…';
+  const btns = document.querySelectorAll('[onclick*="_apSubmit"]');
+  btns.forEach(b => b.disabled = true);
+  try {
+    const res = await sb.rpc('process_jd_approval', { p_token: token, p_action: action, p_comments: comments });
+    if (res.data?.error) throw new Error(res.data.error);
+    const el = document.getElementById('eval-screen') || document.body;
+    el.innerHTML = _apPageShell(action === 'approved'
+      ? `<div style="text-align:center;padding:40px 0"><div style="font-size:48px;margin-bottom:16px">✅</div><div style="font-size:22px;font-weight:800;color:#34d399;margin-bottom:8px">JD Approved</div><div style="font-size:14px;color:rgba(255,255,255,.5)">Thank you — the recruiter has been notified.</div>${comments?`<div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.05);border-radius:10px;font-size:13px;color:rgba(255,255,255,.6);text-align:left"><strong>Your comments:</strong><br>${comments}</div>`:''}</div>`
+      : `<div style="text-align:center;padding:40px 0"><div style="font-size:48px;margin-bottom:16px">📝</div><div style="font-size:22px;font-weight:800;margin-bottom:8px">Changes Requested</div><div style="font-size:14px;color:rgba(255,255,255,.5)">Your feedback has been recorded. The recruiter will follow up with you.</div>${comments?`<div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.05);border-radius:10px;font-size:13px;color:rgba(255,255,255,.6);text-align:left"><strong>Your comments:</strong><br>${comments}</div>`:''}</div>`
+    );
+  } catch(e) {
+    if (fb) fb.textContent = 'Error: ' + (e.message || 'Something went wrong. Please try again.');
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
 // ── INIT ──────────────────────────────────────
 function initApp() {
   var params = new URLSearchParams(window.location.search);
   var evalToken = params.get('eval');
   var bookToken = params.get('book');
+  var approvalToken = params.get('approval');
+
+  if (approvalToken) {
+    document.getElementById('app').classList.remove('ready');
+    document.getElementById('login').classList.remove('visible');
+    _showJdApprovalPage(approvalToken);
+    return;
+  }
 
   if (evalToken || bookToken) {
     // Public page — block auth from running entirely
