@@ -5096,14 +5096,12 @@ If you have any questions or would like to discuss before approving, feel free t
 Thanks in advance,
 Anna`;
 
-  const params=new URLSearchParams({
-    subject:`JD Approval Request: ${roleTitle}`,
-    to: hmEmail,
-    body: emailBody
-  });
-  const outlookUrl='https://outlook.office.com/mail/deeplink/compose?'+params.toString();
-  if(outlookWin){ outlookWin.location.href=outlookUrl; }
-  else { window.open(outlookUrl,'_blank'); }
+  // mailto: opens Outlook desktop with all fields pre-filled
+  const mailtoUrl='mailto:'+encodeURIComponent(hmEmail)
+    +'?subject='+encodeURIComponent('JD Approval Request: '+roleTitle)
+    +'&body='+encodeURIComponent(emailBody);
+  if(outlookWin){ outlookWin.close(); } // close the blank tab
+  window.location.href=mailtoUrl;
 
   try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' sent to HM for approval'});}catch(e){}
   toast('Approval email opened — send it to the HM ✓');
