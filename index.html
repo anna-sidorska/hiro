@@ -3858,29 +3858,32 @@ function _rdS2Html(d) {
   const done=k=>sm[k]?.status==='completed';
   const v=intake||{};
 
-  const jobTitle=encodeURIComponent(v.confirmed_title||role.title||'');
-  const jobLoc=encodeURIComponent(v.remote_policy||role.location||role.region||'');
+  const rawTitle=v.confirmed_title||role.title||'';
+  const rawLoc=v.remote_policy||role.location||role.region||'';
+  const jobTitle=encodeURIComponent(rawTitle);
+  const jobLoc=encodeURIComponent(rawLoc);
   const hasJd=!!roleJd;
-
-  // Saved posting (localStorage)
   const savedPosting=localStorage.getItem('hiro_posting_'+roleId)||'';
+  const posting=savedPosting||_s2GeneratePosting(d);
 
   const boards=[
-    {key:'linkedin', label:'LinkedIn',  icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#0077b5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>', color:'#0077b5',
+    {key:'linkedin', label:'LinkedIn',  color:'#0077b5', hint:'Paste in the "Description" field',
       url:`https://www.linkedin.com/jobs/post/?f_title=${jobTitle}&f_location=${jobLoc}`},
-    {key:'indeed',   label:'Indeed',    icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#003A9B"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm-.35 5.13c1.63 0 2.52.95 2.52 2.28 0 1.34-.92 2.28-2.52 2.28-1.61 0-2.52-.94-2.52-2.28 0-1.33.9-2.28 2.52-2.28zm3.22 13.74h-2.74v-7.4h-1.32v-1.96h4.06v9.36z"/></svg>', color:'#003A9B',
+    {key:'indeed',   label:'Indeed',    color:'#003A9B', hint:'Paste in "Job description"',
       url:`https://employers.indeed.com/p/post-job?title=${jobTitle}&location=${jobLoc}`},
-    {key:'glassdoor',label:'Glassdoor', icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="#0caa41"><circle cx="12" cy="12" r="12"/><path fill="white" d="M12 5a7 7 0 100 14A7 7 0 0012 5zm0 11.5A4.5 4.5 0 1112 7.5a4.5 4.5 0 010 9z"/></svg>', color:'#0caa41',
+    {key:'glassdoor',label:'Glassdoor', color:'#0caa41', hint:'Paste in "Job Description"',
       url:'https://www.glassdoor.com/employer/jobListing/jobListingAdd.htm'},
   ];
+
+  const postedCount=boards.filter(b=>localStorage.getItem('hiro_posted_'+roleId+'_'+b.key)).length;
 
   return `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-size:16px;font-weight:700">📢 Stage 2: Post Role</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${sBadge2(done('req_approved'),'Req Approved')}
-        ${sBadge2(done('posting_ready'),'Posting Ready')}
-        ${sBadge2(done('job_posted'),'Posted')}
+        ${sBadge2(postedCount>0,postedCount+'/'+boards.length+' boards')}
+        ${sBadge2(done('job_posted'),'All Posted')}
       </div>
     </div>
 
@@ -3900,65 +3903,75 @@ function _rdS2Html(d) {
       </div>
     </div>
 
-    <!-- 2b: Job Posting -->
-    <div class="card" style="margin-bottom:12px;${done('posting_ready')?'border:1.5px solid var(--green)':''}">
-      <div class="card-header">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">2b · Job Posting</div>
-          ${done('posting_ready')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Ready</span>':''}
-        </div>
-        <div style="display:flex;gap:6px">
-          ${hasJd?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2RefreshPosting('${roleId}')">↺ Regenerate from JD</button>`:''}
-          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(document.getElementById('s2-posting-text').value).then(()=>toast('Posting copied ✓'))">📋 Copy All</button>
-          ${!done('posting_ready')
-            ?`<button class="btn btn-primary btn-sm" onclick="_wfCompleteStep('${roleId}','posting_ready');this.closest('.card').style.border='1.5px solid var(--green)'">✓ Mark Ready</button>`
-            :`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','posting_ready')">Undo</button>`}
-        </div>
-      </div>
-      <div class="card-body">
-        ${!hasJd?`<div style="text-align:center;padding:16px;color:var(--text-3);font-size:13px">⚠️ Link a JD in Stage 1 first to auto-generate the posting.</div>`:`
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Auto-generated from your JD using the Sovos posting template. Edit directly before posting.</div>
-        <textarea id="s2-posting-text" rows="20" oninput="localStorage.setItem('hiro_posting_${roleId}',this.value)"
-          style="width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px;line-height:1.6;resize:vertical;font-family:inherit;box-sizing:border-box"
-        >${(savedPosting||_s2GeneratePosting(d)).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-        `}
-      </div>
-    </div>
-
-    <!-- 2c: Post to Job Boards -->
+    <!-- 2b+2c: Job Posting + Boards (combined) -->
     <div class="card" style="margin-bottom:12px;${done('job_posted')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">2c · Post to Job Boards</div>
-          ${done('job_posted')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
+          <div class="card-title">2b · Post to Job Boards</div>
+          ${done('job_posted')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Done</span>':''}
         </div>
-        ${done('job_posted')
-          ?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','job_posted')">Undo</button>`
-          :`<button class="btn btn-primary btn-sm" onclick="_s2PostAll('${roleId}')">🚀 Post to All Boards</button>`}
+        <div style="display:flex;gap:6px">
+          ${done('job_posted')
+            ?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfUndoStep('${roleId}','job_posted')">Undo</button>`
+            :`<button class="btn btn-primary" onclick="_s2PostAll('${roleId}')">🚀 Open All Boards</button>`}
+        </div>
       </div>
       <div class="card-body">
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:12px">Each board opens in a new tab with title and location pre-filled. The job posting is copied to your clipboard so you can paste the description directly.</div>
-        <div style="display:grid;gap:8px">
-          ${boards.map(b=>`
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">
-            <div style="display:flex;align-items:center;gap:8px;flex:1">
-              ${b.icon}
-              <span style="font-size:13px;font-weight:600">${b.label}</span>
+
+        <!-- Step 1: Copy posting -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Step 1 — Copy Job Posting</div>
+          <button id="s2-copy-btn" onclick="_s2CopyPosting('${roleId}')"
+            style="width:100%;padding:14px;background:var(--brand);color:#fff;border:none;border-radius:var(--r);font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s">
+            📋 Copy Job Posting to Clipboard
+          </button>
+          <div id="s2-copy-confirm" style="text-align:center;font-size:12px;color:var(--green-text);margin-top:6px;min-height:18px"></div>
+          <div style="margin-top:10px">
+            <button onclick="document.getElementById('s2-posting-wrap').style.display=document.getElementById('s2-posting-wrap').style.display==='none'?'block':'none'" style="background:none;border:none;color:var(--text-3);font-size:12px;cursor:pointer;padding:0">▾ Edit posting text</button>
+            <div id="s2-posting-wrap" style="display:none;margin-top:8px">
+              ${!hasJd?`<div style="padding:10px;color:var(--text-3);font-size:12px;text-align:center">Link a JD in Stage 1 to auto-generate the posting.</div>`:`
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_s2RefreshPosting('${roleId}')">↺ Regenerate from JD</button>
+              </div>
+              <textarea id="s2-posting-text" rows="16" oninput="localStorage.setItem('hiro_posting_${roleId}',this.value)"
+                style="width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:12px;line-height:1.6;resize:vertical;font-family:inherit;box-sizing:border-box"
+              >${posting.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>`}
             </div>
-            <button class="btn btn-outline btn-sm" onclick="_s2PostBoard('${roleId}','${b.key}','${b.url}',this)" style="font-size:11px">
-              ${localStorage.getItem('hiro_posted_'+roleId+'_'+b.key)?'✓ Posted':'Post →'}
-            </button>
-          </div>`).join('')}
+          </div>
         </div>
-        ${done('job_posted')?'':`<div style="margin-top:10px;text-align:center"><button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','job_posted')">✓ Mark All Posted</button></div>`}
+
+        <!-- Step 2: Post to boards -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Step 2 — Open Each Board & Paste</div>
+          <div style="display:grid;gap:8px">
+            ${boards.map(b=>{
+              const isPosted=!!localStorage.getItem('hiro_posted_'+roleId+'_'+b.key);
+              return `<div id="s2-board-row-${b.key}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid ${isPosted?'var(--green)':'var(--border)'};border-radius:var(--r);background:var(--surface);transition:border .2s">
+                <div style="width:8px;height:8px;border-radius:50%;background:${isPosted?'var(--green)':'var(--border)'}"></div>
+                <div style="flex:1">
+                  <div style="font-size:13px;font-weight:700;color:${b.color}">${b.label}</div>
+                  <div style="font-size:11px;color:var(--text-3);margin-top:1px">${isPosted?'✓ Posted':'→ '+b.hint}</div>
+                </div>
+                <button id="s2-btn-${b.key}" class="btn ${isPosted?'btn-ghost':'btn-outline'} btn-sm"
+                  style="font-size:11px;${isPosted?'color:var(--green-text)':''}"
+                  onclick="_s2PostBoard('${roleId}','${b.key}','${b.url}',this)">
+                  ${isPosted?'✓ Done':'Open →'}
+                </button>
+              </div>`;
+            }).join('')}
+          </div>
+          ${!done('job_posted')?`<div style="margin-top:12px;text-align:center">
+            <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','job_posted').then(()=>_rdStage('s2'))">✓ Mark All Posted</button>
+          </div>`:''}
+        </div>
       </div>
     </div>
 
-    <!-- 2d: LinkedIn Organic Post -->
+    <!-- 2c: LinkedIn Organic Post -->
     <div class="card" style="${done('linkedin_post')?'border:1.5px solid var(--green)':''}">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:8px">
-          <div class="card-title">2d · LinkedIn Organic Post</div>
+          <div class="card-title">2c · LinkedIn Organic Post</div>
           ${done('linkedin_post')?'<span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--green-bg);color:var(--green-text);font-weight:600">✓ Posted</span>':''}
         </div>
         <div style="display:flex;gap:6px">
@@ -3969,7 +3982,7 @@ function _rdS2Html(d) {
         </div>
       </div>
       <div class="card-body">
-        <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">Generate a short punchy post for your personal LinkedIn feed to attract passive candidates.</div>
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">Short punchy post for your personal LinkedIn feed to attract passive candidates.</div>
         <div id="li-post-draft-${roleId}" style="display:none;padding:14px;background:var(--brand-light);border-radius:var(--r);border:1px solid var(--brand);font-size:13px;line-height:1.7;white-space:pre-wrap;position:relative">
           <button style="position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:11px;cursor:pointer;color:var(--text)" onclick="navigator.clipboard.writeText(document.getElementById('li-post-draft-${roleId}').innerText.replace('Copy','').trim()).then(()=>toast('Copied!'))">Copy</button>
         </div>
@@ -3990,6 +4003,18 @@ function _s2RefreshPosting(roleId) {
   ta.value=fresh;
   localStorage.setItem('hiro_posting_'+roleId,fresh);
   toast('Posting regenerated from JD ✓');
+}
+
+async function _s2CopyPosting(roleId) {
+  const posting=document.getElementById('s2-posting-text')?.value||localStorage.getItem('hiro_posting_'+roleId)||'';
+  try{ await navigator.clipboard.writeText(posting); }catch(e){}
+  const btn=document.getElementById('s2-copy-btn');
+  const confirm=document.getElementById('s2-copy-confirm');
+  if(btn){ btn.style.background='var(--green)'; btn.textContent='✓ Copied!'; }
+  if(confirm){ confirm.textContent='Posting copied — open each board below and paste in the description field'; }
+  setTimeout(()=>{
+    if(btn){ btn.style.background='var(--brand)'; btn.textContent='📋 Copy Job Posting to Clipboard'; }
+  },3000);
 }
 
 async function _s2PostBoard(roleId,boardKey,boardUrl,btn) {
