@@ -3876,11 +3876,17 @@ function _rdS2Html(d) {
   const posting=savedPosting||_s2GeneratePosting(d);
 
   const boards=[
-    {key:'linkedin', label:'LinkedIn',  color:'#0077b5', hint:'Paste in the "Description" field',
+    {key:'linkedin', label:'LinkedIn',  color:'#0077b5',
+      applyHint:'Under "How should applicants apply?" → select "External website" → paste Apply URL',
+      descHint:'Paste job posting in the "Description" field',
       url:`https://www.linkedin.com/jobs/post/?f_title=${jobTitle}&f_location=${jobLoc}`},
-    {key:'indeed',   label:'Indeed',    color:'#003A9B', hint:'Paste in "Job description"',
+    {key:'indeed',   label:'Indeed',    color:'#003A9B',
+      applyHint:'Look for "Application URL" or "How to apply" → paste Apply URL',
+      descHint:'Paste job posting in the "Job description" field',
       url:`https://employers.indeed.com/p/post-job?title=${jobTitle}&location=${jobLoc}`},
-    {key:'glassdoor',label:'Glassdoor', color:'#0caa41', hint:'Paste in "Job Description"',
+    {key:'glassdoor',label:'Glassdoor', color:'#0caa41',
+      applyHint:'In "Application Settings" → paste Apply URL',
+      descHint:'Paste job posting in the "Job Description" field',
       url:'https://www.glassdoor.com/employer/jobListing/jobListingAdd.htm'},
   ];
 
@@ -3966,17 +3972,23 @@ function _rdS2Html(d) {
           <div style="display:grid;gap:8px">
             ${boards.map(b=>{
               const isPosted=!!localStorage.getItem('hiro_posted_'+roleId+'_'+b.key);
-              return `<div id="s2-board-row-${b.key}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid ${isPosted?'var(--green)':'var(--border)'};border-radius:var(--r);background:var(--surface);transition:border .2s">
-                <div style="width:8px;height:8px;border-radius:50%;background:${isPosted?'var(--green)':'var(--border)'}"></div>
-                <div style="flex:1">
-                  <div style="font-size:13px;font-weight:700;color:${b.color}">${b.label}</div>
-                  <div style="font-size:11px;color:var(--text-3);margin-top:1px">${isPosted?'✓ Posted':'→ '+b.hint}</div>
+              return `<div id="s2-board-row-${b.key}" style="padding:12px 14px;border:1.5px solid ${isPosted?'var(--green)':'var(--border)'};border-radius:var(--r);background:var(--surface);transition:border .2s">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:${isPosted?'0':'8px'}">
+                  <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${isPosted?'var(--green)':'var(--border)'}"></div>
+                  <div style="flex:1">
+                    <div style="font-size:13px;font-weight:700;color:${b.color}">${b.label}</div>
+                    ${isPosted?'<div style="font-size:11px;color:var(--green-text);margin-top:1px">✓ Posted</div>':''}
+                  </div>
+                  <button id="s2-btn-${b.key}" class="btn ${isPosted?'btn-ghost':'btn-outline'} btn-sm"
+                    style="font-size:11px;${isPosted?'color:var(--green-text)':''}"
+                    onclick="_s2PostBoard('${roleId}','${b.key}','${b.url}',this)">
+                    ${isPosted?'✓ Done':'Open →'}
+                  </button>
                 </div>
-                <button id="s2-btn-${b.key}" class="btn ${isPosted?'btn-ghost':'btn-outline'} btn-sm"
-                  style="font-size:11px;${isPosted?'color:var(--green-text)':''}"
-                  onclick="_s2PostBoard('${roleId}','${b.key}','${b.url}',this)">
-                  ${isPosted?'✓ Done':'Open →'}
-                </button>
+                ${!isPosted?`<div style="padding:8px 10px;background:var(--surface-2);border-radius:6px;font-size:11px;color:var(--text-3);line-height:1.6">
+                  <span style="color:var(--brand);font-weight:600">Apply URL:</span> ${b.applyHint}<br>
+                  <span style="color:var(--brand);font-weight:600">Description:</span> ${b.descHint}
+                </div>`:''}
               </div>`;
             }).join('')}
           </div>
