@@ -5142,7 +5142,7 @@ function _s2BuildQueries(roleId) {
   // Strip bullets, keep only short lines (titles/names, not sentences)
   const cleanShort = (text, maxLen) => text
     .split(/\n/)
-    .map(l => l.replace(/^[-•–*]\s*/,'').trim())
+    .map(l => l.replace(/^[-•–*]\s*/,'').replace(/[.,;:]+$/,'').trim())
     .filter(l => l && l.length >= 2 && l.length <= maxLen && !l.includes('—') && !/\b(are|is|the|we|they|those|have|can|will|been|some|that|this|with|from|given|scale|people|anyone|someone)\b/i.test(l));
 
   const title = v.confirmed_title || role.title || '';
