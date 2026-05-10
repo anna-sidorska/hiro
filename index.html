@@ -5138,74 +5138,91 @@ function _s2BuildQueries(roleId) {
   const d = _rdData;
   const role = d?.role || {};
   const v = d?.intake || {};
+  const jd = d?.roleJd || {};
 
-  // Strip bullets, keep only short lines (titles/names, not sentences)
+  // Clean bullet-prefixed lines, strip trailing punctuation, exclude sentences
   const cleanShort = (text, maxLen) => text
     .split(/\n/)
-    .map(l => l.replace(/^[-•–*]\s*/,'').replace(/[.,;:]+$/,'').trim())
-    .filter(l => l && l.length >= 2 && l.length <= maxLen && !l.includes('—') && !/\b(are|is|the|we|they|those|have|can|will|been|some|that|this|with|from|given|scale|people|anyone|someone)\b/i.test(l));
+    .map(l => l.replace(/^[-•–*\d.]\s*/,'').replace(/[.,;:]+$/,'').trim())
+    .filter(l => l && l.length >= 2 && l.length <= maxLen
+      && !l.includes('—') && !l.includes('–')
+      && !/\b(are|is|the|we|they|those|have|can|will|been|some|that|this|with|from|given|scale|people|anyone|someone|ones|main|obvious)\b/i.test(l));
 
   const title = v.confirmed_title || role.title || '';
   const rawLocation = role.location || role.region || '';
-  // Strip country suffix (", US" / ", GB" / ", United States" etc.) — LinkedIn profiles use city only
-  const location = rawLocation.split(/,\s*(US|UK|GB|United States|United Kingdom|Canada|Australia|Germany|France|Spain|Portugal|Turkey|India|Mexico|Argentina|Brazil)$/i)[0].trim();
 
-  // Titles: max 45 chars (real job titles only)
-  const titles = cleanShort(v.target_titles || '', 45).slice(0,4);
+  // Extract city: strip country codes/names and pure country-only values
+  const countryOnly = /^(US|UK|GB|USA|United States|United Kingdom|Remote|Worldwide|Global)$/i.test(rawLocation.trim());
+  const city = countryOnly ? '' : rawLocation
+    .split(/,\s*(US|UK|GB|USA|United States|United Kingdom|Canada|Australia|Germany|France|Spain|Portugal|Turkey|India|Mexico|Argentina|Brazil|Netherlands|Sweden|Italy|Ireland)$/i)[0]
+    .trim();
+
+  // Titles: clean job titles only, max 3 for query efficiency
+  const titles = cleanShort(v.target_titles || '', 45).slice(0,3);
   if (!titles.length) titles.push(title);
 
-  // Companies: max 35 chars (company names only)
+  // Must-have skills: short keyword phrases only
+  const skills = cleanShort(v.must_haves || jd.requirements || '', 40)
+    .filter(s => s.split(' ').length <= 4)
+    .slice(0,2);
+
+  // Companies: names only, no descriptions
   const companies = cleanShort(v.target_companies || '', 35).slice(0,4);
 
   const titleClause = titles.length > 1
     ? '(' + titles.map(t=>`"${t}"`).join(' OR ') + ')'
     : `"${titles[0]}"`;
 
+  const skillClause = skills.length ? skills.map(s=>`"${s}"`).join(' ') : '';
   const companyClause = companies.length
     ? '(' + companies.map(c=>`"${c}"`).join(' OR ') + ')'
     : '';
 
-  // Broad: titles + city only (most results)
-  const xrayBroad = `site:linkedin.com/in ${titleClause}${location?' "'+location+'"':''} -jobs -apply`;
+  const locClause = city ? `"${city}"` : '';
 
-  // Targeted: titles + location + companies (fewer, more precise)
+  // 1. Broad: titles + city — widest net
+  const xrayBroad = `site:linkedin.com/in ${titleClause}${locClause?' '+locClause:''} -jobs -apply`;
+
+  // 2. Skills: titles + city + key skills — mid-level filter
+  const xraySkills = skillClause
+    ? `site:linkedin.com/in ${titleClause}${locClause?' '+locClause:''} ${skillClause} -jobs -apply`
+    : '';
+
+  // 3. Targeted: titles + city + target companies — precision poaching
   const xrayTargeted = companyClause
-    ? `site:linkedin.com/in ${titleClause}${location?' "'+location+'"':''} ${companyClause} -jobs -apply`
-    : xrayBroad;
+    ? `site:linkedin.com/in ${titleClause}${locClause?' '+locClause:''} ${companyClause} -jobs -apply`
+    : '';
 
-  const liQuery = [titleClause, location ? `"${location}"` : ''].filter(Boolean).join(' ');
-
-  return { liQuery, xrayBroad, xrayTargeted, titles, companies, location };
+  return { xrayBroad, xraySkills, xrayTargeted, titles, skills, companies, city };
 }
 
 function _s2GenSearchQueries(roleId) {
   const box = document.getElementById('s2-query-box');
   if (!box) return;
-  const { xrayBroad, xrayTargeted } = _s2BuildQueries(roleId);
+  const { xrayBroad, xraySkills, xrayTargeted, city } = _s2BuildQueries(roleId);
+
+  const qRow = (id, label, hint, query) => !query ? '' : `
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">${label}</span>
+          <span style="font-size:10px;color:var(--text-3);margin-left:6px">${hint}</span>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-outline btn-sm" style="font-size:10px" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);toast('Copied ✓')">📋</button>
+          <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="window.open('https://www.google.com/search?q='+encodeURIComponent(document.getElementById('${id}').textContent),'_blank')">Search →</button>
+        </div>
+      </div>
+      <div id="${id}" style="font-size:11px;color:var(--text);font-family:monospace;white-space:pre-wrap;word-break:break-all;margin-top:6px">${query.replace(/</g,'&lt;')}</div>
+    </div>`;
+
   box.style.display = 'block';
   box.innerHTML = `
     <div style="display:grid;gap:8px">
-      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Broad X-Ray — titles + location</div>
-          <div style="display:flex;gap:4px">
-            <button class="btn btn-outline btn-sm" style="font-size:10px" onclick="navigator.clipboard.writeText(document.getElementById('s2-xray-broad').textContent);toast('Copied ✓')">📋 Copy</button>
-            <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="window.open('https://www.google.com/search?q='+encodeURIComponent(document.getElementById('s2-xray-broad').textContent),'_blank')">Search →</button>
-          </div>
-        </div>
-        <div id="s2-xray-broad" style="font-size:11px;color:var(--text);font-family:monospace;white-space:pre-wrap;word-break:break-all">${xrayBroad.replace(/</g,'&lt;')}</div>
-      </div>
-      ${xrayTargeted !== xrayBroad ? `
-      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Targeted X-Ray — + target companies</div>
-          <div style="display:flex;gap:4px">
-            <button class="btn btn-outline btn-sm" style="font-size:10px" onclick="navigator.clipboard.writeText(document.getElementById('s2-xray-targeted').textContent);toast('Copied ✓')">📋 Copy</button>
-            <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="window.open('https://www.google.com/search?q='+encodeURIComponent(document.getElementById('s2-xray-targeted').textContent),'_blank')">Search →</button>
-          </div>
-        </div>
-        <div id="s2-xray-targeted" style="font-size:11px;color:var(--text);font-family:monospace;white-space:pre-wrap;word-break:break-all">${xrayTargeted.replace(/</g,'&lt;')}</div>
-      </div>` : ''}
+      ${!city?'<div style="font-size:11px;color:var(--amber-text);padding:6px 10px;background:var(--amber-bg);border-radius:var(--r)">⚠ No city set on this role — update Region to a city (e.g. "New York") for location filtering</div>':''}
+      ${qRow('s2-xray-broad','Broad','— titles + city, widest net',xrayBroad)}
+      ${qRow('s2-xray-skills','Skills','— + must-have keywords',xraySkills)}
+      ${qRow('s2-xray-targeted','Targeted','— + target companies, precision poaching',xrayTargeted)}
     </div>`;
 }
 
@@ -5235,6 +5252,7 @@ async function _s2OpenLinkedInRecruiter(roleId) {
   const cleanLines = text => text.split(/\n/).map(l=>l.replace(/^[-•–]\s*/,'').trim()).filter(l=>l && l.length < 120);
   const shortWords = ['Remote','Hybrid','On-site','Onsite','Flexible','WFH'];
   const remoteClean = shortWords.find(w => remote.toLowerCase().includes(w.toLowerCase())) || '';
+  const { city } = _s2BuildQueries(roleId);
 
   const parts = [];
 
@@ -5248,8 +5266,8 @@ async function _s2OpenLinkedInRecruiter(roleId) {
 
   if (dept) parts.push(`in ${dept}`);
 
-  if (location) {
-    const locPart = remoteClean ? `${location} (${remoteClean})` : location;
+  if (city) {
+    const locPart = remoteClean ? `${city} (${remoteClean})` : city;
     parts.push(`based in ${locPart}`);
   }
 
@@ -5315,13 +5333,11 @@ async function _s2OpenLinkedInRecruiter(roleId) {
 }
 
 function _s2OpenXRay(roleId) {
-  const { xrayBroad } = _s2BuildQueries(roleId);
+  const { xrayBroad, city } = _s2BuildQueries(roleId);
   _s2GenSearchQueries(roleId);
+  if (!city) { toast('No city set on this role — update Region for location filtering', 'err'); }
   const url = 'https://www.google.com/search?q=' + encodeURIComponent(xrayBroad);
-  const opened = window.open(url, '_blank');
-  if (!opened) {
-    toast('Popup blocked — use the Search → buttons below', 'err');
-  }
+  window.open(url, '_blank');
 }
 
 // ── LINKEDIN POST GENERATOR ────────────────────
