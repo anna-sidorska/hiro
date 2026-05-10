@@ -5180,17 +5180,20 @@ function _s2BuildQueries(roleId) {
 
   const locClause = city ? `"${city}"` : '';
 
-  // 1. Broad: titles + city — widest net
-  const xrayBroad = `site:linkedin.com/in ${titleClause}${locClause?' '+locClause:''} -jobs -apply`;
+  // X-Ray note: Google indexes full profile text so location matches anywhere in profile (past jobs etc)
+  // Best practice: use titles/skills/companies in X-Ray, filter location in LinkedIn Recruiter
 
-  // 2. Skills: titles + city + key skills — mid-level filter
+  // 1. Broad: titles only — widest net, most results
+  const xrayBroad = `site:linkedin.com/in ${titleClause} -jobs -apply -"job opportunities"`;
+
+  // 2. Skills: titles + must-have keywords — filters for relevant experience
   const xraySkills = skillClause
-    ? `site:linkedin.com/in ${titleClause}${locClause?' '+locClause:''} ${skillClause} -jobs -apply`
+    ? `site:linkedin.com/in ${titleClause} ${skillClause} -jobs -apply`
     : '';
 
-  // 3. Targeted: titles + city + target companies — precision poaching
+  // 3. Targeted: titles + competitor companies — precision poaching
   const xrayTargeted = companyClause
-    ? `site:linkedin.com/in ${titleClause}${locClause?' '+locClause:''} ${companyClause} -jobs -apply`
+    ? `site:linkedin.com/in ${titleClause} ${companyClause} -jobs -apply`
     : '';
 
   return { xrayBroad, xraySkills, xrayTargeted, titles, skills, companies, city };
@@ -5219,10 +5222,10 @@ function _s2GenSearchQueries(roleId) {
   box.style.display = 'block';
   box.innerHTML = `
     <div style="display:grid;gap:8px">
-      ${!city?'<div style="font-size:11px;color:var(--amber-text);padding:6px 10px;background:var(--amber-bg);border-radius:var(--r)">⚠ No city set on this role — update Region to a city (e.g. "New York") for location filtering</div>':''}
-      ${qRow('s2-xray-broad','Broad','— titles + city, widest net',xrayBroad)}
+      <div style="font-size:11px;color:var(--text-3);padding:6px 10px;background:var(--surface-2);border-radius:var(--r)">💡 X-Ray finds profiles globally — filter by location in LinkedIn Recruiter after opening profiles</div>
+      ${qRow('s2-xray-broad','Broad','— titles only, widest net',xrayBroad)}
       ${qRow('s2-xray-skills','Skills','— + must-have keywords',xraySkills)}
-      ${qRow('s2-xray-targeted','Targeted','— + target companies, precision poaching',xrayTargeted)}
+      ${qRow('s2-xray-targeted','Targeted','— + competitor companies',xrayTargeted)}
     </div>`;
 }
 
