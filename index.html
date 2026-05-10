@@ -7555,7 +7555,7 @@ async function viewEpp(eppUrl, btn) {
     if (error || !data?.signedUrl) {
       toast('Could not generate EPP view link — check storage bucket policies', 'err');
     } else {
-      window.open(data.signedUrl, '_blank');
+      window.open('https://docs.google.com/viewer?url=' + encodeURIComponent(data.signedUrl) + '&embedded=false', '_blank');
     }
   } catch(e) { toast('Storage error: '+e.message, 'err'); }
   if (btn) { btn.disabled = false; btn.textContent = origText; }
@@ -7564,20 +7564,21 @@ async function viewEpp(eppUrl, btn) {
 // View a CV — generates a 1-hour signed URL for private bucket files
 async function viewCv(cvUrl, btn) {
   if (!cvUrl) return;
-  if (!cvUrl.startsWith('storage:')) {
-    // Legacy public URL — open directly
-    window.open(cvUrl, '_blank'); return;
-  }
-  const path = cvUrl.replace('storage:', '');
   const origText = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   try {
-    const { data, error } = await sb.storage.from('candidate-cvs').createSignedUrl(path, 3600);
-    if (error || !data?.signedUrl) {
-      toast('Could not generate view link — check storage bucket is set up', 'err');
-    } else {
-      window.open(data.signedUrl, '_blank');
+    var url = cvUrl;
+    if (cvUrl.startsWith('storage:')) {
+      const path = cvUrl.replace('storage:', '');
+      const { data, error } = await sb.storage.from('candidate-cvs').createSignedUrl(path, 3600);
+      if (error || !data?.signedUrl) {
+        toast('Could not generate view link — check storage bucket is set up', 'err');
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        return;
+      }
+      url = data.signedUrl;
     }
+    window.open('https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=false', '_blank');
   } catch(e) { toast('Storage error: '+e.message, 'err'); }
   if (btn) { btn.disabled = false; btn.textContent = origText; }
 }
@@ -7595,7 +7596,7 @@ async function uploadCandidateCV(candidateId, file) {
   // Upload to private Supabase Storage bucket — signed URLs generated on demand
   let storagePath = null;
   try {
-    const { error: upErr } = await sb.storage.from('candidate-cvs').upload(path, file, { upsert: true });
+    const { error: upErr } = await sb.storage.from('candidate-cvs').upload(path, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
     if (upErr) {
       console.warn('Storage upload failed (bucket may not exist yet):', upErr.message);
     } else {
@@ -11642,7 +11643,8 @@ async function _cfpToggleCvViewer(cvUrl) {
     }
   }
   // Show in iframe
-  inner.innerHTML = '<iframe src="' + url + '" style="width:100%;height:520px;border:none;display:block" title="CV Viewer"></iframe>';
+  var viewerUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=true';
+  inner.innerHTML = '<iframe src="' + viewerUrl + '" style="width:100%;height:520px;border:none;display:block" title="CV Viewer"></iframe>';
 }
 
 function switchCfpTab(btn, tabId) {
