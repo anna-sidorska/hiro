@@ -5146,7 +5146,9 @@ function _s2BuildQueries(roleId) {
     .filter(l => l && l.length >= 2 && l.length <= maxLen && !l.includes('—') && !/\b(are|is|the|we|they|those|have|can|will|been|some|that|this|with|from|given|scale|people|anyone|someone)\b/i.test(l));
 
   const title = v.confirmed_title || role.title || '';
-  const location = role.location || role.region || '';
+  const rawLocation = role.location || role.region || '';
+  // Strip country suffix (", US" / ", GB" / ", United States" etc.) — LinkedIn profiles use city only
+  const location = rawLocation.split(/,\s*(US|UK|GB|United States|United Kingdom|Canada|Australia|Germany|France|Spain|Portugal|Turkey|India|Mexico|Argentina|Brazil)$/i)[0].trim();
 
   // Titles: max 45 chars (real job titles only)
   const titles = cleanShort(v.target_titles || '', 45).slice(0,4);
@@ -5163,7 +5165,7 @@ function _s2BuildQueries(roleId) {
     ? '(' + companies.map(c=>`"${c}"`).join(' OR ') + ')'
     : '';
 
-  // Broad: titles + location only (most results)
+  // Broad: titles + city only (most results)
   const xrayBroad = `site:linkedin.com/in ${titleClause}${location?' "'+location+'"':''} -jobs -apply`;
 
   // Targeted: titles + location + companies (fewer, more precise)
