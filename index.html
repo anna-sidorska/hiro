@@ -5138,21 +5138,35 @@ function _s2BuildQueries(roleId) {
   const d = _rdData;
   const role = d?.role || {};
   const v = d?.intake || {};
+
+  // Strip bullets, keep only short lines (titles/names, not sentences)
+  const cleanShort = (text, maxLen) => text
+    .split(/\n/)
+    .map(l => l.replace(/^[-•–*]\s*/,'').trim())
+    .filter(l => l && l.length >= 2 && l.length <= maxLen && !l.includes('—') && !/\b(are|is|the|we|they|those|have|can|will|been|some|that|this|with|from|given|scale|people|anyone|someone)\b/i.test(l));
+
   const title = v.confirmed_title || role.title || '';
   const location = role.location || role.region || '';
-  // Build title variations list
-  const rawTitles = v.target_titles || title;
-  const titles = rawTitles.split(/\n|,/).map(t => t.trim()).filter(Boolean).slice(0,5);
-  const skills = (v.skills_must_have||'').split(/\n|,/).map(s=>s.trim()).filter(Boolean).slice(0,3);
-  const companies = (v.target_companies||'').split(/\n|,/).map(c=>c.trim()).filter(Boolean).slice(0,4);
-  // LinkedIn Boolean query (natural language / keyword style)
-  const titleClause = titles.length > 1 ? '(' + titles.map(t=>`"${t}"`).join(' OR ') + ')' : titles[0] ? `"${titles[0]}"` : `"${title}"`;
-  const skillClause = skills.length ? skills.map(s=>`"${s}"`).join(' ') : '';
-  const liQuery = [titleClause, skillClause, location ? `"${location}"` : ''].filter(Boolean).join(' ');
-  // Google X-Ray (site:linkedin.com/in Boolean)
-  const companyClause = companies.length ? ' (' + companies.map(c=>`"${c}"`).join(' OR ') + ')' : '';
-  const xray = `site:linkedin.com/in ${titleClause}${skillClause?' '+skillClause:''}${location?' "'+location+'"':''}${companyClause} -jobs -apply -"job opportunities"`;
-  return { liQuery, xray, titles, skills, location };
+
+  // Titles: max 45 chars (real job titles only)
+  const titles = cleanShort(v.target_titles || '', 45).slice(0,4);
+  if (!titles.length) titles.push(title);
+
+  // Companies: max 35 chars (company names only)
+  const companies = cleanShort(v.target_companies || '', 35).slice(0,4);
+
+  const titleClause = titles.length > 1
+    ? '(' + titles.map(t=>`"${t}"`).join(' OR ') + ')'
+    : `"${titles[0]}"`;
+
+  const companyClause = companies.length
+    ? ' (' + companies.map(c=>`"${c}"`).join(' OR ') + ')'
+    : '';
+
+  const xray = `site:linkedin.com/in ${titleClause}${location?' "'+location+'"':''}${companyClause} -jobs -apply -"job opportunities"`;
+  const liQuery = [titleClause, location ? `"${location}"` : ''].filter(Boolean).join(' ');
+
+  return { liQuery, xray, titles, companies, location };
 }
 
 function _s2GenSearchQueries(roleId) {
