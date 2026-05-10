@@ -3857,7 +3857,7 @@ ${responsibilities ? fmtBullets(responsibilities) : '• [Add responsibilities]'
 
 ${requirements ? fmtBullets(requirements) : '• [Add requirements]'}`;
 
-  const sections = [applyBtn, SOVOS_INTRO, workSection, reqSection, SOVOS_BENEFITS, SOVOS_COMPANY, applyBtn].filter(Boolean);
+  const sections = [SOVOS_INTRO, workSection, reqSection, SOVOS_BENEFITS, SOVOS_COMPANY].filter(Boolean);
   return sections.join('\n\n---\n\n');
 }
 
@@ -3926,6 +3926,17 @@ function _rdS2Html(d) {
         </div>
       </div>
       <div class="card-body">
+
+        <!-- Apply URL -->
+        <div style="margin-bottom:18px;padding:12px 14px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Apply URL — paste this as the "Apply" link on each board</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="s2-apply-url" readonly value="https://anna-sidorska.github.io/hiro/?apply=${roleId}"
+              style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text-2);font-size:12px;font-family:monospace;outline:none">
+            <button onclick="navigator.clipboard.writeText(document.getElementById('s2-apply-url').value).then(()=>{this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',2000)})"
+              class="btn btn-ghost btn-sm" style="white-space:nowrap">Copy</button>
+          </div>
+        </div>
 
         <!-- Step 1: Copy posting -->
         <div style="margin-bottom:16px">
