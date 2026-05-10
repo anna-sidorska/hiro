@@ -5178,13 +5178,13 @@ function _s2GenSearchQueries(roleId) {
 function _s2OpenLinkedInRecruiter(roleId) {
   const { liQuery } = _s2BuildQueries(roleId);
   navigator.clipboard.writeText(liQuery).catch(()=>{});
-  const opened = window.open('https://www.linkedin.com/talent/search', '_blank');
+  const url = 'https://www.linkedin.com/talent/search?keywords=' + encodeURIComponent(liQuery);
+  const opened = window.open(url, '_blank');
   if (!opened) {
-    // Popup blocked — show the query prominently
     _s2GenSearchQueries(roleId);
-    toast('Popup blocked — query is shown below, copy and paste into LinkedIn Recruiter', 'err');
+    toast('Popup blocked — query shown below, copy and paste into LinkedIn Recruiter', 'err');
   } else {
-    toast('Query copied to clipboard — paste into LinkedIn Recruiter search ✓');
+    toast('Query pre-filled in LinkedIn Recruiter — also copied to clipboard ✓');
   }
 }
 
