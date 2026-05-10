@@ -5218,14 +5218,22 @@ ${summary ? 'Role summary: ' + summary : ''}
 
 Write the ideal candidate description now:`;
 
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`, {
         method: 'POST',
         headers: {'content-type': 'application/json'},
         body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:200, temperature:0.3}})
       });
       const json = await res.json();
-      searchText = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-    } catch(e) {}
+      if (!res.ok) {
+        toast('Gemini error: ' + (json?.error?.message || res.status), 'err');
+      } else {
+        searchText = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      }
+    } catch(e) {
+      toast('Gemini connection failed: ' + e.message, 'err');
+    }
+  } else {
+    toast('No Gemini key set — go to Settings → General to add one', 'err');
   }
 
   // Fallback to structured query if no Gemini key or AI failed
