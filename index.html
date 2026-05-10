@@ -5195,52 +5195,44 @@ async function _s2OpenLinkedInRecruiter(roleId) {
   const requirements = jd.requirements || '';
   const sellingPoints = intake.key_selling_points || '';
 
-  let searchText = '';
+  // Build natural language profile from structured data — no API needed
+  const parts = [];
 
-  if (geminiKey) {
-    toast('Generating ideal candidate profile…');
-    try {
-      const prompt = `You are helping a recruiter search LinkedIn Recruiter which uses AI-powered natural language search.
+  const titleLine = [level, title].filter(Boolean).join(' ');
+  if (titleLine) parts.push(`Looking for a ${titleLine}`);
 
-Generate a concise natural language description of the ideal candidate for this role. Write it as if describing the person you're looking for — their background, experience, skills, seniority. This will be pasted directly into LinkedIn Recruiter's AI search bar, so write it as a natural description, NOT as a Boolean query. Keep it under 100 words.
-
-Role: ${title}
-${dept ? 'Department: ' + dept : ''}
-${level ? 'Level: ' + level : ''}
-${location ? 'Location: ' + location : ''}
-${remote ? 'Work policy: ' + remote : ''}
-${targetTitles ? 'Likely current titles: ' + targetTitles : ''}
-${targetCompanies ? 'Target companies: ' + targetCompanies : ''}
-${mustHave ? 'Must have: ' + mustHave : ''}
-${niceHave ? 'Nice to have: ' + niceHave : ''}
-${requirements ? 'Requirements:\n' + requirements : ''}
-${summary ? 'Role summary: ' + summary : ''}
-
-Write the ideal candidate description now:`;
-
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:200, temperature:0.3}})
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast('Gemini error: ' + (json?.error?.message || res.status), 'err');
-      } else {
-        searchText = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-      }
-    } catch(e) {
-      toast('Gemini connection failed: ' + e.message, 'err');
-    }
-  } else {
-    toast('No Gemini key set — go to Settings → General to add one', 'err');
+  if (targetTitles) {
+    const titles = targetTitles.split(/\n|,/).map(t=>t.trim()).filter(Boolean);
+    if (titles.length) parts.push(`with a background as ${titles.join(', ')}`);
   }
 
-  // Fallback to structured query if no Gemini key or AI failed
-  if (!searchText) {
-    const { liQuery } = _s2BuildQueries(roleId);
-    searchText = liQuery;
+  if (dept) parts.push(`in ${dept}`);
+  if (location) parts.push(`based in or open to ${location}${remote ? ' (' + remote + ')' : ''}`);
+
+  if (mustHave) {
+    const skills = mustHave.split(/\n|,/).map(s=>s.trim()).filter(Boolean).slice(0,5);
+    if (skills.length) parts.push(`who has experience with ${skills.join(', ')}`);
   }
+
+  if (niceHave) {
+    const nice = niceHave.split(/\n|,/).map(s=>s.trim()).filter(Boolean).slice(0,3);
+    if (nice.length) parts.push(`ideally with knowledge of ${nice.join(', ')}`);
+  }
+
+  if (targetCompanies) {
+    const companies = targetCompanies.split(/\n|,/).map(c=>c.trim()).filter(Boolean).slice(0,4);
+    if (companies.length) parts.push(`from companies like ${companies.join(', ')}`);
+  }
+
+  if (summary) {
+    const short = summary.replace(/\s+/g,' ').trim().slice(0, 120);
+    parts.push(short + (summary.length > 120 ? '…' : ''));
+  } else if (requirements) {
+    const reqs = requirements.split(/\n/).map(r=>r.replace(/^[-•]\s*/,'')).filter(Boolean).slice(0,3).join('; ');
+    if (reqs) parts.push(reqs);
+  }
+
+  const searchText = parts.join('. ').replace(/\.\./g,'.') || title;
 
   // Save generated profile so it shows in the query box
   const box = document.getElementById('s2-query-box');
