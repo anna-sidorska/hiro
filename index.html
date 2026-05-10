@@ -5187,13 +5187,15 @@ async function _s2OpenLinkedInRecruiter(roleId) {
   const dept = role.department || '';
   const level = role.level || '';
   const remote = intake.remote_policy || role.work_type || '';
-  const mustHave = intake.must_haves || intake.skills_must_have || '';
-  const niceHave = intake.skills_nice_to_have || '';
+  const mustHave = intake.must_haves || '';
+  const niceHave = intake.nice_to_haves || '';
   const targetTitles = intake.target_titles || '';
   const targetCompanies = intake.target_companies || '';
+  const intakeNotes = (intake.intake_notes || '').split('\n---MTG---\n')[0].trim();
   const summary = jd.summary || '';
   const requirements = jd.requirements || '';
-  const sellingPoints = intake.key_selling_points || '';
+  const reportsTo = intake.reports_to || '';
+  const teamStructure = intake.team_structure || '';
 
   // Build natural language profile from structured data — no API needed
   const cleanLines = text => text.split(/\n/).map(l=>l.replace(/^[-•–]\s*/,'').trim()).filter(l=>l && l.length < 120);
@@ -5230,6 +5232,14 @@ async function _s2OpenLinkedInRecruiter(roleId) {
   if (targetCompanies) {
     const companies = cleanLines(targetCompanies).slice(0,4);
     if (companies.length) parts.push(`from companies like ${companies.join(', ')}`);
+  }
+
+  if (reportsTo) parts.push(`reporting to ${reportsTo}`);
+  if (teamStructure) parts.push(`within a team of ${teamStructure}`);
+
+  if (intakeNotes) {
+    const notesSentences = intakeNotes.replace(/\s+/g,' ').trim();
+    if (notesSentences.length > 10) parts.push(notesSentences.slice(0, 200) + (notesSentences.length > 200 ? '…' : ''));
   }
 
   const searchText = parts.join('. ').replace(/\.\./g,'.').replace(/\s+/g,' ').trim() || title;
