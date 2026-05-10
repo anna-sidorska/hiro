@@ -5250,12 +5250,23 @@ Write the ideal candidate description now:`;
   }
 
   navigator.clipboard.writeText(searchText).catch(()=>{});
-  const url = 'https://www.linkedin.com/talent/search?keywords=' + encodeURIComponent(searchText);
-  const opened = window.open(url, '_blank');
-  if (!opened) {
-    toast('Popup blocked — profile shown below, copy and paste into LinkedIn Recruiter', 'err');
-  } else {
-    toast('Profile copied to clipboard — paste into LinkedIn Recruiter AI search ✓');
+
+  // Update box with open button and paste instruction
+  if (box) {
+    box.innerHTML = `
+      <div style="background:var(--surface-2);border:1px solid var(--brand);border-radius:var(--r);padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>
+          <div style="font-size:11px;font-weight:700;color:var(--green-text)">Profile copied to clipboard — paste into LinkedIn Recruiter AI search</div>
+        </div>
+        <textarea id="s2-li-profile" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;line-height:1.6;resize:vertical;font-family:inherit;box-sizing:border-box">${searchText.replace(/</g,'&lt;')}</textarea>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(document.getElementById('s2-li-profile').value);window.open('https://www.linkedin.com/talent/search','_blank');toast('Copied — paste in the search bar ✓')">💼 Open LinkedIn Recruiter</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(document.getElementById('s2-li-profile').value);toast('Copied ✓')">📋 Copy again</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">↺ Regenerate</button>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-3)">① Click "Open LinkedIn Recruiter" → ② paste in the AI search bar (Cmd/Ctrl+V)</div>
+      </div>`;
   }
 }
 
