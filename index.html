@@ -11514,17 +11514,11 @@ async function openCandidateFullPage(appId) {
 
   // CV Viewer card
   if (c.cv_url && _canSee('cv')) {
-    leftCol += '<div class="card" style="padding:16px;margin-bottom:12px">';
-    leftCol += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
-    leftCol += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3)">📄 CV / Resume</div>';
-    leftCol += '</div>';
-    leftCol += '<div style="display:flex;gap:8px">';
-    leftCol += '<button class="btn btn-primary btn-sm" style="flex:1;justify-content:center" onclick="_cfpToggleCvViewer(\'' + c.cv_url + '\')">View CV in Hiro</button>';
+    leftCol += '<div class="card" style="padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px">';
+    leftCol += '<span style="font-size:18px">📄</span>';
+    leftCol += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (c.cv_filename || 'CV on file') + '</div>';
+    leftCol += '<div style="font-size:11px;color:var(--text-3)">' + (c.cv_uploaded_at ? fmtDate(c.cv_uploaded_at) : '') + '</div></div>';
     leftCol += '<button class="btn btn-outline btn-sm" title="Open in new tab" onclick="viewCv(\'' + c.cv_url + '\',this)">↗</button>';
-    leftCol += '</div>';
-    leftCol += '<div id="cfp-cv-viewer" style="display:none;margin-top:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">';
-    leftCol += '<div id="cfp-cv-inner" style="width:100%;min-height:400px;display:flex;align-items:center;justify-content:center;background:var(--surface-2)"><div class="spinner"></div></div>';
-    leftCol += '</div>';
     leftCol += '</div>';
   }
 
@@ -11559,7 +11553,10 @@ async function openCandidateFullPage(appId) {
   leftCol += '</div>';
 
   // ── RIGHT COLUMN ─────────────────────────────────────────────
+  _cfpCvTabLoaded = false; // reset so CV reloads for each new candidate
   var rightCol = '<div style="flex:1;min-width:0">';
+  // Hidden data store for CV URL (read by _loadCfpCvTab)
+  rightCol += '<span id="cfp-cv-url-data" data-url="' + (c.cv_url || '') + '" style="display:none"></span>';
 
   // Lifecycle progress bar
   rightCol += progressBar;
@@ -11567,6 +11564,7 @@ async function openCandidateFullPage(appId) {
   // Tab bar
   rightCol += '<div class="cfp-tab-bar">';
   var tabs = ['Applications','Activity','Communications','Evaluations','Notes'];
+  if (c.cv_url && _canSee('cv')) tabs.push('CV');
   tabs.forEach(function(tab, i) {
     var isActive = i === 0;
     rightCol += '<button class="cfp-tab' + (isActive?' active':'') + '" data-tab="cfp-tab-' + i + '" onclick="switchCfpTab(this,\'cfp-tab-' + i + '\')">' + tab + '</button>';
@@ -11599,6 +11597,15 @@ async function openCandidateFullPage(appId) {
   rightCol += '<div style="display:flex;gap:8px"><textarea id="cfp-note-input" rows="2" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px;resize:vertical" placeholder="Add a note..."></textarea>';
   rightCol += '<button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="addCfpNote(\'' + appId + '\')">Add</button></div>';
   rightCol += '</div>';
+
+  // Tab 5: CV (only present if cv_url exists and user can see cv)
+  if (c.cv_url && _canSee('cv')) {
+    rightCol += '<div id="cfp-tab-5" class="cfp-tab-pane" style="display:none">';
+    rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)">';
+    rightCol += '<div class="spinner"></div>';
+    rightCol += '</div>';
+    rightCol += '</div>';
+  }
 
   rightCol += '</div>';
 
@@ -11659,6 +11666,37 @@ function switchCfpTab(btn, tabId) {
   if (pane) pane.style.display = '';
   // Re-populate template dropdown whenever user opens Communications tab
   if (tabId === 'cfp-tab-2') { _populateCfpTemplates(); }
+  // Load CV viewer when CV tab opened
+  if (tabId === 'cfp-tab-5') { _loadCfpCvTab(); }
+}
+
+// ── CV TAB LOADER ────────────────────────────────────────────────────
+var _cfpCvTabLoaded = false;
+async function _loadCfpCvTab() {
+  var inner = document.getElementById('cfp-cv-tab-inner');
+  if (!inner || _cfpCvTabLoaded) return;
+  _cfpCvTabLoaded = true;
+  // Get cv_url from the currently open candidate profile (stored on the page)
+  var cvUrlEl = document.getElementById('cfp-cv-url-data');
+  var cvUrl = cvUrlEl ? cvUrlEl.dataset.url : null;
+  if (!cvUrl) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV on file</div>'; return; }
+  inner.innerHTML = '<div class="spinner"></div>';
+  try {
+    var url = cvUrl;
+    if (cvUrl.startsWith('storage:')) {
+      var path = cvUrl.replace('storage:', '');
+      var res = await sb.storage.from('candidate-cvs').createSignedUrl(path, 7200);
+      if (res.error || !res.data?.signedUrl) {
+        inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load CV — check storage bucket is set up</div>';
+        return;
+      }
+      url = res.data.signedUrl;
+    }
+    var viewerUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=true';
+    inner.innerHTML = '<iframe src="' + viewerUrl + '" style="width:100%;height:780px;border:none;display:block;border-radius:var(--r)" title="CV"></iframe>';
+  } catch(e) {
+    inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error: ' + e.message + '</div>';
+  }
 }
 
 async function updateStageFullPage(appId) {
