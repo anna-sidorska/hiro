@@ -3179,6 +3179,28 @@ async function renderRoles() {
   renderRolesCards(data);
 }
 
+// ── REASSIGN RECRUITER ───────────────────────────────────────────────
+async function _reassignRecruiter(roleId) {
+  // Load all profiles with recruiter/admin role
+  var res = await sb.from('profiles').select('id,full_name,email,role').in('role',['recruiter','admin','coordinator']).order('full_name');
+  if (res.error || !res.data?.length) { toast('Could not load recruiter list','err'); return; }
+  var current = _rdData?.role?.assigned_recruiter_id || '';
+  var opts = res.data.map(function(p) {
+    return '<option value="' + p.id + '"' + (p.id===current?' selected':'') + '>' + (p.full_name||p.email) + ' (' + p.role + ')</option>';
+  }).join('');
+  var listStr = res.data.map(function(p,i){return (i+1)+'. '+(p.full_name||p.email)+' ('+p.role+')';}).join('\n');
+  var sel = prompt('Reassign recruiter:\n' + listStr + '\n\nEnter number:');
+  if (!sel) return;
+  var idx = parseInt(sel, 10) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= res.data.length) { toast('Invalid selection','err'); return; }
+  var chosen = res.data[idx];
+  var {error} = await sb.from('roles').update({assigned_recruiter_id: chosen.id}).eq('id', roleId);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  await auditLog('update','role',roleId,{assigned_recruiter_id: chosen.id, recruiter_name: chosen.full_name});
+  toast('Role reassigned to ' + (chosen.full_name||chosen.email) + ' ✓');
+  viewRoleDetail(roleId);
+}
+
 async function setRoleStatus(roleId, status) {
   const {error}=await sb.from('roles').update({status}).eq('id',roleId);
   if(error){toast('Error: ' + (error.message||status),'err');return;}
@@ -3395,6 +3417,7 @@ async function viewRoleDetail(roleId) {
         <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="openSourceModal('${role.id}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔍 Source Candidates</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="openRediscoveryModal('${role.id}','${t}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔄 Past Candidates</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="_rdActivityPanel();document.getElementById('role-more-menu-${role.id}').style.display='none'">📋 Activity Log</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="_reassignRecruiter('${role.id}');document.getElementById('role-more-menu-${role.id}').style.display='none'">👤 Reassign Recruiter</button>
         <div style="border-top:1px solid var(--border);margin:4px 0"></div>
         ${role.status==='open'?`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px;color:var(--amber)" onclick="setRoleStatus('${role.id}','on_hold');viewRoleDetail('${role.id}')">⏸ Put On Hold</button>`:''}
         ${(role.status==='open'||role.status==='on_hold')?`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px;color:var(--green-text)" onclick="setRoleStatus('${role.id}','filled');viewRoleDetail('${role.id}')">✓ Mark Filled</button>`:''}
@@ -3781,7 +3804,111 @@ function _rdS1Html(d) {
           </div>
         `}
       </div>
+    </div>
+
+    <!-- 1d: ROLE APPROVALS & TARGETS -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header">
+        <div class="card-title">✅ 1d · Role Approvals &amp; Targets</div>
+        <button class="btn btn-outline btn-sm" onclick="_s1SaveApprovals('${roleId}')">Save</button>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Hiring Manager</label>
+            <input id="s1ap-hm" value="${(()=>{return localStorage.getItem('hiro_hm_name_'+roleId)||role.profiles?.full_name||'';})()}" placeholder="Hiring Manager name" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Department / Function</label>
+            <input id="s1ap-dept" value="${role.department||''}" placeholder="e.g. Sales / Enterprise" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Hiring Target (headcount)</label>
+            <input id="s1ap-target" type="number" min="1" value="${v.headcount_confirmed||role.headcount||1}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Approval Chain</label>
+            <div style="font-size:12px;color:var(--text-2);padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2)">${(()=>{try{const chains=JSON.parse(localStorage.getItem('hiro_approval_chains')||'[]');const match=chains.find(c=>c.department===(role.department||''));return match?match.approvers.join(' → '):'<span style="color:var(--text-3)">No chain for this dept — set up in Settings → Approval Chains</span>';}catch(e){return'<span style="color:var(--text-3)">Configure in Settings</span>';}})()}</div>
+          </div>
+          <div style="grid-column:1/-1">
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:block">Locations &amp; Salary Targets</label>
+            <div id="s1ap-locs-wrap">
+              ${(()=>{
+                try {
+                  const saved = JSON.parse(localStorage.getItem('hiro_loc_salaries_'+roleId)||'[]');
+                  const locs = saved.length ? saved : [{loc:'',curr:'USD',min:'',max:''}];
+                  return locs.map((l,i)=>`<div class="s1ap-loc-row" style="display:grid;grid-template-columns:2fr 80px 100px 100px 32px;gap:6px;margin-bottom:6px;align-items:center">
+                    <input class="s1ap-loc" value="${l.loc||''}" placeholder="Location (e.g. New York, US)" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                    <select class="s1ap-curr" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                      ${['USD','EUR','GBP','BRL','MXN','TRY','INR'].map(c=>`<option ${c===(l.curr||'USD')?'selected':''}>${c}</option>`).join('')}
+                    </select>
+                    <input class="s1ap-min" type="number" value="${l.min||''}" placeholder="Min" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                    <input class="s1ap-max" type="number" value="${l.max||''}" placeholder="Max" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                    <button class="btn btn-ghost btn-sm" style="color:var(--red-text);padding:4px 8px" onclick="this.closest('.s1ap-loc-row').remove()">✕</button>
+                  </div>`).join('');
+                } catch(e) { return ''; }
+              })()}
+            </div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:12px" onclick="_s1AddLocRow()">+ Add Location</button>
+          </div>
+        </div>
+      </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════════
+// STAGE 1d — APPROVALS HELPERS
+// ══════════════════════════════════════════════
+function _s1AddLocRow() {
+  var wrap = document.getElementById('s1ap-locs-wrap');
+  if (!wrap) return;
+  var row = document.createElement('div');
+  row.className = 's1ap-loc-row';
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 80px 100px 100px 32px;gap:6px;margin-bottom:6px;align-items:center';
+  row.innerHTML = '<input class="s1ap-loc" placeholder="Location (e.g. Madrid, Spain)" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
+    '<select class="s1ap-curr" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
+    ['USD','EUR','GBP','BRL','MXN','TRY','INR'].map(function(c){return '<option>'+c+'</option>';}).join('') +
+    '</select>' +
+    '<input class="s1ap-min" type="number" placeholder="Min" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
+    '<input class="s1ap-max" type="number" placeholder="Max" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
+    '<button class="btn btn-ghost btn-sm" style="color:var(--red-text);padding:4px 8px" onclick="this.closest(\'.s1ap-loc-row\').remove()">✕</button>';
+  wrap.appendChild(row);
+}
+
+async function _s1SaveApprovals(roleId) {
+  // Save location salary targets to localStorage
+  var rows = document.querySelectorAll('.s1ap-loc-row');
+  var locs = [];
+  rows.forEach(function(r) {
+    var loc = r.querySelector('.s1ap-loc')?.value.trim();
+    var curr = r.querySelector('.s1ap-curr')?.value;
+    var min = r.querySelector('.s1ap-min')?.value;
+    var max = r.querySelector('.s1ap-max')?.value;
+    if (loc) locs.push({loc, curr, min, max});
+  });
+  localStorage.setItem('hiro_loc_salaries_'+roleId, JSON.stringify(locs));
+
+  // Save HM name and dept to role
+  var hmName = document.getElementById('s1ap-hm')?.value.trim();
+  var dept = document.getElementById('s1ap-dept')?.value.trim();
+  var target = document.getElementById('s1ap-target')?.value;
+  if (hmName) localStorage.setItem('hiro_hm_name_'+roleId, hmName);
+
+  var upd = {};
+  if (dept) upd.department = dept;
+  if (target) upd.headcount = parseInt(target)||1;
+  if (Object.keys(upd).length) {
+    var {error} = await sb.from('roles').update(upd).eq('id', roleId);
+    if (error) { toast('Error saving: '+error.message, 'err'); return; }
+  }
+
+  // Also save headcount_confirmed to intake
+  if (target) {
+    await sb.from('role_intakes').upsert({role_id: roleId, headcount_confirmed: parseInt(target)||1, updated_at: new Date().toISOString()}, {onConflict:'role_id'});
+  }
+
+  toast('Approvals & targets saved ✓');
+  await auditLog('update','role',roleId,{section:'approvals',hm:hmName,dept,headcount:target,locations:locs.length});
 }
 
 // ══════════════════════════════════════════════
@@ -7269,7 +7396,7 @@ function _evalEmailBody() {
 
 // Opens Outlook with everything pre-filled — just hit Send
 function openMailtoEval() {
-  window.open('mailto:' + encodeURIComponent(_genLinkIntEmail) + '?subject=' + encodeURIComponent(_evalEmailSubject()) + '&body=' + encodeURIComponent(_evalEmailBody()), '_blank');
+  window.location.href = 'mailto:' + encodeURIComponent(_genLinkIntEmail) + '?subject=' + encodeURIComponent(_evalEmailSubject()) + '&body=' + encodeURIComponent(_evalEmailBody());
 }
 
 // "Send Email" button — opens Outlook pre-filled (no extra setup needed)
@@ -10657,7 +10784,7 @@ function openMailtoCompose() {
   var to = document.getElementById('compose-to')?.value.trim() || '';
   var subject = document.getElementById('compose-subject')?.value.trim() || '';
   var body = document.getElementById('compose-body')?.value.trim() || '';
-  window.open('mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), '_blank');
+  window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
 }
 
 // ── COMPOSE EMAIL MODAL OPENER ────────────────────────────────
@@ -10809,7 +10936,7 @@ async function sendComposedEmail() {
 
   if (!sent) {
     var mailto = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-    window.open(mailto, '_blank');
+    window.location.href = mailto;
     toast('Opened in Outlook');
     sent = true;
   }
@@ -11472,7 +11599,7 @@ async function openCandidateFullPage(appId) {
   var _currStageIdx   = _progressStages.findIndex(function(s){ return s.key === app.stage; });
   if (_currStageIdx < 0) _currStageIdx = 0;
   var progressBar = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:18px;overflow-x:auto">';
-  progressBar += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:10px">Candidate Pipeline</div>';
+  progressBar += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:10px">Lifecycle</div>';
   progressBar += '<div style="display:flex;align-items:center;gap:0;min-width:max-content">';
   _progressStages.forEach(function(s, i) {
     var isPast    = i < _currStageIdx;
@@ -11554,29 +11681,48 @@ async function openCandidateFullPage(appId) {
 
   // ── RIGHT COLUMN ─────────────────────────────────────────────
   _cfpCvTabLoaded = false; // reset so CV reloads for each new candidate
+  _cfpEppTabLoaded = false; // reset so EPP reloads for each new candidate
   var rightCol = '<div style="flex:1;min-width:0">';
-  // Hidden data store for CV URL (read by _loadCfpCvTab)
+  // Hidden data stores for CV/EPP URLs
   rightCol += '<span id="cfp-cv-url-data" data-url="' + (c.cv_url || '') + '" style="display:none"></span>';
+  rightCol += '<span id="cfp-epp-url-data" data-url="' + (c.epp_url || '') + '" style="display:none"></span>';
 
   // Lifecycle progress bar
   rightCol += progressBar;
 
-  // Tab bar
+  // Tab bar — CV first if available, then EPP, then standard tabs
+  var hasCv  = !!(c.cv_url && _canSee('cv'));
+  var hasEpp = !!(c.epp_url && _canSee('epp'));
   rightCol += '<div class="cfp-tab-bar">';
-  var tabs = ['Applications','Activity','Communications','Evaluations','Notes'];
-  if (c.cv_url && _canSee('cv')) tabs.push('CV');
-  tabs.forEach(function(tab, i) {
-    var isActive = i === 0;
+  if (hasCv)  rightCol += '<button class="cfp-tab active" data-tab="cfp-tab-cv"  onclick="switchCfpTab(this,\'cfp-tab-cv\')">📄 CV</button>';
+  if (hasEpp) rightCol += '<button class="cfp-tab' + (hasCv?'':' active') + '" data-tab="cfp-tab-epp" onclick="switchCfpTab(this,\'cfp-tab-epp\')">🧠 EPP</button>';
+  var stdTabs = ['Applications','Activity','Communications','Evaluations','Notes'];
+  stdTabs.forEach(function(tab, i) {
+    var isActive = !hasCv && !hasEpp && i === 0;
     rightCol += '<button class="cfp-tab' + (isActive?' active':'') + '" data-tab="cfp-tab-' + i + '" onclick="switchCfpTab(this,\'cfp-tab-' + i + '\')">' + tab + '</button>';
   });
   rightCol += '</div>';
 
-  // Tab 0: Applications
-  rightCol += '<div id="cfp-tab-0" class="cfp-tab-pane">';
+  // CV pane (shown by default if CV exists)
+  if (hasCv) {
+    rightCol += '<div id="cfp-tab-cv" class="cfp-tab-pane">';
+    rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
+    rightCol += '</div>';
+  }
+
+  // EPP pane
+  if (hasEpp) {
+    rightCol += '<div id="cfp-tab-epp" class="cfp-tab-pane"' + (hasCv?' style="display:none"':'') + '>';
+    rightCol += '<div id="cfp-epp-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
+    rightCol += '</div>';
+  }
+
+  // Tab 0: Applications (hidden if CV/EPP shown by default)
+  rightCol += '<div id="cfp-tab-0" class="cfp-tab-pane"' + ((hasCv||hasEpp)?' style="display:none"':'') + '>';
   rightCol += '<div id="cfp-applications"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
 
-  // Tab 1: Activity (formerly Lifecycle)
+  // Tab 1: Activity
   rightCol += '<div id="cfp-tab-1" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-lifecycle"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
@@ -11598,15 +11744,6 @@ async function openCandidateFullPage(appId) {
   rightCol += '<button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="addCfpNote(\'' + appId + '\')">Add</button></div>';
   rightCol += '</div>';
 
-  // Tab 5: CV (only present if cv_url exists and user can see cv)
-  if (c.cv_url && _canSee('cv')) {
-    rightCol += '<div id="cfp-tab-5" class="cfp-tab-pane" style="display:none">';
-    rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)">';
-    rightCol += '<div class="spinner"></div>';
-    rightCol += '</div>';
-    rightCol += '</div>';
-  }
-
   rightCol += '</div>';
 
   document.getElementById('content').innerHTML =
@@ -11615,7 +11752,7 @@ async function openCandidateFullPage(appId) {
   // Load all tab data
   loadCfpApplications(c.id);
   loadCfpLifecycle(c.id, appId);
-  loadCfpCommunications(c.id, c.email, fullName, appId, app.roles ? app.roles.title : '', app.stage);
+  loadCfpCommunications(c.id, c.email, fullName, appId, app.roles ? app.roles.title : '', app.stage, app.role_id||'', app.jd_id||'');
   loadCfpEvaluations(c.id);
   loadCfpNotes(appId);
 }
@@ -11666,8 +11803,9 @@ function switchCfpTab(btn, tabId) {
   if (pane) pane.style.display = '';
   // Re-populate template dropdown whenever user opens Communications tab
   if (tabId === 'cfp-tab-2') { _populateCfpTemplates(); }
-  // Load CV viewer when CV tab opened
-  if (tabId === 'cfp-tab-5') { _loadCfpCvTab(); }
+  // Load CV/EPP viewers when respective tabs opened
+  if (tabId === 'cfp-tab-cv')  { _loadCfpCvTab(); }
+  if (tabId === 'cfp-tab-epp') { _loadCfpEppTab(); }
 }
 
 // ── CV TAB LOADER ────────────────────────────────────────────────────
@@ -11676,7 +11814,6 @@ async function _loadCfpCvTab() {
   var inner = document.getElementById('cfp-cv-tab-inner');
   if (!inner || _cfpCvTabLoaded) return;
   _cfpCvTabLoaded = true;
-  // Get cv_url from the currently open candidate profile (stored on the page)
   var cvUrlEl = document.getElementById('cfp-cv-url-data');
   var cvUrl = cvUrlEl ? cvUrlEl.dataset.url : null;
   if (!cvUrl) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV on file</div>'; return; }
@@ -11694,6 +11831,34 @@ async function _loadCfpCvTab() {
     }
     var viewerUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=true';
     inner.innerHTML = '<iframe src="' + viewerUrl + '" style="width:100%;height:780px;border:none;display:block;border-radius:var(--r)" title="CV"></iframe>';
+  } catch(e) {
+    inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error: ' + e.message + '</div>';
+  }
+}
+
+// ── EPP TAB LOADER ───────────────────────────────────────────────────
+var _cfpEppTabLoaded = false;
+async function _loadCfpEppTab() {
+  var inner = document.getElementById('cfp-epp-tab-inner');
+  if (!inner || _cfpEppTabLoaded) return;
+  _cfpEppTabLoaded = true;
+  var eppUrlEl = document.getElementById('cfp-epp-url-data');
+  var eppUrl = eppUrlEl ? eppUrlEl.dataset.url : null;
+  if (!eppUrl) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No EPP report on file</div>'; return; }
+  inner.innerHTML = '<div class="spinner"></div>';
+  try {
+    var url = eppUrl;
+    if (eppUrl.startsWith('storage:')) {
+      var path = eppUrl.replace('storage:', '');
+      var res = await sb.storage.from('candidate-cvs').createSignedUrl(path, 7200);
+      if (res.error || !res.data?.signedUrl) {
+        inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load EPP — check storage bucket is set up</div>';
+        return;
+      }
+      url = res.data.signedUrl;
+    }
+    var viewerUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=true';
+    inner.innerHTML = '<iframe src="' + viewerUrl + '" style="width:100%;height:780px;border:none;display:block;border-radius:var(--r)" title="EPP Report"></iframe>';
   } catch(e) {
     inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error: ' + e.message + '</div>';
   }
@@ -11779,7 +11944,7 @@ async function loadCfpEvaluations(candidateId) {
 }
 
 // Communications tab with template variable substitution
-async function loadCfpCommunications(candidateId, candidateEmail, candidateName, appId, roleTitle, stage) {
+async function loadCfpCommunications(candidateId, candidateEmail, candidateName, appId, roleTitle, stage, roleId, jdId) {
   var el = document.getElementById('cfp-comms-wrap');
   if (!el) return;
 
@@ -11871,6 +12036,7 @@ async function loadCfpCommunications(candidateId, candidateEmail, candidateName,
     '</div></div>' +
     '<div style="display:flex;gap:8px;margin-bottom:12px">' +
     '<button class="btn btn-outline btn-sm" onclick="openIcsFormFromCfp(\'' + candidateId + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + (roleTitle||'').replace(/'/g,"\\'") + '\')">📅 Schedule Interview</button>' +
+    (roleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + candidateId + '\',\'' + (roleId||'') + '\',\'' + (jdId||'') + '\')">🔗 Send Eval Link</button>' : '') +
     '<button class="btn btn-outline" onclick="_cfpDownloadEml(\'' + candidateEmail + '\')" title="Downloads a .eml file — double-click it in Downloads to open in Outlook with full formatting">📨 Download .eml</button>' +
     '<button class="btn btn-primary" onclick="sendCfpEmail(\'' + candidateId + '\',\'' + candidateEmail + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + appId + '\')">' + (_outlookAccount ? '📧 Send via Outlook' : 'Send Email') + '</button>' +
     '</div>' +
@@ -12665,7 +12831,7 @@ async function renderTasks() {
 function sendTestEmail() {
   const subject = encodeURIComponent('Hiro test \u2713');
   const body = encodeURIComponent('This is a test email from Hiro ATS.\n\nEmail is working correctly via Outlook.');
-  window.open('mailto:anna.sidorska@sovos.com?subject=' + subject + '&body=' + body, '_blank');
+  window.location.href = 'mailto:anna.sidorska@sovos.com?subject=' + subject + '&body=' + body;
   toast('Outlook opened with test email \u2713');
 }
 
