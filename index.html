@@ -1223,7 +1223,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
 <script>
 // ── PUBLIC PAGE FLAG (eval/booking links — set before EVERYTHING) ──
-const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book'));
+const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply'));
 
 // ── SUPABASE ──────────────────────────────────
 const SUPABASE_URL = 'https://zgecauwahfszpeungbfb.supabase.co';
@@ -3831,11 +3831,19 @@ function _s2GeneratePosting(d) {
   const summary = jd.summary||'';
   const responsibilities = (jd.responsibilities||'').trim();
   const requirements = (jd.requirements||'').trim();
+  const roleId = role?.id||'';
+  const applyUrl = roleId
+    ? (window.location.origin + window.location.pathname + '?apply=' + roleId)
+    : '';
 
   const fmtBullets = text => text.split('\n')
     .map(l=>l.trim()).filter(Boolean)
     .map(l=>l.startsWith('•')||l.startsWith('-')?l.replace(/^[-•]\s*/,'• ') : '• '+l)
     .join('\n');
+
+  const applyBtn = applyUrl
+    ? `➡ Apply now: ${applyUrl}`
+    : '';
 
   const workSection = `The Work You'll Do
 
@@ -3849,7 +3857,8 @@ ${responsibilities ? fmtBullets(responsibilities) : '• [Add responsibilities]'
 
 ${requirements ? fmtBullets(requirements) : '• [Add requirements]'}`;
 
-  return [SOVOS_INTRO, workSection, reqSection, SOVOS_BENEFITS, SOVOS_COMPANY].join('\n\n---\n\n');
+  const sections = [applyBtn, SOVOS_INTRO, workSection, reqSection, SOVOS_BENEFITS, SOVOS_COMPANY, applyBtn].filter(Boolean);
+  return sections.join('\n\n---\n\n');
 }
 
 function _rdS2Html(d) {
@@ -8926,6 +8935,150 @@ function downloadEvalIcs() {
   });
 }
 
+// ── PUBLIC APPLY PAGE ─────────────────────────
+async function _showApplyPage(roleId) {
+  const el = document.getElementById('eval-screen') || document.body;
+  el.style.cssText = 'display:flex;align-items:center;justify-content:center;min-height:100vh;background:#07101f;font-family:Inter,sans-serif;padding:24px;box-sizing:border-box';
+
+  el.innerHTML = `<div style="text-align:center;color:#eef4ff"><div style="width:36px;height:36px;border:3px solid rgba(0,196,238,.2);border-top-color:#00c4ee;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px"></div><div style="font-size:14px;color:rgba(255,255,255,.5)">Loading…</div></div>`;
+
+  // Fetch public role info
+  const {data, error} = await sb.rpc('get_role_for_apply', {p_role_id: roleId});
+  if (error || !data || data.error) {
+    el.innerHTML = `<div style="text-align:center;color:#ef4444;font-size:15px">Role not found or no longer accepting applications.</div>`;
+    return;
+  }
+
+  const r = data;
+  let submitted = false;
+
+  function render(state) {
+    if (state === 'success') {
+      el.innerHTML = `
+        <div style="max-width:560px;width:100%;background:#0d1b2e;border-radius:16px;padding:40px;border:1px solid rgba(0,196,238,.15);text-align:center">
+          <div style="font-size:48px;margin-bottom:16px">🎉</div>
+          <div style="font-size:22px;font-weight:700;color:#eef4ff;margin-bottom:10px">Application submitted!</div>
+          <div style="font-size:14px;color:rgba(255,255,255,.55);line-height:1.6">Thanks for applying for <strong style="color:#eef4ff">${r.title}</strong>.<br>Our team will be in touch soon.</div>
+          <div style="margin-top:28px;font-size:12px;color:rgba(255,255,255,.25)">Powered by Hiro · Sovos Talent Acquisition</div>
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = `
+      <div style="max-width:600px;width:100%">
+        <!-- Header -->
+        <div style="text-align:center;margin-bottom:32px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#00c4ee;margin-bottom:10px">Sovos · Open Role</div>
+          <div style="font-size:28px;font-weight:800;color:#eef4ff;margin-bottom:8px">${r.title}</div>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+            ${r.department ? `<span style="font-size:12px;padding:3px 10px;border-radius:99px;background:rgba(0,196,238,.1);color:#00c4ee">${r.department}</span>` : ''}
+            ${r.region ? `<span style="font-size:12px;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.6)">${r.region}</span>` : ''}
+            ${r.level ? `<span style="font-size:12px;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.6)">${r.level}</span>` : ''}
+          </div>
+        </div>
+
+        <!-- JD snippet -->
+        ${r.summary ? `<div style="background:#0d1b2e;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:20px;margin-bottom:24px;font-size:13px;color:rgba(255,255,255,.65);line-height:1.7">${r.summary}</div>` : ''}
+
+        <!-- Form card -->
+        <div style="background:#0d1b2e;border:1px solid rgba(0,196,238,.15);border-radius:16px;padding:32px">
+          <div style="font-size:16px;font-weight:700;color:#eef4ff;margin-bottom:22px">Apply for this role</div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px">First name *</label>
+              <input id="ap-first" type="text" placeholder="Jane" style="width:100%;background:#111d30;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;color:#eef4ff;font-size:14px;outline:none;box-sizing:border-box">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px">Last name *</label>
+              <input id="ap-last" type="text" placeholder="Smith" style="width:100%;background:#111d30;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;color:#eef4ff;font-size:14px;outline:none;box-sizing:border-box">
+            </div>
+          </div>
+
+          <div style="margin-bottom:14px">
+            <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px">Email *</label>
+            <input id="ap-email" type="email" placeholder="jane.smith@email.com" style="width:100%;background:#111d30;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;color:#eef4ff;font-size:14px;outline:none;box-sizing:border-box">
+          </div>
+
+          <div style="margin-bottom:14px">
+            <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px">Phone</label>
+            <input id="ap-phone" type="tel" placeholder="+1 555 000 0000" style="width:100%;background:#111d30;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;color:#eef4ff;font-size:14px;outline:none;box-sizing:border-box">
+          </div>
+
+          <div style="margin-bottom:14px">
+            <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px">LinkedIn URL / CV link</label>
+            <input id="ap-cv" type="url" placeholder="https://linkedin.com/in/..." style="width:100%;background:#111d30;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;color:#eef4ff;font-size:14px;outline:none;box-sizing:border-box">
+          </div>
+
+          <div style="margin-bottom:22px">
+            <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px">Why Sovos? (optional)</label>
+            <textarea id="ap-cover" rows="4" placeholder="Tell us a bit about yourself and why you're interested..." style="width:100%;background:#111d30;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;color:#eef4ff;font-size:14px;outline:none;resize:vertical;box-sizing:border-box;font-family:Inter,sans-serif"></textarea>
+          </div>
+
+          <div id="ap-error" style="display:none;color:#ef4444;font-size:13px;margin-bottom:14px"></div>
+
+          <button id="ap-submit-btn" onclick="_apSubmitApplication('${roleId}')"
+            style="width:100%;padding:14px;background:#00c4ee;color:#07101f;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s">
+            Submit Application →
+          </button>
+        </div>
+
+        <div style="text-align:center;margin-top:20px;font-size:11px;color:rgba(255,255,255,.2)">Powered by Hiro · Sovos Talent Acquisition</div>
+      </div>`;
+  }
+
+  render('form');
+}
+
+async function _apSubmitApplication(roleId) {
+  const btn = document.getElementById('ap-submit-btn');
+  const errEl = document.getElementById('ap-error');
+  const first = document.getElementById('ap-first')?.value.trim();
+  const last = document.getElementById('ap-last')?.value.trim();
+  const email = document.getElementById('ap-email')?.value.trim();
+  const phone = document.getElementById('ap-phone')?.value.trim();
+  const cvUrl = document.getElementById('ap-cv')?.value.trim();
+  const cover = document.getElementById('ap-cover')?.value.trim();
+
+  if (!first || !last || !email) {
+    if (errEl) { errEl.style.display='block'; errEl.textContent='First name, last name and email are required.'; }
+    return;
+  }
+  if (!/\S+@\S+\.\S+/.test(email)) {
+    if (errEl) { errEl.style.display='block'; errEl.textContent='Please enter a valid email address.'; }
+    return;
+  }
+
+  if (btn) { btn.disabled=true; btn.textContent='Submitting…'; }
+  if (errEl) errEl.style.display='none';
+
+  const {data, error} = await sb.rpc('submit_application', {
+    p_role_id: roleId,
+    p_first_name: first,
+    p_last_name: last,
+    p_email: email,
+    p_phone: phone||null,
+    p_cv_url: cvUrl||null,
+    p_cover_note: cover||null
+  });
+
+  if (error || (data && data.error)) {
+    if (btn) { btn.disabled=false; btn.textContent='Submit Application →'; }
+    if (errEl) { errEl.style.display='block'; errEl.textContent = (data&&data.error)||error?.message||'Something went wrong. Please try again.'; }
+    return;
+  }
+
+  // Show success
+  const el = document.getElementById('eval-screen') || document.body;
+  el.innerHTML = `
+    <div style="max-width:560px;width:100%;background:#0d1b2e;border-radius:16px;padding:40px;border:1px solid rgba(0,196,238,.15);text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">🎉</div>
+      <div style="font-size:22px;font-weight:700;color:#eef4ff;margin-bottom:10px">Application submitted!</div>
+      <div style="font-size:14px;color:rgba(255,255,255,.55);line-height:1.6">Thanks for applying.<br>Our team will be in touch soon.</div>
+      <div style="margin-top:28px;font-size:12px;color:rgba(255,255,255,.25)">Powered by Hiro · Sovos Talent Acquisition</div>
+    </div>`;
+}
+
 // ── JD PUBLIC APPROVAL PAGE ───────────────────
 async function _showJdApprovalPage(token) {
   const el = document.getElementById('eval-screen') || document.body;
@@ -9027,11 +9180,19 @@ function initApp() {
   var evalToken = params.get('eval');
   var bookToken = params.get('book');
   var approvalToken = params.get('approval');
+  var applyRoleId = params.get('apply');
 
   if (approvalToken) {
     document.getElementById('app').classList.remove('ready');
     document.getElementById('login').classList.remove('visible');
     _showJdApprovalPage(approvalToken);
+    return;
+  }
+
+  if (applyRoleId) {
+    document.getElementById('app').classList.remove('ready');
+    document.getElementById('login').classList.remove('visible');
+    _showApplyPage(applyRoleId);
     return;
   }
 
