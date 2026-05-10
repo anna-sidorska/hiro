@@ -4100,13 +4100,11 @@ function _rdS3Html(d) {
     <div class="card" style="margin-bottom:12px">
       <div class="card-header">
         <div class="card-title">🔍 Sourcing Tools</div>
-        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2GenSearchQueries('${roleId}')">⚡ Build Search Queries</button>
       </div>
       <div class="card-body">
         <div id="s2-query-box" style="display:none;margin-bottom:14px"></div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
           <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">💼 LinkedIn Recruiter →</button>
-          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenXRay('${roleId}')">🔍 Google X-Ray →</button>
           <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
           <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">Source from Database</button>
           <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Find Past Candidates</button>
@@ -5199,35 +5197,7 @@ function _s2BuildQueries(roleId) {
   return { xrayBroad, xraySkills, xrayTargeted, titles, skills, companies, city };
 }
 
-function _s2GenSearchQueries(roleId) {
-  const box = document.getElementById('s2-query-box');
-  if (!box) return;
-  const { xrayBroad, xraySkills, xrayTargeted, city } = _s2BuildQueries(roleId);
 
-  const qRow = (id, label, hint, query) => !query ? '' : `
-    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div>
-          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">${label}</span>
-          <span style="font-size:10px;color:var(--text-3);margin-left:6px">${hint}</span>
-        </div>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-outline btn-sm" style="font-size:10px" onclick="navigator.clipboard.writeText(document.getElementById('${id}').textContent);toast('Copied ✓')">📋</button>
-          <button class="btn btn-primary btn-sm" style="font-size:10px" onclick="window.open('https://www.google.com/search?q='+encodeURIComponent(document.getElementById('${id}').textContent),'_blank')">Search →</button>
-        </div>
-      </div>
-      <div id="${id}" style="font-size:11px;color:var(--text);font-family:monospace;white-space:pre-wrap;word-break:break-all;margin-top:6px">${query.replace(/</g,'&lt;')}</div>
-    </div>`;
-
-  box.style.display = 'block';
-  box.innerHTML = `
-    <div style="display:grid;gap:8px">
-      <div style="font-size:11px;color:var(--text-3);padding:6px 10px;background:var(--surface-2);border-radius:var(--r)">💡 X-Ray finds profiles globally — filter by location in LinkedIn Recruiter after opening profiles</div>
-      ${qRow('s2-xray-broad','Broad','— titles only, widest net',xrayBroad)}
-      ${qRow('s2-xray-skills','Skills','— + must-have keywords',xraySkills)}
-      ${qRow('s2-xray-targeted','Targeted','— + competitor companies',xrayTargeted)}
-    </div>`;
-}
 
 async function _s2OpenLinkedInRecruiter(roleId) {
   const geminiKey = localStorage.getItem('hiro_gemini_key');
@@ -5335,13 +5305,6 @@ async function _s2OpenLinkedInRecruiter(roleId) {
   }
 }
 
-function _s2OpenXRay(roleId) {
-  const { xrayBroad, city } = _s2BuildQueries(roleId);
-  _s2GenSearchQueries(roleId);
-  if (!city) { toast('No city set on this role — update Region for location filtering', 'err'); }
-  const url = 'https://www.google.com/search?q=' + encodeURIComponent(xrayBroad);
-  window.open(url, '_blank');
-}
 
 // ── LINKEDIN POST GENERATOR ────────────────────
 async function _rdGenerateLinkedInPost(roleId) {
