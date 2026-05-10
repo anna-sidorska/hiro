@@ -5175,16 +5175,87 @@ function _s2GenSearchQueries(roleId) {
     </div>`;
 }
 
-function _s2OpenLinkedInRecruiter(roleId) {
-  const { liQuery } = _s2BuildQueries(roleId);
-  navigator.clipboard.writeText(liQuery).catch(()=>{});
-  const url = 'https://www.linkedin.com/talent/search?keywords=' + encodeURIComponent(liQuery);
+async function _s2OpenLinkedInRecruiter(roleId) {
+  const geminiKey = localStorage.getItem('hiro_gemini_key');
+  const d = _rdData;
+  const role = d?.role || {};
+  const intake = d?.intake || {};
+  const jd = d?.roleJd || {};
+
+  const title = intake.confirmed_title || role.title || '';
+  const location = role.location || role.region || '';
+  const dept = role.department || '';
+  const level = role.level || '';
+  const remote = intake.remote_policy || role.work_type || '';
+  const mustHave = intake.must_haves || intake.skills_must_have || '';
+  const niceHave = intake.skills_nice_to_have || '';
+  const targetTitles = intake.target_titles || '';
+  const targetCompanies = intake.target_companies || '';
+  const summary = jd.summary || '';
+  const requirements = jd.requirements || '';
+  const sellingPoints = intake.key_selling_points || '';
+
+  let searchText = '';
+
+  if (geminiKey) {
+    toast('Generating ideal candidate profile…');
+    try {
+      const prompt = `You are helping a recruiter search LinkedIn Recruiter which uses AI-powered natural language search.
+
+Generate a concise natural language description of the ideal candidate for this role. Write it as if describing the person you're looking for — their background, experience, skills, seniority. This will be pasted directly into LinkedIn Recruiter's AI search bar, so write it as a natural description, NOT as a Boolean query. Keep it under 100 words.
+
+Role: ${title}
+${dept ? 'Department: ' + dept : ''}
+${level ? 'Level: ' + level : ''}
+${location ? 'Location: ' + location : ''}
+${remote ? 'Work policy: ' + remote : ''}
+${targetTitles ? 'Likely current titles: ' + targetTitles : ''}
+${targetCompanies ? 'Target companies: ' + targetCompanies : ''}
+${mustHave ? 'Must have: ' + mustHave : ''}
+${niceHave ? 'Nice to have: ' + niceHave : ''}
+${requirements ? 'Requirements:\n' + requirements : ''}
+${summary ? 'Role summary: ' + summary : ''}
+
+Write the ideal candidate description now:`;
+
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:200, temperature:0.3}})
+      });
+      const json = await res.json();
+      searchText = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    } catch(e) {}
+  }
+
+  // Fallback to structured query if no Gemini key or AI failed
+  if (!searchText) {
+    const { liQuery } = _s2BuildQueries(roleId);
+    searchText = liQuery;
+  }
+
+  // Save generated profile so it shows in the query box
+  const box = document.getElementById('s2-query-box');
+  if (box) {
+    box.style.display = 'block';
+    box.innerHTML = `
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px">Ideal Candidate Profile — paste into LinkedIn Recruiter AI search</div>
+        <textarea id="s2-li-profile" rows="4" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;line-height:1.6;resize:vertical;font-family:inherit;box-sizing:border-box">${searchText.replace(/</g,'&lt;')}</textarea>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(document.getElementById('s2-li-profile').value);toast('Profile copied ✓')">📋 Copy</button>
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">↺ Regenerate</button>
+        </div>
+      </div>`;
+  }
+
+  navigator.clipboard.writeText(searchText).catch(()=>{});
+  const url = 'https://www.linkedin.com/talent/search?keywords=' + encodeURIComponent(searchText);
   const opened = window.open(url, '_blank');
   if (!opened) {
-    _s2GenSearchQueries(roleId);
-    toast('Popup blocked — query shown below, copy and paste into LinkedIn Recruiter', 'err');
+    toast('Popup blocked — profile shown below, copy and paste into LinkedIn Recruiter', 'err');
   } else {
-    toast('Query pre-filled in LinkedIn Recruiter — also copied to clipboard ✓');
+    toast('Profile copied to clipboard — paste into LinkedIn Recruiter AI search ✓');
   }
 }
 
