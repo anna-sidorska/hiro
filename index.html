@@ -13932,7 +13932,7 @@ async function renderTeamUsers() {
       '<td style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:32px;height:32px;font-size:11px;flex-shrink:0">' + initials + '</div><div><div style="font-weight:500;font-size:13px">' + _escHtml(u.full_name||'—') + '</div><div style="font-size:11px;color:var(--text-3)">' + _escHtml(u.email||'') + '</div></div></div></td>' +
       '<td style="padding:12px 16px"><select class="form-input" style="padding:4px 8px;font-size:12px;width:auto" onchange="_tuUpdateRole(' + JSON.stringify(u.id) + ',this.value)">' + roleOpts + '</select></td>' +
       '<td style="padding:12px 16px;font-size:12px;color:var(--text-3)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '—') + '</td>' +
-      '<td style="padding:12px 16px">' + (!u.user_id ? '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_tuInviteRow(' + JSON.stringify(u.email) + ')">✉ Invite</button>' : '<span style="font-size:11px;color:var(--green-text);font-weight:600">✓ Active</span>') + '</td>' +
+      '<td style="padding:12px 16px">' + (!u.user_id ? '<button class="btn btn-primary btn-sm" style="font-size:11px" data-inv-email="' + _escHtml(u.email||'') + '" onclick="_tuInviteRow(this.dataset.invEmail)">✉ Invite</button>' : '<span style="font-size:11px;color:var(--green-text);font-weight:600">✓ Active</span>') + '</td>' +
     '</tr>';
   }).join('');
 
@@ -13967,7 +13967,7 @@ window._tuUpdateRole = async function(userId, newRole) {
 
 window._tuInviteRow = async function(email) {
   if (!email) { toast('No email on this profile', 'err'); return; }
-  var btns = document.querySelectorAll('[onclick*="_tuInviteRow(' + JSON.stringify(email) + ')"]');
+  var btns = document.querySelectorAll('[data-inv-email="' + email.replace(/"/g,'&quot;') + '"]');
   var btn = btns[0];
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   try {
