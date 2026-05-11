@@ -417,6 +417,20 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <button class="btn btn-ghost btn-sm" onclick="showLoginView()">← Back to sign in</button>
       </div>
     </div>
+    <div id="login-set-password" style="display:none">
+      <div style="text-align:center;margin-bottom:16px;font-size:13px;color:var(--text-2)">Set your new password</div>
+      <div class="form-group">
+        <label>New Password</label>
+        <input type="password" id="new-password" placeholder="Min 8 characters" onkeydown="if(event.key==='Enter')saveNewPassword()">
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="confirm-password" placeholder="Repeat password" onkeydown="if(event.key==='Enter')saveNewPassword()">
+      </div>
+      <div id="set-pw-error" style="display:none;background:var(--red-bg);color:var(--red-text);border:1px solid #fecaca;border-radius:var(--r);padding:10px 12px;font-size:12px;margin-bottom:16px"></div>
+      <div id="set-pw-msg" style="display:none;background:var(--green-bg);color:var(--green-text);border:1px solid #6ee7b7;border-radius:var(--r);padding:10px 12px;font-size:12px;margin-bottom:16px"></div>
+      <button class="btn btn-primary" id="set-pw-btn" style="width:100%;justify-content:center" onclick="saveNewPassword()">Set Password</button>
+    </div>
   </div>
 </div>
 
@@ -1438,9 +1452,60 @@ async function sendMagicLink() {
 function showLoginView() {
   document.getElementById('login-main').style.display = 'block';
   document.getElementById('login-reset').style.display = 'none';
+  document.getElementById('login-set-password').style.display = 'none';
   document.getElementById('login-error').style.display = 'none';
   document.getElementById('login-btn').textContent = 'Sign In';
   document.getElementById('login-btn').disabled = false;
+}
+
+function showSetPasswordView() {
+  document.getElementById('login-main').style.display = 'none';
+  document.getElementById('login-reset').style.display = 'none';
+  document.getElementById('login-set-password').style.display = 'block';
+  document.getElementById('set-pw-error').style.display = 'none';
+  document.getElementById('set-pw-msg').style.display = 'none';
+}
+
+async function saveNewPassword() {
+  var pw = (document.getElementById('new-password')?.value || '').trim();
+  var pw2 = (document.getElementById('confirm-password')?.value || '').trim();
+  var errDiv = document.getElementById('set-pw-error');
+  var msgDiv = document.getElementById('set-pw-msg');
+  var btn = document.getElementById('set-pw-btn');
+  errDiv.style.display = 'none';
+  msgDiv.style.display = 'none';
+  if (!pw || pw.length < 8) { errDiv.textContent = 'Password must be at least 8 characters.'; errDiv.style.display = 'block'; return; }
+  if (pw !== pw2) { errDiv.textContent = 'Passwords do not match.'; errDiv.style.display = 'block'; return; }
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  var { error } = await sb.auth.updateUser({ password: pw });
+  btn.textContent = 'Set Password'; btn.disabled = false;
+  if (error) {
+    errDiv.textContent = error.message;
+    errDiv.style.display = 'block';
+  } else {
+    msgDiv.textContent = 'Password set! Signing you in…';
+    msgDiv.style.display = 'block';
+    // Session is already active after updateUser — load the app
+    setTimeout(async function() {
+      var { data: { session } } = await sb.auth.getSession();
+      if (session) {
+        var authId = session.user.id;
+        var authEmail = session.user.email;
+        var { data: profile } = await sb.from('profiles').select('*').eq('user_id', authId).maybeSingle();
+        if (!profile) {
+          var { data: byEmail } = await sb.from('profiles').select('*').ilike('email', authEmail).maybeSingle();
+          if (byEmail) {
+            await sb.from('profiles').update({ user_id: authId }).eq('id', byEmail.id);
+            profile = Object.assign({}, byEmail, { user_id: authId });
+          }
+        }
+        if (profile) { currentUser = profile; showApp(); }
+        else { showLoginView(); }
+      } else {
+        showLoginView();
+      }
+    }, 1200);
+  }
 }
 
 function showResetView() {
@@ -9837,18 +9902,27 @@ function initApp() {
 
 function _startAuthFlow() {
   if (_HIRO_IS_PUBLIC) return; // never run auth on public pages
+  // Capture magic link / recovery token flag BEFORE Supabase clears the URL hash
+  window._hasMagicToken = window.location.hash.includes('access_token') || window.location.search.includes('access_token');
+  window._hasRecoveryToken = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
+
   // Always show login immediately — no blank page ever
   showLoginScreen();
 
   sb.auth.onAuthStateChange(async (event, session) => {
-    if(event==='PASSWORD_RECOVERY') return;
+    // PASSWORD_RECOVERY: user clicked a reset link — show set-new-password form
+    if(event==='PASSWORD_RECOVERY') {
+      document.getElementById('login').classList.add('visible');
+      document.getElementById('app').classList.remove('ready');
+      showSetPasswordView();
+      return;
+    }
     // INITIAL_SESSION fires on page load from localStorage cache — always ignore (user must log in manually)
     if(event==='INITIAL_SESSION') return;
-    // SIGNED_IN: only allow auto-login when triggered by a magic link (access_token in URL)
+    // SIGNED_IN: only allow auto-login when triggered by a magic link (access_token captured before hash was cleared)
     // Password logins call showApp() directly — no need to handle here
     if(event==='SIGNED_IN') {
-      var hasMagicToken = window.location.hash.includes('access_token') || window.location.search.includes('access_token');
-      if(!hasMagicToken || currentUser) return;
+      if(!window._hasMagicToken || currentUser) return;
     }
     if(!session) { showLoginScreen(); return; }
     if(currentUser) return;
