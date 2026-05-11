@@ -13915,6 +13915,7 @@ async function renderTeamUsers() {
       '<td style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:32px;height:32px;font-size:11px;flex-shrink:0">' + initials + '</div><div><div style="font-weight:500;font-size:13px">' + _escHtml(u.full_name||'—') + '</div><div style="font-size:11px;color:var(--text-3)">' + _escHtml(u.email||'') + '</div></div></div></td>' +
       '<td style="padding:12px 16px"><select class="form-input" style="padding:4px 8px;font-size:12px;width:auto" onchange="_tuUpdateRole(' + JSON.stringify(u.id) + ',this.value)">' + roleOpts + '</select></td>' +
       '<td style="padding:12px 16px;font-size:12px;color:var(--text-3)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '—') + '</td>' +
+      '<td style="padding:12px 16px">' + (!u.user_id ? '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_tuInviteRow(' + JSON.stringify(u.email) + ')">✉ Invite</button>' : '<span style="font-size:11px;color:var(--green-text);font-weight:600">✓ Active</span>') + '</td>' +
     '</tr>';
   }).join('');
 
@@ -13935,7 +13936,7 @@ async function renderTeamUsers() {
     '</div>' +
     '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
     '<thead><tr style="background:var(--surface-2);font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">' +
-    '<th style="padding:8px 16px;text-align:left">User</th><th style="padding:8px 16px;text-align:left">Role</th><th style="padding:8px 16px;text-align:left">Joined</th></tr></thead>' +
+    '<th style="padding:8px 16px;text-align:left">User</th><th style="padding:8px 16px;text-align:left">Role</th><th style="padding:8px 16px;text-align:left">Joined</th><th style="padding:8px 16px;text-align:left">Access</th></tr></thead>' +
     '<tbody id="tu-tbody">' + (rows || '<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--text-3)">No users found</td></tr>') + '</tbody>' +
     '</table></div></div>';
 }
@@ -13944,6 +13945,26 @@ window._tuUpdateRole = async function(userId, newRole) {
   var upRes = await sb.from('profiles').update({role: newRole}).eq('id', userId);
   if (upRes.error) { toast('Could not update role: ' + upRes.error.message, 'err'); return; }
   toast('Role updated');
+};
+
+
+window._tuInviteRow = async function(email) {
+  if (!email) { toast('No email on this profile', 'err'); return; }
+  var btns = document.querySelectorAll('[onclick*="_tuInviteRow(' + JSON.stringify(email) + ')"]');
+  var btn = btns[0];
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    var res = await sb.auth.signInWithOtp({
+      email: email,
+      options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + window.location.pathname }
+    });
+    if (res.error) throw new Error(res.error.message);
+    if (btn) { btn.textContent = '✓ Sent'; btn.style.background = 'var(--green)'; btn.style.borderColor = 'var(--green)'; }
+    toast('Magic link sent to ' + email + ' ✓');
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '✉ Invite'; }
+    toast('Failed: ' + e.message, 'err');
+  }
 };
 
 window._tuShowInvite = function() {
