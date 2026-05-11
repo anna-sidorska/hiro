@@ -6750,6 +6750,8 @@ async function checkEvalMode() {
     const submittedAt = link.submitted_at || link.questions?.submitted_at;
     if (submittedAt) { _evalError('This evaluation has already been submitted. Each link can only be used once.'); return true; }
     _evalLinkData = link;
+    // Pull AI key from dedicated column (v7) or JSONB questions (older links)
+    _evalAiKey = link.ai_key || link.questions?.ai_key || null;
     // Load candidate + jd
     const [candRes, jdRes] = await Promise.all([
       link.candidate_id ? sb.from('candidates').select('*').eq('id', link.candidate_id).maybeSingle() : Promise.resolve({data:null}),
@@ -6958,14 +6960,26 @@ function _renderEvalForm() {
           <span style="font-size:11px;color:#94a3b8;margin-left:8px">(1=Poor · 5=Exceptional)</span>
         </div>
       </div>
-      <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Recommendation *</label>
-        <select id="erec" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit">
-          <option value="">Select...</option>
-          <option>Proceed to next stage</option>
-          <option>Hold — discuss with panel</option>
-          <option>Fast track to offer</option>
-          <option>Do not proceed</option>
-        </select>
+      <div>
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:8px">Recommendation *</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" id="rec-btn-yes" onclick="_setRec('yes')" style="flex:1;min-width:100px;padding:10px 8px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#64748b;transition:all .15s;text-align:center">✅<br><span style="font-size:12px">Yes</span></button>
+          <button type="button" id="rec-btn-maybe" onclick="_setRec('maybe')" style="flex:1;min-width:100px;padding:10px 8px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#64748b;transition:all .15s;text-align:center">🤔<br><span style="font-size:12px">Maybe</span></button>
+          <button type="button" id="rec-btn-no" onclick="_setRec('no')" style="flex:1;min-width:100px;padding:10px 8px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#64748b;transition:all .15s;text-align:center">❌<br><span style="font-size:12px">No</span></button>
+        </div>
+        <input type="hidden" id="erec" value="">
+        <div id="maybe-next-steps" style="display:none;margin-top:12px">
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Next steps <span style="color:#dc2626">*</span> <span style="color:#64748b;font-weight:400">(required when Maybe)</span></label>
+          <select id="erec-next-steps" style="width:100%;padding:8px 10px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;font-family:inherit;background:#fffbeb">
+            <option value="">Select next step...</option>
+            <option value="next_interview">Move to next interview stage</option>
+            <option value="backup">Hold as backup candidate</option>
+            <option value="extend_assessment">Extend assessment / additional stage</option>
+            <option value="revisit_3m">Revisit in 3 months</option>
+            <option value="revisit_6m">Revisit in 6 months</option>
+            <option value="other">Other — specify in Debrief Notes</option>
+          </select>
+        </div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -7080,6 +7094,205 @@ function _renderEvalForm() {
     var bar = document.querySelector('.eval-progress-fill');
     if (bar) bar.style.width = pct + '%';
   });
+  // Initialise transcription panel
+  _evalAiKey = (_evalLinkData?.ai_key) || null;
+  _initTranscriptPanel();
+}
+
+// ── EVAL RECOMMENDATION BUTTONS ──────────────────────────────────────────────
+function _setRec(val) {
+  document.getElementById('erec').value = val;
+  ['yes','maybe','no'].forEach(function(v) {
+    var btn = document.getElementById('rec-btn-'+v);
+    if (!btn) return;
+    if (v === val) {
+      var colors = {yes:'#16a34a',maybe:'#d97706',no:'#dc2626'};
+      btn.style.borderColor = colors[v];
+      btn.style.background  = v==='yes'?'#f0fdf4':v==='maybe'?'#fffbeb':'#fef2f2';
+      btn.style.color       = colors[v];
+    } else {
+      btn.style.borderColor = '#e2e8f0';
+      btn.style.background  = '#fff';
+      btn.style.color       = '#64748b';
+    }
+  });
+  var ns = document.getElementById('maybe-next-steps');
+  if (ns) ns.style.display = val==='maybe' ? 'block' : 'none';
+}
+
+// ── LIVE TRANSCRIPTION ────────────────────────────────────────────────────────
+var _evalTranscript   = '';
+var _speechRec        = null;
+var _micActive        = false;
+var _evalAiKey        = null; // set from link data when form loads
+
+function _initTranscriptPanel() {
+  // Don't add twice
+  if (document.getElementById('transcript-panel')) return;
+  var panel = document.createElement('div');
+  panel.id = 'transcript-panel';
+  panel.style.cssText = 'position:fixed;bottom:16px;right:16px;width:340px;max-height:420px;background:#1e293b;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.35);z-index:9999;display:flex;flex-direction:column;overflow:hidden;font-family:inherit';
+  panel.innerHTML = [
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#0f172a;cursor:pointer" onclick="_toggleTranscriptPanel()">',
+      '<div style="display:flex;align-items:center;gap:8px">',
+        '<span id="mic-dot" style="width:8px;height:8px;border-radius:50%;background:#64748b;display:inline-block"></span>',
+        '<span style="font-size:13px;font-weight:600;color:#e2e8f0">🎙 Live Transcription</span>',
+      '</div>',
+      '<span id="transcript-toggle-icon" style="font-size:11px;color:#94a3b8">▲</span>',
+    '</div>',
+    '<div id="transcript-body" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">',
+      '<div style="display:flex;gap:8px">',
+        '<button id="mic-btn" type="button" onclick="_toggleMic()" style="flex:1;padding:8px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:12px;font-weight:600;cursor:pointer">▶ Start</button>',
+        '<button type="button" onclick="_clearTranscript()" style="padding:8px 10px;border:none;border-radius:8px;background:#334155;color:#94a3b8;font-size:12px;cursor:pointer" title="Clear transcript">🗑</button>',
+      '</div>',
+      '<div id="transcript-text" style="min-height:80px;max-height:180px;overflow-y:auto;background:#0f172a;border-radius:8px;padding:10px;font-size:11px;color:#94a3b8;line-height:1.6;white-space:pre-wrap">Tap Start to begin transcription...</div>',
+      '<button type="button" id="extract-btn" onclick="_extractFromTranscript()" style="padding:9px;border:none;border-radius:8px;background:#7c3aed;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:none">✨ Auto-fill from transcript</button>',
+      '<div id="extract-status" style="display:none;font-size:11px;color:#94a3b8;text-align:center"></div>',
+    '</div>',
+  ].join('');
+  document.body.appendChild(panel);
+  // Show extract button only if AI key available
+  if (_evalAiKey) document.getElementById('extract-btn').style.display = 'block';
+}
+
+function _toggleTranscriptPanel() {
+  var body = document.getElementById('transcript-body');
+  var icon = document.getElementById('transcript-toggle-icon');
+  if (!body) return;
+  var hidden = body.style.display === 'none';
+  body.style.display = hidden ? 'flex' : 'none';
+  if (icon) icon.textContent = hidden ? '▲' : '▼';
+}
+
+function _toggleMic() {
+  if (_micActive) { _stopMic(); return; }
+  _startMic();
+}
+
+function _startMic() {
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    _updateTranscriptText('⚠ Speech recognition not supported in this browser. Use Chrome or Edge.');
+    return;
+  }
+  _speechRec = new SpeechRec();
+  _speechRec.continuous = true;
+  _speechRec.interimResults = true;
+  _speechRec.lang = 'en-US';
+  var finalText = _evalTranscript;
+  _speechRec.onresult = function(e) {
+    var interim = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      var t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) { finalText += (finalText ? ' ' : '') + t; _evalTranscript = finalText; }
+      else interim += t;
+    }
+    _updateTranscriptText(finalText + (interim ? ' [' + interim + ']' : ''));
+  };
+  _speechRec.onerror = function(e) { _updateTranscriptText('⚠ Error: ' + e.error + '. ' + (_evalTranscript||'')); _setMicState(false); };
+  _speechRec.onend = function() { if (_micActive) _speechRec.start(); }; // auto-restart on pause
+  _speechRec.start();
+  _setMicState(true);
+}
+
+function _stopMic() {
+  if (_speechRec) { _speechRec.onend = null; _speechRec.stop(); _speechRec = null; }
+  _setMicState(false);
+}
+
+function _setMicState(active) {
+  _micActive = active;
+  var dot = document.getElementById('mic-dot');
+  var btn = document.getElementById('mic-btn');
+  if (dot) { dot.style.background = active ? '#22c55e' : '#64748b'; dot.style.animation = active ? 'pulse 1.5s infinite' : 'none'; }
+  if (btn) { btn.textContent = active ? '⏹ Stop' : '▶ Start'; btn.style.background = active ? '#dc2626' : '#2563eb'; }
+}
+
+function _updateTranscriptText(text) {
+  var el = document.getElementById('transcript-text');
+  if (!el) return;
+  el.style.color = '#e2e8f0';
+  el.textContent = text || '(silence)';
+  el.scrollTop = el.scrollHeight;
+}
+
+function _clearTranscript() {
+  _evalTranscript = '';
+  _stopMic();
+  _updateTranscriptText('Transcript cleared. Tap Start to begin again.');
+}
+
+async function _extractFromTranscript() {
+  if (!_evalTranscript || _evalTranscript.trim().length < 20) {
+    var es = document.getElementById('extract-status');
+    if (es) { es.textContent = 'Need more transcript text first.'; es.style.display='block'; }
+    return;
+  }
+  var btn = document.getElementById('extract-btn');
+  var es  = document.getElementById('extract-status');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Analysing...'; }
+  if (es)  { es.textContent='Extracting signals from transcript...'; es.style.display='block'; }
+
+  // Build question context for AI
+  var pillars = Object.values(AI_FORWARD_QB);
+  var questionCtx = pillars.map(function(p,pi) {
+    return 'Pillar ' + (pi+1) + ' — ' + p.label + ':
+' + p.questions.map(function(q,qi){ return '  Q'+(qi+1)+': '+q.q; }).join('
+');
+  }).join('
+
+');
+
+  var prompt = 'You are a structured interview evaluator. Read the interview transcript below and extract evidence for each AI-Forward pillar question.
+
+For each question, provide:
+1. A star rating 1-5 (1=no evidence, 3=some evidence, 5=strong evidence)
+2. Brief notes (1-2 sentences) of what the candidate said that supports the rating
+
+Return ONLY valid JSON in this exact format:
+{"pillars":[{"rating":3,"notes":"candidate said X..."},{"rating":4,"notes":"..."},{"rating":2,"notes":"..."},{"rating":5,"notes":"..."}],"strengths":"key positives from transcript","concerns":"any red flags or gaps","overall":4}
+
+Pillars in order:
+' + questionCtx + '
+
+TRANSCRIPT:
+' + _evalTranscript.slice(0, 8000);
+
+  try {
+    var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + _evalAiKey, {
+      method: 'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1000,temperature:0.2}})
+    });
+    var data = await res.json();
+    var raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    // Strip markdown code fences if present
+    raw = raw.replace(/^```json?\s*/,'').replace(/```\s*$/,'').trim();
+    var parsed = JSON.parse(raw);
+    // Apply to form
+    var applied = 0;
+    if (parsed.pillars && Array.isArray(parsed.pillars)) {
+      parsed.pillars.forEach(function(p,pi) {
+        // Set AI-Forward score buttons
+        var radio = document.querySelector('input[name="eaif_'+pi+'"][value="'+Math.round(p.rating)+'"]');
+        if (radio) { radio.checked=true; _updateScoreButtons(radio); }
+        // Fill notes
+        var notes = document.getElementById('eaifnotes_'+pi);
+        if (notes && p.notes) { notes.value = p.notes; applied++; }
+      });
+    }
+    if (parsed.strengths) { var s=document.getElementById('estrengths'); if(s) s.value = parsed.strengths; }
+    if (parsed.concerns)  { var c=document.getElementById('econcerns');  if(c) c.value = parsed.concerns; }
+    if (parsed.overall) {
+      var or=document.querySelector('input[name="eoverall"][value="'+Math.round(parsed.overall)+'"]');
+      if(or){ or.checked=true; _updateScoreButtons(or); }
+    }
+    if (es) { es.textContent = '✓ Filled ' + applied + ' question notes from transcript. Review and adjust before submitting.'; es.style.color='#22c55e'; }
+    if (btn){ btn.disabled=false; btn.textContent='✨ Re-extract from transcript'; }
+  } catch(e) {
+    if (es) { es.textContent = 'Extraction failed: ' + (e.message||'unknown error'); es.style.color='#f87171'; }
+    if (btn){ btn.disabled=false; btn.textContent='✨ Auto-fill from transcript'; }
+  }
 }
 
 async function submitEvalForm() {
@@ -7090,8 +7303,10 @@ async function submitEvalForm() {
   // Validate required fields
   const overall = document.querySelector('input[name="eoverall"]:checked')?.value;
   const rec = document.getElementById('erec')?.value;
+  const nextSteps = document.getElementById('erec-next-steps')?.value || null;
   if (!overall) { errEl.textContent = 'Please select an overall rating.'; errEl.style.display='block'; return; }
-  if (!rec)     { errEl.textContent = 'Please select a recommendation.'; errEl.style.display='block'; return; }
+  if (!rec)     { errEl.textContent = 'Please select a recommendation (Yes, Maybe, or No).'; errEl.style.display='block'; return; }
+  if (rec === 'maybe' && !nextSteps) { errEl.textContent = 'Please select next steps — required when recommendation is Maybe.'; errEl.style.display='block'; document.getElementById('maybe-next-steps')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
 
   btn.disabled = true; btn.textContent = 'Submitting...';
 
@@ -7124,6 +7339,7 @@ async function submitEvalForm() {
   const debriefNotes= document.getElementById('edebrief')?.value||'';
 
   // Pack ALL data into `responses` JSONB as well (backup for older schema versions)
+  const transcript = _evalTranscript || null;
   const responses = {
     interviewer_name:  link._submitter_name,
     interviewer_email: link._submitter_email,
@@ -7132,6 +7348,8 @@ async function submitEvalForm() {
     ai_forward_scores: aifScores,
     overall_rating:    parseInt(overall),
     recommendation:    rec,
+    next_steps:        nextSteps || null,
+    transcript:        transcript,
     strengths,
     concerns,
     debrief_notes:     debriefNotes,
@@ -7150,6 +7368,8 @@ async function submitEvalForm() {
     ai_forward_scores: Object.keys(aifScores).length ? aifScores : null,
     overall_rating:    parseInt(overall),
     recommendation:    rec,
+    next_steps:        nextSteps || null,
+    transcript:        transcript || null,
     strengths:         strengths || null,
     concerns:          concerns || null,
     debrief_notes:     debriefNotes || null,
@@ -7331,6 +7551,7 @@ async function generateEvalLink() {
     include_epp:       document.getElementById('gl-epp').checked,
     competencies:      _stageCompsForValue(document.getElementById('gl-stage').value, _genLinkJdData?.competencies)||[],
     role_title:        _genLinkJdData?.title||null,
+    ai_key:            localStorage.getItem('hiro_gemini_key')||null,
     cv_signed_url:     cvSignedUrl,
   };
 
