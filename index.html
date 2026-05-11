@@ -14094,9 +14094,9 @@ async function renderTeamUsers() {
     }).join('');
     return '<tr>' +
       '<td style="padding:12px 16px"><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="width:32px;height:32px;font-size:11px;flex-shrink:0">' + initials + '</div><div><div style="font-weight:500;font-size:13px">' + _escHtml(u.full_name||'—') + '</div><div style="font-size:11px;color:var(--text-3)">' + _escHtml(u.email||'') + '</div></div></div></td>' +
-      '<td style="padding:12px 16px"><select class="form-input" style="padding:4px 8px;font-size:12px;width:auto" onchange="_tuUpdateRole(' + JSON.stringify(u.id) + ',this.value)">' + roleOpts + '</select></td>' +
+      '<td style="padding:12px 16px"><select class="form-input" style="padding:4px 8px;font-size:12px;width:auto" onchange="_tuUpdateRole(' + JSON.stringify(u.id) + ',' + JSON.stringify(u.full_name||u.email) + ',this.value,this)">' + roleOpts + '</select></td>' +
       '<td style="padding:12px 16px;font-size:12px;color:var(--text-3)">' + (u.created_at ? new Date(u.created_at).toLocaleDateString() : '—') + '</td>' +
-      '<td style="padding:12px 16px">' + (!u.user_id ? '<button class="btn btn-primary btn-sm" style="font-size:11px" data-inv-email="' + _escHtml(u.email||'') + '" onclick="_tuInviteRow(this.dataset.invEmail)">✉ Invite</button>' : '<span style="font-size:11px;color:var(--green-text);font-weight:600">✓ Active</span>') + '</td>' +
+      '<td style="padding:12px 16px;display:flex;align-items:center;gap:8px">' + (!u.user_id ? '<button class="btn btn-primary btn-sm" style="font-size:11px" data-inv-email="' + _escHtml(u.email||'') + '" onclick="_tuInviteRow(this.dataset.invEmail)">✉ Invite</button>' : '<span style="font-size:11px;color:var(--green-text);font-weight:600">✓ Active</span>') + (u.email !== currentUser?.email ? '<button class="btn btn-outline btn-sm" style="font-size:11px;color:var(--red-text);border-color:var(--red-text)" onclick="_tuDeleteUser(' + JSON.stringify(u.id) + ',' + JSON.stringify(u.full_name||u.email) + ')">✕</button>' : '') + '</td>' +
     '</tr>';
   }).join('');
 
@@ -14127,10 +14127,31 @@ async function renderTeamUsers() {
     '</table></div></div>';
 }
 
-window._tuUpdateRole = async function(userId, newRole) {
+window._tuUpdateRole = async function(userId, userName, newRole, selectEl) {
+  var prev = selectEl ? selectEl.dataset.prev || selectEl.value : newRole;
   var upRes = await sb.from('profiles').update({role: newRole}).eq('id', userId);
-  if (upRes.error) { toast('Could not update role: ' + upRes.error.message, 'err'); return; }
-  toast('Role updated');
+  if (upRes.error) {
+    toast('Could not update role for ' + userName + ': ' + upRes.error.message + ' (check RLS policy in Supabase)', 'err');
+    if (selectEl) selectEl.value = prev; // revert
+    return;
+  }
+  // Verify it actually saved (RLS silently blocks without error)
+  var check = await sb.from('profiles').select('role').eq('id', userId).maybeSingle();
+  if (check.data && check.data.role !== newRole) {
+    toast('Role change blocked by database policy — run the admin RLS fix in Supabase SQL editor', 'err');
+    if (selectEl) selectEl.value = prev;
+    return;
+  }
+  if (selectEl) selectEl.dataset.prev = newRole;
+  toast(userName + ' role updated to ' + newRole + ' ✓');
+};
+
+window._tuDeleteUser = async function(userId, userName) {
+  if (!confirm('Remove ' + userName + ' from Hiro? This deletes their profile (not their Sovos account).')) return;
+  var res = await sb.from('profiles').delete().eq('id', userId);
+  if (res.error) { toast('Could not delete: ' + res.error.message, 'err'); return; }
+  toast(userName + ' removed ✓');
+  setTimeout(renderTeamUsers, 800);
 };
 
 
