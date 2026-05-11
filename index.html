@@ -1684,7 +1684,9 @@ function renderSidebarNav() {
     // ── MANAGE section ──
     navHtml += '<hr class="sb-section-sep"><div class="sb-section">Manage</div>';
     if (!_isHrRole) {
-      navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+      if (_r !== 'admin') {
+        navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+      }
       navHtml += '<button class="sb-item" id="nav-tasks" onclick="nav(\'tasks\',this)">' + icon.tasks + ' Tasks <span class="sb-badge" id="sb-task-count" style="display:none"></span></button>';
       navHtml += '<button class="sb-item" id="nav-jd_library" onclick="nav(\'jd_library\',this)">' + icon.jd_library + ' JD Library</button>';
       navHtml += '<button class="sb-item" id="nav-email_templates" onclick="nav(\'email_templates\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email Templates</button>';
@@ -1700,13 +1702,18 @@ function renderSidebarNav() {
       navHtml += '<button class="sb-item" id="nav-scheduling_hub" onclick="nav(\'scheduling_hub\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Scheduling Hub</button>';
     }
 
+    // ── REPORTS section (admin only) ──
+    if (_r === 'admin') {
+      navHtml += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+      navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+      navHtml += '<button class="sb-item" id="nav-hiring_dashboard" onclick="nav(\'hiring_dashboard\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8h4M6 12h8M6 12"/><polyline points="14,8 16,10 20,6"/></svg> Hiring Dashboard</button>';
+      navHtml += '<button class="sb-item" id="nav-recruiter_stats" onclick="nav(\'recruiter_stats\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Recruiter Stats</button>';
+      navHtml += '<button class="sb-item" id="nav-roles_tracker" onclick="nav(\'roles_tracker\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> Roles Tracker</button>';
+    }
     // ── ADMIN section ──
     if (_r === 'admin') {
       navHtml += '<hr class="sb-section-sep"><div class="sb-section">Admin</div>';
       navHtml += '<button class="sb-item" id="nav-team_users" onclick="nav(\'team_users\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Team &amp; Users</button>';
-      navHtml += '<button class="sb-item" id="nav-hiring_dashboard" onclick="nav(\'hiring_dashboard\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8h4M6 12h8M6 12"/><polyline points="14,8 16,10 20,6"/></svg> Hiring Dashboard</button>';
-      navHtml += '<button class="sb-item" id="nav-recruiter_stats" onclick="nav(\'recruiter_stats\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Recruiter Stats</button>';
-      navHtml += '<button class="sb-item" id="nav-roles_tracker" onclick="nav(\'roles_tracker\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> Roles Tracker</button>';
     }
 
     // ── SETTINGS (bottom, subtle) ──
