@@ -14537,229 +14537,210 @@ function _rtRender() {
 async function renderHiringDashboard() {
   _pushHistory('hiring_dashboard', 'Hiring Dashboard', renderHiringDashboard);
   document.getElementById('topbar-actions').innerHTML = '';
-  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+  var content = document.getElementById('content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
-  var [rolesRes, profilesRes, hiredAppsRes] = await Promise.all([
+  var now = Date.now();
+  var nowDate = new Date();
+  var lastUpdated = nowDate.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + nowDate.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+
+  var [rolesRes, profilesRes] = await Promise.all([
     sb.from('roles').select('*').not('status','eq','cancelled').order('created_at',{ascending:false}),
-    sb.from('profiles').select('id,full_name,email').in('role',['recruiter','admin','coordinator']),
-    sb.from('applications').select('role_id,created_at,updated_at,stage').in('stage',['offer_accepted','hired'])
+    sb.from('profiles').select('id,full_name,email').in('role',['recruiter','admin','coordinator','management'])
   ]);
 
   if (rolesRes.error) {
-    document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load roles</div><div class="empty-sub">' + rolesRes.error.message + '</div></div>';
+    content.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load roles</div><div class="empty-sub">' + rolesRes.error.message + '</div></div>';
     return;
   }
 
-  var roles = rolesRes.data || [];
-  var profiles = profilesRes.data || [];
-  var hiredApps = hiredAppsRes.data || [];
-  var pMap = {};
-  profiles.forEach(function(p){ pMap[p.id] = p; });
-
-  // Build role open-date map for TTH
-  var roleOpenDate = {};
-  roles.forEach(function(r){ roleOpenDate[r.id] = r.created_at; });
-
-  var now = Date.now();
-  roles = roles.map(function(r){
+  var allRoles = (rolesRes.data || []).map(function(r) {
     var days = r.created_at ? Math.floor((now - new Date(r.created_at)) / 86400000) : 0;
-    var bucket = days < 30 ? 'Healthy' : days < 60 ? 'Needs Attention' : days < 90 ? 'At Risk' : 'Critical';
-    return Object.assign({}, r, { aging: days, bucket: bucket });
+    return Object.assign({}, r, { aging: days });
   });
 
-  var active = roles.filter(function(r){ return ['open','offered','on_hold'].includes(r.status); });
-  var openOnly = roles.filter(function(r){ return r.status === 'open'; });
-  var offeredOnly = roles.filter(function(r){ return r.status === 'offered'; });
-  var onHoldOnly = roles.filter(function(r){ return r.status === 'on_hold'; });
+  var profiles = profilesRes.data || [];
+  var pMap = {};
+  profiles.forEach(function(p) { pMap[p.id] = p; });
 
-  // Quarter filled
-  var qMo = Math.floor(new Date().getMonth()/3)*3;
-  var qStart = new Date(new Date().getFullYear(), qMo, 1);
-  var filledQ = roles.filter(function(r){ return r.status==='filled' && (r.updated_at||r.created_at) && new Date(r.updated_at||r.created_at)>=qStart; }).length;
+  // Subsets
+  var openHold   = allRoles.filter(function(r){ return r.status==='open'||r.status==='on_hold'; });
+  var offered    = allRoles.filter(function(r){ return r.status==='offered'; });
+  var filled     = allRoles.filter(function(r){ return r.status==='filled'||r.status==='closed'; });
 
-  var critCount = active.filter(function(r){ return r.bucket==='Critical'; }).length;
-  var atRiskCount = active.filter(function(r){ return r.bucket==='At Risk'; }).length;
-  var avgAging = active.length ? Math.round(active.reduce(function(s,r){ return s+r.aging; },0)/active.length) : 0;
+  // KPI calculations
+  var totalReqsOpen = openHold.length;
+  var hiresPending  = offered.length;
+  var avgAging      = openHold.length ? (openHold.reduce(function(s,r){return s+r.aging;},0)/openHold.length).toFixed(1) : '—';
+  var roles60_90    = openHold.filter(function(r){return r.aging>=60&&r.aging<91;}).length;
+  var roles91plus   = openHold.filter(function(r){return r.aging>=91;}).length;
 
-  // TTH: days from role open date to hire date (via applications)
-  var tthValues = hiredApps.map(function(a){
-    var roleOpen = roleOpenDate[a.role_id];
-    var hireDate = a.updated_at || a.created_at;
-    if (!roleOpen || !hireDate) return null;
-    return Math.floor((new Date(hireDate) - new Date(roleOpen)) / 86400000);
-  }).filter(function(d){ return d !== null && d >= 0; });
-  // This quarter only
-  var qMo2 = Math.floor(new Date().getMonth()/3)*3;
-  var qStart2 = new Date(new Date().getFullYear(), qMo2, 1);
-  var tthQValues = hiredApps.filter(function(a){
-    return a.updated_at && new Date(a.updated_at) >= qStart2;
-  }).map(function(a){
-    var roleOpen = roleOpenDate[a.role_id];
-    var hireDate = a.updated_at;
-    if (!roleOpen || !hireDate) return null;
-    return Math.floor((new Date(hireDate) - new Date(roleOpen)) / 86400000);
-  }).filter(function(d){ return d !== null && d >= 0; });
-  var avgTTH = tthValues.length ? Math.round(tthValues.reduce(function(s,d){ return s+d; },0)/tthValues.length) : null;
-  var avgTTHQ = tthQValues.length ? Math.round(tthQValues.reduce(function(s,d){ return s+d; },0)/tthQValues.length) : null;
-  var tthDisplay = avgTTHQ !== null ? avgTTHQ+'d' : (avgTTH !== null ? avgTTH+'d' : '—');
-  var tthSub = avgTTHQ !== null ? 'Avg TTH (this qtr)' : (avgTTH !== null ? 'Avg TTH (all time)' : 'Avg TTH');
+  // Avg Time to Fill: created_at → updated_at for filled roles (proxy for date offered)
+  var ttfVals = filled.filter(function(r){return r.created_at&&r.updated_at;}).map(function(r){
+    return Math.floor((new Date(r.updated_at)-new Date(r.created_at))/86400000);
+  }).filter(function(d){return d>=0&&d<1000;});
+  var avgTTF = ttfVals.length ? (ttfVals.reduce(function(s,d){return s+d;},0)/ttfVals.length).toFixed(1) : '—';
 
-  // ── helpers ──
-  function barH(items, keyFn, colorFn) {
+  // Avg Offer to Start and Avg Time to Start: use start_date column if it exists
+  var otsVals = offered.concat(filled).filter(function(r){return r.start_date&&r.updated_at;}).map(function(r){
+    return Math.floor((new Date(r.start_date)-new Date(r.updated_at))/86400000);
+  }).filter(function(d){return d>=0&&d<1000;});
+  var avgOTS = otsVals.length ? (otsVals.reduce(function(s,d){return s+d;},0)/otsVals.length).toFixed(1) : '—';
+
+  var atsVals = filled.filter(function(r){return r.start_date&&r.created_at;}).map(function(r){
+    return Math.floor((new Date(r.start_date)-new Date(r.created_at))/86400000);
+  }).filter(function(d){return d>=0&&d<1000;});
+  var avgATS = atsVals.length ? (atsVals.reduce(function(s,d){return s+d;},0)/atsVals.length).toFixed(1) : '—';
+
+  // ── styles ──
+  var DARK_HEADER = 'background:#0d1b2e;color:#fff;padding:8px 14px;font-size:12px;font-weight:600;border-radius:6px 6px 0 0';
+  var KPI_VAL = 'font-size:42px;font-weight:700;color:#00aadd;line-height:1.1;margin:12px 0 4px';
+  var KPI_SUB = 'font-size:12px;color:#888;margin-bottom:12px';
+  var KPI_VAL_RED = 'font-size:42px;font-weight:700;color:#e53e3e;line-height:1.1;margin:12px 0 4px';
+
+  function spKpi(headerText, subText, val, valStyle) {
+    return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)">'
+      + '<div style="'+DARK_HEADER+'">'+headerText+'</div>'
+      + '<div style="padding:4px 14px 0;font-size:11px;color:#aaa">'+subText+'</div>'
+      + '<div style="'+(valStyle||KPI_VAL)+'">'+val+'</div>'
+      + '</div>';
+  }
+
+  function spKpiWithSub(headerText, subText, val, valSub, valStyle) {
+    return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)">'
+      + '<div style="'+DARK_HEADER+'">'+headerText+'</div>'
+      + '<div style="padding:4px 14px 0;font-size:11px;color:#aaa">'+subText+'</div>'
+      + '<div style="'+(valStyle||KPI_VAL)+'">'+val+'</div>'
+      + '<div style="'+KPI_SUB+'">'+valSub+'</div>'
+      + '</div>';
+  }
+
+  function barChart(items, keyFn, label) {
     var counts = {};
     items.forEach(function(r){ var k=keyFn(r)||'Unknown'; counts[k]=(counts[k]||0)+1; });
-    var sorted = Object.entries(counts).sort(function(a,b){ return b[1]-a[1]; });
+    var sorted = Object.entries(counts).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
     var max = sorted.length ? sorted[0][1] : 1;
     return sorted.map(function(e){
       var pct = Math.round(e[1]/max*100);
-      var color = colorFn ? colorFn(e[0]) : 'var(--brand)';
-      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">'
-        + '<div style="width:130px;font-size:12px;font-weight:500;color:var(--text-2);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_escHtml(e[0])+'">'+_escHtml(e[0])+'</div>'
-        + '<div style="flex:1;height:12px;background:var(--surface-2);border-radius:99px;overflow:hidden">'
-        + '<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:99px;transition:width .4s"></div></div>'
-        + '<div style="width:24px;text-align:right;font-size:13px;font-weight:700;color:var(--text-2)">'+e[1]+'</div>'
-        + '</div>';
-    }).join('') || '<div class="text-muted" style="font-size:13px">No data</div>';
+      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+        +'<div style="width:120px;font-size:12px;color:var(--text-2);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_escHtml(e[0])+'</div>'
+        +'<div style="flex:1;height:18px;background:var(--surface-2);border-radius:3px;overflow:hidden;position:relative">'
+        +'<div style="width:'+pct+'%;height:100%;background:#1e6fa8;border-radius:3px;transition:width .4s"></div>'
+        +'<span style="position:absolute;left:'+(pct>15?'8px':'calc('+pct+'% + 4px)')+';top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:'+(pct>15?'#fff':'var(--text)')+'">'+e[1]+'</span>'
+        +'</div>'
+        +'</div>';
+    }).join('') || '<div style="font-size:13px;color:var(--text-3)">No data</div>';
   }
 
-  function bucketColor(b){
-    return b==='Healthy'?'var(--green)':b==='Needs Attention'?'var(--amber)':b==='At Risk'?'#f97316':'var(--red)';
-  }
-  function statusColor(s){
-    return s==='open'?'var(--brand)':s==='offered'?'var(--amber)':s==='on_hold'?'var(--text-3)':s==='filled'?'var(--green)':'var(--red)';
-  }
-  function regionColor(r){
-    var c={'APAC':'#6366f1','EUR':'var(--brand)','US':'#10b981','ARG':'#f59e0b','BRA':'#ef4444','EMEA':'#8b5cf6','LATAM':'#f97316'};
-    return c[r]||'var(--brand)';
-  }
+  // ── TAB CONTENT BUILDERS ──
 
-  var kpiColor = function(v, warn, crit) {
-    return v >= crit ? 'var(--red)' : v >= warn ? 'var(--amber)' : 'var(--green)';
-  };
+  function buildTeamOverview() {
+    var byFunc  = barChart(openHold, function(r){return r.department||r.function_area||'Other';}, 'Function');
+    var byRec   = barChart(openHold, function(r){ var p=pMap[r.assigned_recruiter_id]; return p?(p.full_name||p.email).split(' ')[0]:'Unassigned'; }, 'Recruiter');
 
-  // Bucket breakdown (active only)
-  var buckets = ['Healthy','Needs Attention','At Risk','Critical'];
-  var bucketCounts = {};
-  buckets.forEach(function(b){ bucketCounts[b]=0; });
-  active.forEach(function(r){ bucketCounts[r.bucket]=(bucketCounts[r.bucket]||0)+1; });
-  var maxB = Math.max.apply(null, Object.values(bucketCounts).concat([1]));
-  var bucketBars = buckets.map(function(b){
-    var n = bucketCounts[b]||0;
-    var pct = Math.round(n/maxB*100);
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">'
-      + '<div style="width:130px;font-size:12px;font-weight:600;color:var(--text-2);flex-shrink:0">'+b+'</div>'
-      + '<div style="flex:1;height:14px;background:var(--surface-2);border-radius:99px;overflow:hidden">'
-      + '<div style="width:'+pct+'%;height:100%;background:'+bucketColor(b)+';border-radius:99px;transition:width .4s"></div></div>'
-      + '<div style="width:28px;text-align:right;font-size:14px;font-weight:700;color:'+bucketColor(b)+'">'+n+'</div>'
+    return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">'
+      + spKpi('Total Reqs Open','Open, Not Offered', totalReqsOpen)
+      + spKpi('# Hires Pending','Offered, Not Started', hiresPending)
+      + spKpiWithSub('Average Aging','Avg # Days Open (Not Offered)', avgAging, 'Days')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">'
+      + spKpiWithSub('Average Time to Fill','Date Req Approved → Date Offered', avgTTF, 'Days · Avg TTF')
+      + spKpiWithSub('Average Offer to Start','Date Offer Approved → Start Date', avgOTS, 'Days')
+      + spKpiWithSub('Average Time to Start','Date Req Approved → Start Date', avgATS, 'Days')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">'
+      + spKpi('Roles Open 60–90 Days','', roles60_90)
+      + spKpi('Roles Open 91+ Days','', roles91plus, KPI_VAL_RED)
+      + '<div></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
+      + '<div class="card"><div class="card-header"><div class="card-title">Total Reqs by Function</div><span class="text-muted" style="font-size:12px">Open Roles</span></div><div class="card-body">'+byFunc+'</div></div>'
+      + '<div class="card"><div class="card-header"><div class="card-title">Total Reqs by Recruiter</div><span class="text-muted" style="font-size:12px">Open Roles</span></div><div class="card-body">'+byRec+'</div></div>'
       + '</div>';
-  }).join('');
+  }
 
-  // Status mix
-  var statusGroups = [
-    {key:'open',label:'Open',color:'var(--brand)'},
-    {key:'offered',label:'Offered',color:'var(--amber)'},
-    {key:'on_hold',label:'On Hold',color:'var(--text-3)'},
-    {key:'filled',label:'Filled',color:'var(--green)'},
-    {key:'closed',label:'Closed',color:'var(--red)'}
-  ];
-  var totalAll = roles.length || 1;
-  var statusBars = statusGroups.map(function(sg){
-    var n = roles.filter(function(r){ return r.status===sg.key; }).length;
-    var pct = Math.round(n/totalAll*100);
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">'
-      + '<div style="width:80px;font-size:12px;font-weight:600;color:var(--text-2);flex-shrink:0">'+sg.label+'</div>'
-      + '<div style="flex:1;height:12px;background:var(--surface-2);border-radius:99px;overflow:hidden">'
-      + '<div style="width:'+pct+'%;height:100%;background:'+sg.color+';border-radius:99px;transition:width .4s"></div></div>'
-      + '<div style="width:28px;text-align:right;font-size:13px;font-weight:700;color:var(--text-2)">'+n+'</div>'
+  function buildByRecruiter() {
+    // Build per-recruiter stats
+    var recStats = {};
+    allRoles.forEach(function(r) {
+      var rid = r.assigned_recruiter_id || '_none';
+      if (!recStats[rid]) {
+        var p = pMap[rid];
+        var firstName = rid==='_none' ? 'Unassigned' : (p ? (p.full_name||p.email).split(' ')[0] : 'Unknown');
+        recStats[rid] = { name: firstName, open:0, offered:0, openAging:[], filled:0, ttfVals:[], open91:0 };
+      }
+      var rs = recStats[rid];
+      if (r.status==='open'||r.status==='on_hold') {
+        rs.open++;
+        rs.openAging.push(r.aging);
+        if (r.aging>=91) rs.open91++;
+      }
+      if (r.status==='offered') rs.offered++;
+      if (r.status==='filled'||r.status==='closed') {
+        rs.filled++;
+        if (r.created_at&&r.updated_at) {
+          var d = Math.floor((new Date(r.updated_at)-new Date(r.created_at))/86400000);
+          if (d>=0&&d<1000) rs.ttfVals.push(d);
+        }
+      }
+    });
+
+    var cards = Object.values(recStats)
+      .filter(function(rs){ return rs.name!=='Unassigned' && (rs.open+rs.offered+rs.filled)>0; })
+      .sort(function(a,b){ return (b.open+b.offered)-(a.open+a.offered); })
+      .map(function(rs) {
+        var avgOpenAging = rs.openAging.length ? (rs.openAging.reduce(function(s,d){return s+d;},0)/rs.openAging.length).toFixed(1) : '—';
+        var recAvgTTF    = rs.ttfVals.length ? (rs.ttfVals.reduce(function(s,d){return s+d;},0)/rs.ttfVals.length).toFixed(1) : '—';
+        function metric(val, label) {
+          return '<div><div style="font-size:26px;font-weight:700;color:#00aadd;line-height:1">'+val+'</div><div style="font-size:11px;color:#888;margin-top:2px">'+label+'</div></div>';
+        }
+        return '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)">'
+          +'<div style="'+DARK_HEADER+';font-size:14px;text-align:center;padding:10px 14px">'+_escHtml(rs.name)+'</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:12px 16px 8px">'
+          +metric(rs.open,'# Open Reqs')+metric(rs.offered,'# Offered Reqs')
+          +'</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:4px 16px 8px">'
+          +metric(avgOpenAging,'Open Aging')+metric(rs.filled,'# Reqs Filled')
+          +'</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:4px 16px 12px">'
+          +metric(recAvgTTF,'Avg TTF')+metric(rs.open91,'# Open 91+ Days')
+          +'</div>'
+          +'</div>';
+      }).join('');
+
+    return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">'
+      + (cards || '<div style="grid-column:span 3;text-align:center;color:var(--text-3);padding:40px">No recruiter data</div>')
       + '</div>';
-  }).join('');
+  }
 
-  // Recruiter workload table
-  var recMap = {};
-  active.forEach(function(r){
-    var rid = r.assigned_recruiter_id || '_none';
-    if(!recMap[rid]) recMap[rid] = {open:0,offered:0,critical:0,atRisk:0,aging:[],name:rid==='_none'?'Unassigned':(pMap[rid]?pMap[rid].full_name||pMap[rid].email:'Unknown')};
-    if(r.status==='open') recMap[rid].open++;
-    if(r.status==='offered') recMap[rid].offered++;
-    if(r.bucket==='Critical') recMap[rid].critical++;
-    if(r.bucket==='At Risk') recMap[rid].atRisk++;
-    recMap[rid].aging.push(r.aging);
-  });
-  var recRows = Object.values(recMap).sort(function(a,b){ return (b.open+b.offered)-(a.open+a.offered); }).map(function(rc){
-    var avg = rc.aging.length ? Math.round(rc.aging.reduce(function(s,d){ return s+d; },0)/rc.aging.length) : 0;
-    var total = rc.open + rc.offered;
-    return '<tr>'
-      + '<td style="font-weight:600">'+_escHtml(rc.name)+'</td>'
-      + '<td style="text-align:center"><span style="color:var(--brand);font-weight:700">'+rc.open+'</span></td>'
-      + '<td style="text-align:center"><span style="color:var(--amber);font-weight:700">'+rc.offered+'</span></td>'
-      + '<td style="text-align:center;font-weight:600;color:'+(avg>90?'var(--red)':avg>60?'var(--amber)':'var(--text-2)')+'">'+avg+'d</td>'
-      + '<td style="text-align:center">'+(rc.critical?'<span style="color:var(--red);font-weight:700">'+rc.critical+'</span>':'<span style="color:var(--text-3)">0</span>')+'</td>'
-      + '</tr>';
-  }).join('') || '<tr><td colspan="5" class="text-muted">No recruiter data</td></tr>';
+  // ── RENDER SHELL ──
+  var header = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">'
+    +'<div style="display:flex;align-items:center;gap:12px"><span style="color:#00aadd;font-size:22px;font-weight:800;letter-spacing:1px">SOVOS</span>'
+    +'<div><div style="font-size:18px;font-weight:700;color:var(--text)">FY2026 Talent Acquisition Dashboard</div>'
+    +'<div style="font-size:12px;color:var(--text-3)">Global Talent Acquisition · Onboarding · Learning Development</div></div></div>'
+    +'<div style="font-size:11px;color:var(--text-3);text-align:right">Last updated<br><strong>'+lastUpdated+'</strong></div>'
+    +'</div>';
 
-  // Most critical roles (top 10 by aging, active only)
-  var critRoles = active.slice().sort(function(a,b){ return b.aging-a.aging; }).slice(0,10);
-  var critRows = critRoles.map(function(r){
-    var rec = pMap[r.assigned_recruiter_id];
-    var recName = rec ? (rec.full_name||rec.email) : 'Unassigned';
-    var stageLabel = (STAGES||[]).find(function(s){ return s.key===r.hiring_stage; })?.label || r.hiring_stage || '—';
-    return '<tr onclick="viewRoleDetail(\''+r.id+'\')" style="cursor:pointer">'
-      + '<td><span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:'+bucketColor(r.bucket)+'22;color:'+bucketColor(r.bucket)+'">'+r.bucket+'</span></td>'
-      + '<td style="font-weight:600">'+_escHtml(r.title||'—')+'</td>'
-      + '<td style="color:var(--text-3);font-size:12px">'+_escHtml(r.req_id||'—')+'</td>'
-      + '<td style="font-weight:700;color:'+bucketColor(r.bucket)+'">'+r.aging+'d</td>'
-      + '<td>'+_escHtml(recName)+'</td>'
-      + '<td><span style="padding:2px 8px;border-radius:99px;font-size:10px;background:var(--brand-light);color:var(--brand);font-weight:600">'+_escHtml(r.region||'—')+'</span></td>'
-      + '<td style="font-size:12px;color:var(--text-2)">'+_escHtml(stageLabel)+'</td>'
-      + '</tr>';
-  }).join('') || '<tr><td colspan="7" class="text-muted">No active roles</td></tr>';
+  var tabs = '<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">'
+    +'<button id="hd-tab-overview" onclick="_hdTab(\'overview\')" style="padding:10px 20px;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;color:#00aadd;border-bottom:3px solid #00aadd;margin-bottom:-2px">Team Overview</button>'
+    +'<button id="hd-tab-recruiter" onclick="_hdTab(\'recruiter\')" style="padding:10px 20px;font-size:14px;font-weight:500;border:none;background:none;cursor:pointer;color:var(--text-3);border-bottom:3px solid transparent;margin-bottom:-2px">By Recruiter</button>'
+    +'</div>';
 
-  var regionBars = barH(active, function(r){ return r.region; }, regionColor);
-  var deptBars = barH(active, function(r){ return r.department||'Other'; }, null);
+  content.innerHTML = header + tabs + '<div id="hd-tab-content"></div>';
 
-  var card = function(title, sub, body) {
-    return '<div class="card"><div class="card-header"><div class="card-title">'+title+'</div>'+(sub?'<span class="text-muted" style="font-size:12px">'+sub+'</span>':'')+'</div><div class="card-body">'+body+'</div></div>';
+  // Store tab content builders on window so tab switcher can call them
+  window._hdBuildOverview  = buildTeamOverview;
+  window._hdBuildRecruiter = buildByRecruiter;
+  window._hdTab = function(tab) {
+    document.getElementById('hd-tab-overview').style.color  = tab==='overview'  ? '#00aadd' : 'var(--text-3)';
+    document.getElementById('hd-tab-recruiter').style.color = tab==='recruiter' ? '#00aadd' : 'var(--text-3)';
+    document.getElementById('hd-tab-overview').style.borderBottomColor  = tab==='overview'  ? '#00aadd' : 'transparent';
+    document.getElementById('hd-tab-recruiter').style.borderBottomColor = tab==='recruiter' ? '#00aadd' : 'transparent';
+    document.getElementById('hd-tab-content').innerHTML = tab==='overview' ? window._hdBuildOverview() : window._hdBuildRecruiter();
   };
-
-  var kpi = function(val, label, color) {
-    return '<div class="card kpi"><div class="kpi-val" style="color:'+color+'">'+val+'</div><div class="kpi-label">'+label+'</div></div>';
-  };
-
-  document.getElementById('content').innerHTML =
-    // KPI row
-    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">'
-    + kpi(openOnly.length, 'Open Roles', 'var(--brand)')
-    + kpi(offeredOnly.length, 'In Offer', 'var(--amber)')
-    + kpi(onHoldOnly.length, 'On Hold', 'var(--text-3)')
-    + kpi(filledQ, 'Filled This Qtr', 'var(--green)')
-    + '</div>'
-    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">'
-    + kpi(critCount, 'Critical (90+d)', kpiColor(critCount, 3, 8))
-    + kpi(atRiskCount, 'At Risk (60-90d)', kpiColor(atRiskCount, 5, 10))
-    + kpi(avgAging+'d', 'Avg Active Aging', kpiColor(avgAging, 45, 75))
-    + kpi(tthDisplay, tthSub, avgTTHQ !== null ? kpiColor(avgTTHQ, 45, 70) : 'var(--text-3)')
-    + '</div>'
-    // Row 1: status + aging buckets
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">'
-    + card('Role Status Mix', roles.length+' total', statusBars)
-    + card('Aging Buckets', active.length+' active roles', bucketBars)
-    + '</div>'
-    // Row 2: region + dept
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">'
-    + card('Active Roles by Region', null, regionBars)
-    + card('Active Roles by Department', null, deptBars)
-    + '</div>'
-    // Row 3: recruiter workload
-    + '<div style="margin-bottom:16px">'
-    + '<div class="card"><div class="card-header"><div class="card-title">Recruiter Workload</div><span class="text-muted" style="font-size:12px">Active (open + offered) roles</span></div>'
-    + '<table><thead><tr><th>Recruiter</th><th style="text-align:center">Open</th><th style="text-align:center">Offered</th><th style="text-align:center">Avg Aging</th><th style="text-align:center">Critical</th></tr></thead>'
-    + '<tbody>'+recRows+'</tbody></table></div>'
-    + '</div>'
-    // Row 4: critical roles table
-    + '<div class="card"><div class="card-header"><div class="card-title">Oldest Active Roles</div><span class="text-muted" style="font-size:12px">Click to open</span></div>'
-    + '<table><thead><tr><th>Bucket</th><th>Title</th><th>Req ID</th><th>Aging</th><th>Recruiter</th><th>Region</th><th>Stage</th></tr></thead>'
-    + '<tbody>'+critRows+'</tbody></table></div>';
+  window._hdTab('overview');
 }
+
 
 // ── MANAGEMENT VIEW (management role only) ────────────────────
 async function renderManagement() {
