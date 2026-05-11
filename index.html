@@ -14458,9 +14458,10 @@ async function renderHiringDashboard() {
   document.getElementById('topbar-actions').innerHTML = '';
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
-  var [rolesRes, profilesRes] = await Promise.all([
+  var [rolesRes, profilesRes, hiredAppsRes] = await Promise.all([
     sb.from('roles').select('*').not('status','eq','cancelled').order('created_at',{ascending:false}),
-    sb.from('profiles').select('id,full_name,email').in('role',['recruiter','admin','coordinator'])
+    sb.from('profiles').select('id,full_name,email').in('role',['recruiter','admin','coordinator']),
+    sb.from('applications').select('role_id,created_at,updated_at,stage').in('stage',['offer_accepted','hired'])
   ]);
 
   if (rolesRes.error) {
@@ -14470,8 +14471,13 @@ async function renderHiringDashboard() {
 
   var roles = rolesRes.data || [];
   var profiles = profilesRes.data || [];
+  var hiredApps = hiredAppsRes.data || [];
   var pMap = {};
   profiles.forEach(function(p){ pMap[p.id] = p; });
+
+  // Build role open-date map for TTH
+  var roleOpenDate = {};
+  roles.forEach(function(r){ roleOpenDate[r.id] = r.created_at; });
 
   var now = Date.now();
   roles = roles.map(function(r){
@@ -14493,6 +14499,29 @@ async function renderHiringDashboard() {
   var critCount = active.filter(function(r){ return r.bucket==='Critical'; }).length;
   var atRiskCount = active.filter(function(r){ return r.bucket==='At Risk'; }).length;
   var avgAging = active.length ? Math.round(active.reduce(function(s,r){ return s+r.aging; },0)/active.length) : 0;
+
+  // TTH: days from role open date to hire date (via applications)
+  var tthValues = hiredApps.map(function(a){
+    var roleOpen = roleOpenDate[a.role_id];
+    var hireDate = a.updated_at || a.created_at;
+    if (!roleOpen || !hireDate) return null;
+    return Math.floor((new Date(hireDate) - new Date(roleOpen)) / 86400000);
+  }).filter(function(d){ return d !== null && d >= 0; });
+  // This quarter only
+  var qMo2 = Math.floor(new Date().getMonth()/3)*3;
+  var qStart2 = new Date(new Date().getFullYear(), qMo2, 1);
+  var tthQValues = hiredApps.filter(function(a){
+    return a.updated_at && new Date(a.updated_at) >= qStart2;
+  }).map(function(a){
+    var roleOpen = roleOpenDate[a.role_id];
+    var hireDate = a.updated_at;
+    if (!roleOpen || !hireDate) return null;
+    return Math.floor((new Date(hireDate) - new Date(roleOpen)) / 86400000);
+  }).filter(function(d){ return d !== null && d >= 0; });
+  var avgTTH = tthValues.length ? Math.round(tthValues.reduce(function(s,d){ return s+d; },0)/tthValues.length) : null;
+  var avgTTHQ = tthQValues.length ? Math.round(tthQValues.reduce(function(s,d){ return s+d; },0)/tthQValues.length) : null;
+  var tthDisplay = avgTTHQ !== null ? avgTTHQ+'d' : (avgTTH !== null ? avgTTH+'d' : '—');
+  var tthSub = avgTTHQ !== null ? 'Avg TTH (this qtr)' : (avgTTH !== null ? 'Avg TTH (all time)' : 'Avg TTH');
 
   // ── helpers ──
   function barH(items, keyFn, colorFn) {
@@ -14617,14 +14646,17 @@ async function renderHiringDashboard() {
 
   document.getElementById('content').innerHTML =
     // KPI row
-    '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:20px">'
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">'
     + kpi(openOnly.length, 'Open Roles', 'var(--brand)')
     + kpi(offeredOnly.length, 'In Offer', 'var(--amber)')
     + kpi(onHoldOnly.length, 'On Hold', 'var(--text-3)')
     + kpi(filledQ, 'Filled This Qtr', 'var(--green)')
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">'
     + kpi(critCount, 'Critical (90+d)', kpiColor(critCount, 3, 8))
     + kpi(atRiskCount, 'At Risk (60-90d)', kpiColor(atRiskCount, 5, 10))
     + kpi(avgAging+'d', 'Avg Active Aging', kpiColor(avgAging, 45, 75))
+    + kpi(tthDisplay, tthSub, avgTTHQ !== null ? kpiColor(avgTTHQ, 45, 70) : 'var(--text-3)')
     + '</div>'
     // Row 1: status + aging buckets
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">'
