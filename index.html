@@ -4918,10 +4918,14 @@ async function _s4SendSelfSchedule(roleId) {
     }
     // Log activity
     try { await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'self_schedule_sent',p_description:'Self-schedule link sent to '+candidateEmail}); } catch(e) {}
+    var mailtoSubj = encodeURIComponent('Interview Scheduling – ' + (role?.title||'role at Sovos'));
+    var mailtoBody = encodeURIComponent('Hi,\n\nThank you for your interest in the ' + (role?.title||'role') + ' position at Sovos. We\'d love to schedule an interview with you.\n\nPlease use the link below to choose a time that works for you:\n\n' + bookingUrl + '\n\nBest regards,\n' + (_outlookAccount?.name||'Sovos Talent Acquisition'));
     result.innerHTML =
       '<div style="padding:10px 12px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);font-size:12px;color:var(--green-text)">' +
-      (emailSent ? '✅ Email sent to ' + candidateEmail : '📋 Booking link created (copy below to send manually)') +
-      '<br><div style="margin-top:6px"><a href="' + bookingUrl + '" target="_blank" style="color:var(--brand);font-size:11px;word-break:break-all">' + bookingUrl + '</a></div></div>';
+      (emailSent ? '✅ Email sent to ' + candidateEmail : '📋 Booking link created') +
+      '<br><div style="margin-top:6px"><a href="' + bookingUrl + '" target="_blank" style="color:var(--brand);font-size:11px;word-break:break-all">' + bookingUrl + '</a></div>' +
+      (!emailSent ? '<div style="margin-top:8px;display:flex;gap:6px"><a href="mailto:' + candidateEmail + '?subject=' + mailtoSubj + '&body=' + mailtoBody + '" class="btn btn-primary btn-sm" style="font-size:11px">📨 Open in Outlook</a><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(this.dataset.u).then(function(){toast(\'Link copied\')})" data-u="' + bookingUrl + '">Copy Link</button></div>' : '') +
+      '</div>';
   } catch(e) {
     if (result) result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error creating booking link') + '</div>';
   }
@@ -11775,6 +11779,88 @@ async function loadDrawerLifecycle(candidateId, appId) {
 var _candidatePrevPage = null;
 var _candidatePrevTitle = null;
 
+
+// ── Self-Schedule from Candidate Full Page ──────────────────────
+function _cfpOpenSelfSchedule(appId, candidateId, candidateEmail, roleId, candidateName) {
+  // Inject a mini self-schedule panel below the topbar or show as a modal-style inline card
+  var existing = document.getElementById('cfp-self-sched-panel');
+  if (existing) { existing.remove(); return; }
+
+  var today = new Date();
+  var fromD = new Date(today.getTime() + 86400000).toISOString().slice(0,10);
+  var toD   = new Date(today.getTime() + 14*86400000).toISOString().slice(0,10);
+
+  var panel = document.createElement('div');
+  panel.id = 'cfp-self-sched-panel';
+  panel.style.cssText = 'position:fixed;top:56px;right:16px;z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;width:420px;box-shadow:0 8px 24px rgba(0,0,0,.3)';
+  panel.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+    '<div style="font-size:13px;font-weight:700;color:var(--brand)">⚡ Self-Schedule Link — ' + candidateName + '</div>' +
+    '<button class="btn btn-ghost btn-sm" onclick="var p=document.getElementById(\'cfp-self-sched-panel\');if(p)p.remove()">✕</button></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">' +
+    '<div><label style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;display:block;margin-bottom:3px">From</label>' +
+    '<input type="date" id="cfp-ss-from" value="' + fromD + '" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>' +
+    '<div><label style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;display:block;margin-bottom:3px">To</label>' +
+    '<input type="date" id="cfp-ss-to" value="' + toD + '" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>' +
+    '<div><label style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;display:block;margin-bottom:3px">Duration</label>' +
+    '<select id="cfp-ss-dur" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
+    '<option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option></select></div></div>' +
+    '<div style="margin-bottom:10px"><label style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;display:block;margin-bottom:3px">Interviewer email(s)</label>' +
+    '<input type="text" id="cfp-ss-attendees" placeholder="interviewer@sovos.com" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>' +
+    '<div style="margin-bottom:10px"><label style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;display:block;margin-bottom:3px">Candidate email</label>' +
+    '<input type="email" id="cfp-ss-cand-email" value="' + (candidateEmail||'') + '" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>' +
+    '<button class="btn btn-primary btn-sm" style="width:100%" onclick="_cfpFindAndBook(\'' + appId + '\',\'' + roleId + '\')">⚡ Find Slots & Create Link</button>' +
+    '<div id="cfp-ss-result" style="margin-top:10px;font-size:12px"></div>';
+
+  document.body.appendChild(panel);
+}
+
+async function _cfpFindAndBook(appId, roleId) {
+  var webhook = localStorage.getItem('hiro_pa_slots_webhook');
+  if (!_outlookAccount && !webhook) { toast('Connect Outlook or set up Find Slots webhook in Settings','err'); return; }
+  var attendees = document.getElementById('cfp-ss-attendees')?.value.trim();
+  if (!attendees) { toast('Enter interviewer email','err'); return; }
+  var from     = document.getElementById('cfp-ss-from')?.value;
+  var to       = document.getElementById('cfp-ss-to')?.value;
+  var duration = parseInt(document.getElementById('cfp-ss-dur')?.value || '60');
+  var candEmail = document.getElementById('cfp-ss-cand-email')?.value.trim();
+  if (!candEmail) { toast('Enter candidate email','err'); return; }
+  var result = document.getElementById('cfp-ss-result');
+  result.innerHTML = '<div style="color:var(--text-3)">Checking calendars…</div>';
+  try {
+    var suggestions = [];
+    if (_outlookAccount) {
+      suggestions = await _graphFindMeetingTimes(attendees, duration, from, to);
+    } else {
+      var resp = await fetch(webhook, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({hm_email:attendees,duration_mins:duration,start_date:from,end_date:to}) });
+      if (!resp.ok) throw new Error('Webhook returned ' + resp.status);
+      var data = await resp.json();
+      suggestions = data.meetingTimeSuggestions || [];
+    }
+    if (!suggestions.length) { result.innerHTML = '<div style="color:var(--amber)">No free slots found — try a wider window.</div>'; return; }
+    var slots = suggestions.slice(0,8).map(function(s) {
+      var start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone==='UTC'?'Z':''));
+      return { iso: start.toISOString(), label: start.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) };
+    });
+    // Create booking link in Supabase
+    var uid = (await sb.auth.getUser()).data.user?.id;
+    var ins = await sb.from('booking_links').insert({ role_id: roleId||null, candidate_email: candEmail, interviewer_emails: attendees, slots: slots, duration_mins: duration, status: 'pending', created_by: uid }).select('id').maybeSingle();
+    if (ins.error) throw new Error(ins.error.message);
+    var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
+    var sSubj = encodeURIComponent('Interview Scheduling – Sovos');
+    var sBody = encodeURIComponent('Hi,\n\nThank you for applying to Sovos. Please use the link below to choose your interview time:\n\n' + bookUrl + '\n\nBest regards,\nSovos Talent Acquisition');
+    result.innerHTML =
+      '<div style="padding:8px 10px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);color:var(--green-text);font-size:12px">' +
+      '✅ Link created! <a href="' + bookUrl + '" target="_blank" style="color:var(--brand);font-size:11px;display:block;margin-top:4px;word-break:break-all">' + bookUrl + '</a>' +
+      '<div style="margin-top:8px;display:flex;gap:6px">' +
+      '<a href="mailto:' + candEmail + '?subject=' + sSubj + '&body=' + sBody + '" class="btn btn-primary btn-sm" style="font-size:11px">📨 Open in Outlook</a>' +
+      '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(\'' + bookUrl.replace(/'/g,"\'") + '\').then(function(){toast(\'Link copied\')})">Copy Link</button>' +
+      '</div></div>';
+  } catch(e) {
+    result.innerHTML = '<div style="color:var(--red)">' + (e.message||'Error') + '</div>';
+  }
+}
+
 async function openCandidateFullPage(appId) {
   _cfpCvViewerOpen = false; // reset cv viewer state for new candidate
   document.getElementById('page-title').textContent = 'Candidate';
@@ -11810,9 +11896,13 @@ async function openCandidateFullPage(appId) {
   subEl.style.cursor = prevEntry ? 'pointer' : '';
   subEl.onclick = prevEntry ? function() { _goBack(); } : null;
 
+  var _cfpRoleId = app.role_id || '';
+  var _cfpJdId = app.jd_id || '';
   document.getElementById('topbar-actions').innerHTML =
     '<button class="btn btn-outline btn-sm" onclick="openApplyModal(\'' + c.id + '\')">+ Apply to Role</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openComposeModal(\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✉ Email</button>' +
+    (_cfpRoleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + c.id + '\',\'' + _cfpRoleId + '\',\'' + _cfpJdId + '\')">🔗 Eval Link</button>' : '') +
+    '<button class="btn btn-outline btn-sm" onclick="_cfpOpenSelfSchedule(\'' + appId + '\',\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + _cfpRoleId + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">🗓 Self-Schedule</button>' +
     '<button class="btn btn-danger btn-sm" onclick="rejectApplication(\'' + appId + '\')">✕ Reject</button>';
 
   // EPP summary for left column
