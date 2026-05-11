@@ -1477,10 +1477,22 @@ async function saveNewPassword() {
   if (!pw || pw.length < 8) { errDiv.textContent = 'Password must be at least 8 characters.'; errDiv.style.display = 'block'; return; }
   if (pw !== pw2) { errDiv.textContent = 'Passwords do not match.'; errDiv.style.display = 'block'; return; }
   btn.textContent = 'Saving…'; btn.disabled = true;
+  // Check session exists first — PKCE token can only be exchanged once
+  var { data: { session: currentSession } } = await sb.auth.getSession();
+  if (!currentSession) {
+    errDiv.innerHTML = 'Your reset link has expired or already been used. <a href="#" onclick="showResetView();return false;" style="color:#00aadd">Request a new one</a>.';
+    errDiv.style.display = 'block';
+    btn.textContent = 'Set Password'; btn.disabled = false;
+    return;
+  }
   var { error } = await sb.auth.updateUser({ password: pw });
   btn.textContent = 'Set Password'; btn.disabled = false;
   if (error) {
-    errDiv.textContent = error.message;
+    if (error.message && error.message.toLowerCase().includes('session')) {
+      errDiv.innerHTML = 'Your reset link has expired or already been used. <a href="#" onclick="showResetView();return false;" style="color:#00aadd">Request a new one</a>.';
+    } else {
+      errDiv.textContent = error.message;
+    }
     errDiv.style.display = 'block';
   } else {
     msgDiv.textContent = 'Password set! Signing you in…';
@@ -10480,7 +10492,7 @@ async function _settingsLoadTeam() {
       html += '<button class="btn btn-primary btn-sm" onclick="var b=document.getElementById(\'_settInvBox\');b.style.display=b.style.display===\'none\'?\'block\':\'none\'">+ Invite Member</button>';
       html += '<div id="_settInvBox" style="display:none;margin-top:12px;background:var(--brand-light);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px">';
       html += '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Add user to Hiro</div>';
-      html += '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Set a temp password so they can log in immediately \u2014 no email needed. Leave blank to send a magic link.</div>';
+      html += '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Set a temp password for immediate login \u2014 requires <strong>Confirm email OFF</strong> in Supabase \u2192 Auth \u2192 Providers \u2192 Email. Leave blank to send a magic link instead.</div>';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">';
       html += '<input id="_sett-inv-name" type="text" placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">';
       html += '<input id="_sett-inv-email" type="email" placeholder="email@sovos.com *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">';
@@ -14105,7 +14117,7 @@ async function renderTeamUsers() {
     '<button class="btn btn-primary btn-sm" onclick="_tuShowInvite()">+ Invite User</button></div>' +
     '<div id="tu-invite-box" style="display:none;padding:16px;background:var(--brand-light);border-bottom:1px solid var(--border)">' +
     '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Add user to Hiro</div>' +
-    '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Enter name, email and role. Optionally set a temporary password — if you do, they can log in immediately with it (no email needed). Leave blank to send a magic link instead.</div>' +
+    '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Enter name, email and role. Set a temp password so they can log in immediately — requires <strong>Confirm email OFF</strong> in Supabase → Auth → Providers → Email. Leave blank to send a magic link instead.</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center">' +
     '<input id="tu-invite-name" type="text" placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
     '<input id="tu-invite-email" type="email" placeholder="email@sovos.com *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
