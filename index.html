@@ -3181,24 +3181,39 @@ async function renderRoles() {
 
 // ── REASSIGN RECRUITER ───────────────────────────────────────────────
 async function _reassignRecruiter(roleId) {
-  // Load all profiles with recruiter/admin role
   var res = await sb.from('profiles').select('id,full_name,email,role').in('role',['recruiter','admin','coordinator']).order('full_name');
   if (res.error || !res.data?.length) { toast('Could not load recruiter list','err'); return; }
   var current = _rdData?.role?.assigned_recruiter_id || '';
   var opts = res.data.map(function(p) {
     return '<option value="' + p.id + '"' + (p.id===current?' selected':'') + '>' + (p.full_name||p.email) + ' (' + p.role + ')</option>';
   }).join('');
-  var listStr = res.data.map(function(p,i){return (i+1)+'. '+(p.full_name||p.email)+' ('+p.role+')';}).join('\n');
-  var sel = prompt('Reassign recruiter:\n' + listStr + '\n\nEnter number:');
-  if (!sel) return;
-  var idx = parseInt(sel, 10) - 1;
-  if (isNaN(idx) || idx < 0 || idx >= res.data.length) { toast('Invalid selection','err'); return; }
-  var chosen = res.data[idx];
-  var {error} = await sb.from('roles').update({assigned_recruiter_id: chosen.id}).eq('id', roleId);
-  if (error) { toast('Error: ' + error.message, 'err'); return; }
-  await auditLog('update','role',roleId,{assigned_recruiter_id: chosen.id, recruiter_name: chosen.full_name});
-  toast('Role reassigned to ' + (chosen.full_name||chosen.email) + ' ✓');
-  viewRoleDetail(roleId);
+  // Remove any existing modal
+  var old = document.getElementById('reassign-modal');
+  if (old) old.remove();
+  var m = document.createElement('div');
+  m.id = 'reassign-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  m.innerHTML = '<div style="background:var(--card);border-radius:12px;padding:28px 28px 22px;width:380px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.25)">'
+    + '<div style="font-weight:700;font-size:16px;margin-bottom:16px;color:var(--text)">Reassign Recruiter</div>'
+    + '<select id="reassign-sel" style="width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;margin-bottom:20px">'
+    + opts + '</select>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end">'
+    + '<button onclick="document.getElementById(\'reassign-modal\').remove()" style="padding:8px 18px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:14px">Cancel</button>'
+    + '<button id="reassign-confirm-btn" style="padding:8px 18px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer;font-size:14px;font-weight:600">Confirm</button>'
+    + '</div></div>';
+  document.body.appendChild(m);
+  document.getElementById('reassign-confirm-btn').onclick = async function() {
+    var selEl = document.getElementById('reassign-sel');
+    var chosenId = selEl.value;
+    var chosen = res.data.find(function(p){ return p.id === chosenId; });
+    if (!chosen) return;
+    m.remove();
+    var upd = await sb.from('roles').update({assigned_recruiter_id: chosen.id}).eq('id', roleId);
+    if (upd.error) { toast('Error: ' + upd.error.message, 'err'); return; }
+    await auditLog('update','role',roleId,{assigned_recruiter_id: chosen.id, recruiter_name: chosen.full_name});
+    toast('Role reassigned to ' + (chosen.full_name||chosen.email) + ' ✓');
+    viewRoleDetail(roleId);
+  };
 }
 
 async function setRoleStatus(roleId, status) {
