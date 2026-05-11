@@ -1594,6 +1594,7 @@ function renderSidebarNav() {
       navHtml += '<hr class="sb-section-sep"><div class="sb-section">Admin</div>';
       navHtml += '<button class="sb-item" id="nav-team_users" onclick="nav(\'team_users\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Team &amp; Users</button>';
       navHtml += '<button class="sb-item" id="nav-recruiter_stats" onclick="nav(\'recruiter_stats\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Recruiter Stats</button>';
+      navHtml += '<button class="sb-item" id="nav-roles_tracker" onclick="nav(\'roles_tracker\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> Roles Tracker</button>';
     }
 
     // ── SETTINGS (bottom, subtle) ──
@@ -1652,7 +1653,7 @@ function nav(page, el) {
     hm_roles:'My Roles', hm_interviews:'My Interviews', team:'Team',
     communications:'Communications', integrations:'Integrations', gdpr:'GDPR',
     hr_portal:'HR Portal',
-    team_users:'Team & Users', management_view:'Overview', scheduling_hub:'Scheduling Hub', recruiter_stats:'Recruiter Stats',
+    team_users:'Team & Users', management_view:'Overview', scheduling_hub:'Scheduling Hub', recruiter_stats:'Recruiter Stats', roles_tracker:'Roles Tracker',
   };
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = '';
@@ -1678,6 +1679,7 @@ function nav(page, el) {
     management_view: renderManagement,
     scheduling_hub: renderSchedulingHub,
     recruiter_stats: renderRecruiterStats,
+    roles_tracker: renderRolesTracker,
   };
   if(pages[page]) pages[page]();
 }
@@ -14124,6 +14126,168 @@ async function renderRecruiterStats() {
 
   html += '</div></div>';
   content.innerHTML = html;
+}
+
+// ── ROLES TRACKER ─────────────────────────────────────────────
+var _rtAllRoles = [];
+var _rtProfiles = {};
+var _rtFilters = { status: '', region: '', recruiter: '', bucket: '', search: '' };
+
+async function renderRolesTracker() {
+  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openAddRoleModal()">+ Add Role</button>';
+  var content = document.getElementById('content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div> Loading tracker...</div>';
+
+  var [rolesRes, profRes, appsRes] = await Promise.all([
+    sb.from('roles').select('*').not('status','eq','cancelled').order('created_at',{ascending:false}),
+    sb.from('profiles').select('id,full_name,email,role'),
+    sb.from('applications').select('role_id,stage').not('stage','in','(rejected,withdrawn)'),
+  ]);
+
+  _rtAllRoles = rolesRes.data || [];
+  var profiles = profRes.data || [];
+  _rtProfiles = {};
+  profiles.forEach(function(p){ _rtProfiles[p.id] = p; });
+
+  // Build latest stage per role
+  var roleStage = {};
+  (appsRes.data||[]).forEach(function(a){
+    var stagePriority = {applied:1,screening:2,interview:3,offer:4,offer_accepted:5};
+    var prev = roleStage[a.role_id];
+    if (!prev || (stagePriority[a.stage]||0) > (stagePriority[prev]||0)) roleStage[a.role_id] = a.stage;
+  });
+  _rtAllRoles.forEach(function(r){ r._stage = roleStage[r.id] || '—'; });
+
+  var regions = [...new Set(_rtAllRoles.map(function(r){return r.region;}).filter(Boolean))].sort();
+  var recruiters = [...new Set(_rtAllRoles.map(function(r){
+    var p = _rtProfiles[r.assigned_recruiter_id];
+    return p ? (p.full_name||p.email) : null;
+  }).filter(Boolean))].sort();
+
+  // Filter bar
+  var filterHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
+    + '<input id="rt-search" placeholder="Search title, notes..." oninput="_rtApply()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);width:220px">'
+    + '<select id="rt-status" onchange="_rtApply()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">All Statuses</option><option>open</option><option>on_hold</option><option>offered</option><option>filled</option><option>closed</option></select>'
+    + '<select id="rt-region" onchange="_rtApply()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">All Regions</option>'
+    + regions.map(function(r){return '<option>'+r+'</option>';}).join('') + '</select>'
+    + '<select id="rt-recruiter" onchange="_rtApply()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">All Recruiters</option>'
+    + recruiters.map(function(r){return '<option>'+_escHtml(r)+'</option>';}).join('') + '</select>'
+    + '<select id="rt-bucket" onchange="_rtApply()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">All Aging</option><option value="Healthy">Healthy</option><option value="Needs Attention">Needs Attention</option><option value="At Risk">At Risk</option><option value="Critical">Critical</option></select>'
+    + '<span id="rt-count" style="font-size:12px;color:var(--text-3);margin-left:4px"></span>'
+    + '</div>';
+
+  content.innerHTML = '<div style="max-width:1400px">'
+    + '<div style="font-size:20px;font-weight:700;margin-bottom:4px">Roles Tracker</div>'
+    + '<div style="font-size:13px;color:var(--text-2);margin-bottom:20px">Live overview of all open roles · Click a row to open · Click recruiter to reassign</div>'
+    + filterHtml
+    + '<div id="rt-table-wrap" style="overflow-x:auto"><table id="rt-table" style="width:100%;border-collapse:collapse;font-size:12px"></table></div>'
+    + '</div>';
+
+  _rtRender();
+}
+
+function _rtAgingBucket(days) {
+  if (days <= 30) return {label:'Healthy', color:'var(--green-text)', bg:'var(--green-bg)'};
+  if (days <= 60) return {label:'Needs Attention', color:'var(--amber-text)', bg:'var(--amber-bg)'};
+  if (days <= 90) return {label:'At Risk', color:'#f97316', bg:'rgba(249,115,22,0.12)'};
+  return {label:'Critical', color:'var(--red)', bg:'var(--red-bg)'};
+}
+
+function _rtApply() {
+  _rtFilters.search = (document.getElementById('rt-search')?.value||'').toLowerCase();
+  _rtFilters.status = document.getElementById('rt-status')?.value||'';
+  _rtFilters.region = document.getElementById('rt-region')?.value||'';
+  _rtFilters.recruiter = document.getElementById('rt-recruiter')?.value||'';
+  _rtFilters.bucket = document.getElementById('rt-bucket')?.value||'';
+  _rtRender();
+}
+
+function _rtRender() {
+  var statusColors = {open:'var(--green-text)',on_hold:'var(--amber-text)',offered:'var(--purple-text)',filled:'var(--brand)',closed:'var(--text-3)'};
+  var statusBg = {open:'var(--green-bg)',on_hold:'var(--amber-bg)',offered:'var(--purple-bg)',filled:'var(--brand-light)',closed:'rgba(0,0,0,.1)'};
+  var stageLabelMap = {applied:'Applied',screening:'Screening',interview:'Dept Interview',offer:'Offered',offer_accepted:'Hired'};
+
+  var rows = _rtAllRoles.filter(function(r) {
+    var days = daysSince(r.created_at);
+    var bucket = _rtAgingBucket(days).label;
+    var recruiterName = (_rtProfiles[r.assigned_recruiter_id]?.full_name || _rtProfiles[r.assigned_recruiter_id]?.email || '');
+    if (_rtFilters.status && r.status !== _rtFilters.status) return false;
+    if (_rtFilters.region && r.region !== _rtFilters.region) return false;
+    if (_rtFilters.recruiter && recruiterName !== _rtFilters.recruiter) return false;
+    if (_rtFilters.bucket && bucket !== _rtFilters.bucket) return false;
+    if (_rtFilters.search) {
+      var hay = [(r.title||''),(r.req_id||r.id||''),(r.description||''),(r.notes||''),(recruiterName),(r.location||'')].join(' ').toLowerCase();
+      if (hay.indexOf(_rtFilters.search) === -1) return false;
+    }
+    return true;
+  });
+
+  var countEl = document.getElementById('rt-count');
+  if (countEl) countEl.textContent = rows.length + ' roles';
+
+  var thStyle = 'padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;background:var(--surface-3)';
+  var thead = '<thead><tr>'
+    + '<th style="'+thStyle+'">Status</th>'
+    + '<th style="'+thStyle+'">Job Title</th>'
+    + '<th style="'+thStyle+'">Req ID</th>'
+    + '<th style="'+thStyle+'">Aging</th>'
+    + '<th style="'+thStyle+'">Bucket</th>'
+    + '<th style="'+thStyle+'">Recruiter</th>'
+    + '<th style="'+thStyle+'">Hiring Manager</th>'
+    + '<th style="'+thStyle+'">Function</th>'
+    + '<th style="'+thStyle+'">Location</th>'
+    + '<th style="'+thStyle+'">Region</th>'
+    + '<th style="'+thStyle+'">Open Date</th>'
+    + '<th style="'+thStyle+'">Hiring Stage</th>'
+    + '<th style="'+thStyle+'">Notes</th>'
+    + '</tr></thead>';
+
+  var tdBase = 'padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top';
+
+  var tbody = '<tbody>' + rows.map(function(r) {
+    var days = daysSince(r.created_at);
+    var bucket = _rtAgingBucket(days);
+    var recruiter = _rtProfiles[r.assigned_recruiter_id];
+    var recruiterName = recruiter ? (recruiter.full_name||recruiter.email) : '—';
+    var hmName = r.hiro_hm_name_first ? (r.hiro_hm_name_first+' '+(r.hiro_hm_name_last||'')) : (r.hm_name||'—');
+    var statusLabel = {open:'Open',on_hold:'On Hold',offered:'Offered',filled:'Filled',closed:'Closed'}[r.status]||(r.status||'—');
+    var sc = statusColors[r.status]||'var(--text-3)';
+    var sb2 = statusBg[r.status]||'rgba(0,0,0,.08)';
+    var openDate = r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+    var stageLabel = stageLabelMap[r._stage]||r._stage||'—';
+    var reqId = r.req_id || (r.region ? r.region.substring(0,3).toUpperCase()+'-???' : r.id.substring(0,8));
+    var notes = _escHtml(r.description||r.notes||'');
+    var dept = r.department||'—';
+
+    return '<tr style="cursor:pointer" onmouseover="this.style.background=\'var(--surface-3)\'" onmouseout="this.style.background=\'\'">'
+      + '<td style="'+tdBase+'" onclick="viewRoleDetail(\''+r.id+'\')">'
+        + '<span style="padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:'+sb2+';color:'+sc+';white-space:nowrap">'+statusLabel+'</span>'
+      + '</td>'
+      + '<td style="'+tdBase+';font-weight:600;color:var(--text);max-width:200px" onclick="viewRoleDetail(\''+r.id+'\')">'+_escHtml(r.title||'Untitled')+'</td>'
+      + '<td style="'+tdBase+';color:var(--text-3);font-family:monospace;font-size:11px" onclick="viewRoleDetail(\''+r.id+'\')">'+_escHtml(reqId)+'</td>'
+      + '<td style="'+tdBase+';font-weight:700;color:'+(days>90?'var(--red)':days>60?'#f97316':days>30?'var(--amber-text)':'var(--green-text)')+'" onclick="viewRoleDetail(\''+r.id+'\')">'+(days)+'d</td>'
+      + '<td style="'+tdBase+'" onclick="viewRoleDetail(\''+r.id+'\')">'
+        + '<span style="padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:'+bucket.bg+';color:'+bucket.color+';white-space:nowrap">'+bucket.label+'</span>'
+      + '</td>'
+      + '<td style="'+tdBase+'">'
+        + '<button onclick="_reassignRecruiter(\''+r.id+'\')" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--brand);text-decoration:underline;font-family:inherit">'+_escHtml(recruiterName)+'</button>'
+      + '</td>'
+      + '<td style="'+tdBase+';color:var(--text-2)" onclick="viewRoleDetail(\''+r.id+'\')">'+_escHtml(hmName)+'</td>'
+      + '<td style="'+tdBase+';color:var(--text-2)" onclick="viewRoleDetail(\''+r.id+'\')">'+_escHtml(dept)+'</td>'
+      + '<td style="'+tdBase+';color:var(--text-2)" onclick="viewRoleDetail(\''+r.id+'\')">'+_escHtml(r.location||r.city||'—')+'</td>'
+      + '<td style="'+tdBase+'" onclick="viewRoleDetail(\''+r.id+'\')">'
+        + (r.region ? '<span style="padding:2px 8px;border-radius:99px;font-size:10px;background:var(--brand-light);color:var(--brand);font-weight:600">'+_escHtml(r.region)+'</span>' : '—')
+      + '</td>'
+      + '<td style="'+tdBase+';color:var(--text-3);white-space:nowrap" onclick="viewRoleDetail(\''+r.id+'\')">'+openDate+'</td>'
+      + '<td style="'+tdBase+';color:var(--text-2)" onclick="viewRoleDetail(\''+r.id+'\')">'+_escHtml(stageLabel)+'</td>'
+      + '<td style="'+tdBase+';color:var(--text-2);max-width:280px" onclick="viewRoleDetail(\''+r.id+'\')">'
+        + '<div style="max-height:40px;overflow:hidden;text-overflow:ellipsis">'+notes+'</div>'
+      + '</td>'
+    + '</tr>';
+  }).join('') + '</tbody>';
+
+  var table = document.getElementById('rt-table');
+  if (table) table.innerHTML = thead + tbody;
 }
 
 // ── MANAGEMENT VIEW (management role only) ────────────────────
