@@ -3466,6 +3466,14 @@ function _rdStageStatus(stageKey) {
   const d=_rdData;
   const sm={};(d.wfSteps||[]).forEach(s=>{sm[s.step_key]=s;});
   const done=k=>sm[k]?.status==='completed';
+  if(stageKey==='s0'){
+    const role0=d.role||{};
+    const rid0=role0.id||'';
+    const hasHm=!!(localStorage.getItem('hiro_hm_name_'+rid0)||role0.profiles?.full_name);
+    const hasDept=!!role0.department;
+    const hasLocs=!!(localStorage.getItem('hiro_loc_salaries_'+rid0));
+    return (hasHm&&hasDept&&hasLocs)?'done':(hasHm||hasDept)?'active':'pending';
+  }
   if(stageKey==='s1'){
     const steps=['intake_meeting','intake_form','jd_approved'];
     const n=steps.filter(done).length;
@@ -3497,6 +3505,7 @@ function _rdRenderTimeline() {
   if(!el) return;
   const cur=_rdData._stage||'s1';
   const stages=[
+    {key:'s0', num:0, label:'HR Approval', icon:'✅', sub:'Headcount · Budget · Targets'},
     {key:'s1', num:1, label:'Intake', icon:'🤝', sub:'Meeting · Form · JD'},
     {key:'s2', num:2, label:'Post Role', icon:'📢', sub:'Job boards · LinkedIn'},
     {key:'s3', num:3, label:'Pipeline', icon:'👤', sub:'Source · Review'},
@@ -3539,7 +3548,8 @@ function _rdStage(key) {
   _rdRenderTimeline();
   const el=document.getElementById('rd-stage-content');
   if(!el) return;
-  if(key==='s1') el.innerHTML=_rdS1Html(_rdData);
+  if(key==='s0') el.innerHTML=_rdS0Html(_rdData);
+  else if(key==='s1') el.innerHTML=_rdS1Html(_rdData);
   else if(key==='s2') el.innerHTML=_rdS2Html(_rdData);
   else if(key==='s3') el.innerHTML=_rdS3Html(_rdData);
   else if(key==='s4') el.innerHTML=_rdS4Html(_rdData);
@@ -3551,6 +3561,68 @@ function _rdStage(key) {
 // tab: 'intake' | 'jd' | 'workflow' — all live in Stage 1
 function _rdSwitchTab(tab) {
   _rdStage(_rdData._stage || 's1');
+}
+
+// ══════════════════════════════════════════════
+// STAGE 0 — HR APPROVAL
+// ══════════════════════════════════════════════
+function _rdS0Html(d) {
+  const {roleId,role,intake}=d;
+  const v=intake||{};
+  return `
+    <!-- Stage 0 header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:16px;font-weight:700">✅ Stage 0: HR Approval</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px">Complete before intake begins — headcount, budget &amp; approval chain</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="_s0SaveApprovals('${roleId}')">Save</button>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Hiring Manager</label>
+            <input id="s1ap-hm" value="${(()=>{return localStorage.getItem('hiro_hm_name_'+roleId)||role.profiles?.full_name||'';})()}" placeholder="Hiring Manager name" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Department / Function</label>
+            <input id="s1ap-dept" value="${role.department||''}" placeholder="e.g. Sales / Enterprise" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Hiring Target (headcount)</label>
+            <input id="s1ap-target" type="number" min="1" value="${v.headcount_confirmed||role.headcount||1}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Approval Chain</label>
+            <div style="font-size:12px;color:var(--text-2);padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2)">${(()=>{try{const chains=JSON.parse(localStorage.getItem('hiro_approval_chains')||'[]');const match=chains.find(c=>c.department===(role.department||''));return match?match.approvers.join(' → '):'<span style="color:var(--text-3)">No chain for this dept — set up in Settings → Approval Chains</span>';}catch(e){return'<span style="color:var(--text-3)">Configure in Settings</span>';}})()}</div>
+          </div>
+          <div style="grid-column:1/-1">
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:block">Locations &amp; Salary Targets</label>
+            <div id="s1ap-locs-wrap">
+              ${(()=>{
+                try {
+                  const saved = JSON.parse(localStorage.getItem('hiro_loc_salaries_'+roleId)||'[]');
+                  const locs = saved.length ? saved : [{loc:'',curr:'USD',min:'',max:''}];
+                  return locs.map((l,i)=>`<div class="s1ap-loc-row" style="display:grid;grid-template-columns:2fr 80px 100px 100px 32px;gap:6px;margin-bottom:6px;align-items:center">
+                    <input class="s1ap-loc" value="${l.loc||''}" placeholder="Location (e.g. New York, US)" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                    <select class="s1ap-curr" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                      ${['USD','EUR','GBP','BRL','MXN','TRY','INR'].map(c=>`<option ${c===(l.curr||'USD')?'selected':''}>${c}</option>`).join('')}
+                    </select>
+                    <input class="s1ap-min" type="number" value="${l.min||''}" placeholder="Min" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                    <input class="s1ap-max" type="number" value="${l.max||''}" placeholder="Max" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+                    <button class="btn btn-ghost btn-sm" style="color:var(--red-text);padding:4px 8px" onclick="this.closest('.s1ap-loc-row').remove()">✕</button>
+                  </div>`).join('');
+                } catch(e) { return ''; }
+              })()}
+            </div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:12px" onclick="_s0AddLocRow()">+ Add Location</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // ══════════════════════════════════════════════
@@ -3806,60 +3878,13 @@ function _rdS1Html(d) {
       </div>
     </div>
 
-    <!-- 1d: ROLE APPROVALS & TARGETS -->
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-header">
-        <div class="card-title">✅ 1d · Role Approvals &amp; Targets</div>
-        <button class="btn btn-outline btn-sm" onclick="_s1SaveApprovals('${roleId}')">Save</button>
-      </div>
-      <div class="card-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Hiring Manager</label>
-            <input id="s1ap-hm" value="${(()=>{return localStorage.getItem('hiro_hm_name_'+roleId)||role.profiles?.full_name||'';})()}" placeholder="Hiring Manager name" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Department / Function</label>
-            <input id="s1ap-dept" value="${role.department||''}" placeholder="e.g. Sales / Enterprise" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Hiring Target (headcount)</label>
-            <input id="s1ap-target" type="number" min="1" value="${v.headcount_confirmed||role.headcount||1}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box">
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Approval Chain</label>
-            <div style="font-size:12px;color:var(--text-2);padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2)">${(()=>{try{const chains=JSON.parse(localStorage.getItem('hiro_approval_chains')||'[]');const match=chains.find(c=>c.department===(role.department||''));return match?match.approvers.join(' → '):'<span style="color:var(--text-3)">No chain for this dept — set up in Settings → Approval Chains</span>';}catch(e){return'<span style="color:var(--text-3)">Configure in Settings</span>';}})()}</div>
-          </div>
-          <div style="grid-column:1/-1">
-            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:block">Locations &amp; Salary Targets</label>
-            <div id="s1ap-locs-wrap">
-              ${(()=>{
-                try {
-                  const saved = JSON.parse(localStorage.getItem('hiro_loc_salaries_'+roleId)||'[]');
-                  const locs = saved.length ? saved : [{loc:'',curr:'USD',min:'',max:''}];
-                  return locs.map((l,i)=>`<div class="s1ap-loc-row" style="display:grid;grid-template-columns:2fr 80px 100px 100px 32px;gap:6px;margin-bottom:6px;align-items:center">
-                    <input class="s1ap-loc" value="${l.loc||''}" placeholder="Location (e.g. New York, US)" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
-                    <select class="s1ap-curr" style="padding:7px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
-                      ${['USD','EUR','GBP','BRL','MXN','TRY','INR'].map(c=>`<option ${c===(l.curr||'USD')?'selected':''}>${c}</option>`).join('')}
-                    </select>
-                    <input class="s1ap-min" type="number" value="${l.min||''}" placeholder="Min" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
-                    <input class="s1ap-max" type="number" value="${l.max||''}" placeholder="Max" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
-                    <button class="btn btn-ghost btn-sm" style="color:var(--red-text);padding:4px 8px" onclick="this.closest('.s1ap-loc-row').remove()">✕</button>
-                  </div>`).join('');
-                } catch(e) { return ''; }
-              })()}
-            </div>
-            <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:12px" onclick="_s1AddLocRow()">+ Add Location</button>
-          </div>
-        </div>
-      </div>
     </div>`;
 }
 
 // ══════════════════════════════════════════════
-// STAGE 1d — APPROVALS HELPERS
+// STAGE 0 — HR APPROVAL HELPERS
 // ══════════════════════════════════════════════
-function _s1AddLocRow() {
+function _s0AddLocRow() {
   var wrap = document.getElementById('s1ap-locs-wrap');
   if (!wrap) return;
   var row = document.createElement('div');
@@ -3875,7 +3900,7 @@ function _s1AddLocRow() {
   wrap.appendChild(row);
 }
 
-async function _s1SaveApprovals(roleId) {
+async function _s0SaveApprovals(roleId) {
   // Save location salary targets to localStorage
   var rows = document.querySelectorAll('.s1ap-loc-row');
   var locs = [];
