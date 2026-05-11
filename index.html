@@ -7230,33 +7230,33 @@ async function _extractFromTranscript() {
   }
   var btn = document.getElementById('extract-btn');
   var es  = document.getElementById('extract-status');
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Analysing...'; }
+  if (btn) { btn.disabled=true; btn.textContent='⧐ Analysing...'; }
   if (es)  { es.textContent='Extracting signals from transcript...'; es.style.display='block'; }
 
   // Build question context for AI
   var pillars = Object.values(AI_FORWARD_QB);
   var questionCtx = pillars.map(function(p,pi) {
-    return 'Pillar ' + (pi+1) + ' — ' + p.label + ':
-' + p.questions.map(function(q,qi){ return '  Q'+(qi+1)+': '+q.q; }).join('
-');
-  }).join('
+    var qs = p.questions.map(function(q,qi){ return '  Q'+(qi+1)+': '+q.q; }).join('\n');
+    return 'Pillar '+(pi+1)+' - '+p.label+':\n'+qs;
+  }).join('\n\n');
 
-');
-
-  var prompt = 'You are a structured interview evaluator. Read the interview transcript below and extract evidence for each AI-Forward pillar question.
-
-For each question, provide:
-1. A star rating 1-5 (1=no evidence, 3=some evidence, 5=strong evidence)
-2. Brief notes (1-2 sentences) of what the candidate said that supports the rating
-
-Return ONLY valid JSON in this exact format:
-{"pillars":[{"rating":3,"notes":"candidate said X..."},{"rating":4,"notes":"..."},{"rating":2,"notes":"..."},{"rating":5,"notes":"..."}],"strengths":"key positives from transcript","concerns":"any red flags or gaps","overall":4}
-
-Pillars in order:
-' + questionCtx + '
-
-TRANSCRIPT:
-' + _evalTranscript.slice(0, 8000);
+  var promptLines = [
+    'You are a structured interview evaluator. Read the interview transcript below and extract evidence for each AI-Forward pillar question.',
+    '',
+    'For each question, provide:',
+    '1. A star rating 1-5 (1=no evidence, 3=some evidence, 5=strong evidence)',
+    '2. Brief notes (1-2 sentences) of what the candidate said that supports the rating',
+    '',
+    'Return ONLY valid JSON in this exact format:',
+    '{"pillars":[{"rating":3,"notes":"candidate said X..."},{"rating":4,"notes":"..."},{"rating":2,"notes":"..."},{"rating":5,"notes":"..."}],"strengths":"key positives from transcript","concerns":"any red flags or gaps","overall":4}',
+    '',
+    'Pillars in order:',
+    questionCtx,
+    '',
+    'TRANSCRIPT:',
+    _evalTranscript.slice(0, 8000)
+  ];
+  var prompt = promptLines.join('\n');
 
   try {
     var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + _evalAiKey, {
@@ -7266,31 +7266,27 @@ TRANSCRIPT:
     });
     var data = await res.json();
     var raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    // Strip markdown code fences if present
     raw = raw.replace(/^```json?\s*/,'').replace(/```\s*$/,'').trim();
     var parsed = JSON.parse(raw);
-    // Apply to form
     var applied = 0;
     if (parsed.pillars && Array.isArray(parsed.pillars)) {
       parsed.pillars.forEach(function(p,pi) {
-        // Set AI-Forward score buttons
         var radio = document.querySelector('input[name="eaif_'+pi+'"][value="'+Math.round(p.rating)+'"]');
         if (radio) { radio.checked=true; _updateScoreButtons(radio); }
-        // Fill notes
         var notes = document.getElementById('eaifnotes_'+pi);
         if (notes && p.notes) { notes.value = p.notes; applied++; }
       });
     }
-    if (parsed.strengths) { var s=document.getElementById('estrengths'); if(s) s.value = parsed.strengths; }
-    if (parsed.concerns)  { var c=document.getElementById('econcerns');  if(c) c.value = parsed.concerns; }
+    if (parsed.strengths) { var s=document.getElementById('estrengths'); if(s) s.value=parsed.strengths; }
+    if (parsed.concerns)  { var c=document.getElementById('econcerns');  if(c) c.value=parsed.concerns; }
     if (parsed.overall) {
       var or=document.querySelector('input[name="eoverall"][value="'+Math.round(parsed.overall)+'"]');
       if(or){ or.checked=true; _updateScoreButtons(or); }
     }
-    if (es) { es.textContent = '✓ Filled ' + applied + ' question notes from transcript. Review and adjust before submitting.'; es.style.color='#22c55e'; }
+    if (es) { es.textContent='✓ Filled '+applied+' question notes from transcript. Review before submitting.'; es.style.color='#22c55e'; }
     if (btn){ btn.disabled=false; btn.textContent='✨ Re-extract from transcript'; }
   } catch(e) {
-    if (es) { es.textContent = 'Extraction failed: ' + (e.message||'unknown error'); es.style.color='#f87171'; }
+    if (es) { es.textContent='Extraction failed: '+(e.message||'unknown error'); es.style.color='#f87171'; }
     if (btn){ btn.disabled=false; btn.textContent='✨ Auto-fill from transcript'; }
   }
 }
