@@ -375,18 +375,34 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
     <div style="font-size:10px;color:var(--text-3);margin-top:2px;font-weight:500;letter-spacing:.5px;text-transform:uppercase">TA Ops Platform &middot; v6</div>
     <div class="login-sub" style="margin-top:8px">Sign in to continue</div>
     <div id="login-main">
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="you@sovos.com" onkeydown="if(event.key==='Enter')signIn()">
+      <div style="display:flex;gap:0;margin-bottom:18px;border:1.5px solid var(--border);border-radius:var(--r);overflow:hidden">
+        <button id="tab-password" onclick="_loginTab('password')" style="flex:1;padding:8px;font-size:12px;font-weight:600;border:none;background:var(--brand);color:#fff;cursor:pointer">Password</button>
+        <button id="tab-magic" onclick="_loginTab('magic')" style="flex:1;padding:8px;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--text-2);cursor:pointer">Magic Link</button>
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')signIn()">
+      <div id="login-password-section">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="you@sovos.com" onkeydown="if(event.key==='Enter')signIn()">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')signIn()">
+        </div>
+        <div id="login-error" style="display:none;background:var(--red-bg);color:var(--red-text);border:1px solid rgba(248,113,113,.3);border-radius:var(--r);padding:10px 12px;font-size:12px;margin-bottom:16px"></div>
+        <button class="btn btn-primary" id="login-btn" style="width:100%;justify-content:center" onclick="signIn()">Sign In</button>
+        <div style="text-align:center;margin-top:12px">
+          <button class="btn btn-ghost btn-sm" onclick="showResetView()">Forgot password?</button>
+        </div>
       </div>
-      <div id="login-error" style="display:none;background:var(--red-bg);color:var(--red-text);border:1px solid rgba(248,113,113,.3);border-radius:var(--r);padding:10px 12px;font-size:12px;margin-bottom:16px"></div>
-      <button class="btn btn-primary" id="login-btn" style="width:100%;justify-content:center" onclick="signIn()">Sign In</button>
-      <div style="text-align:center;margin-top:12px">
-        <button class="btn btn-ghost btn-sm" onclick="showResetView()">Forgot password?</button>
+      <div id="login-magic-section" style="display:none">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="magic-email" placeholder="you@sovos.com" onkeydown="if(event.key==='Enter')sendMagicLink()">
+        </div>
+        <div id="magic-msg" style="display:none;background:var(--green-bg);color:var(--green-text);border:1px solid #6ee7b7;border-radius:var(--r);padding:10px 12px;font-size:12px;margin-bottom:16px"></div>
+        <div id="magic-error" style="display:none;background:var(--red-bg);color:var(--red-text);border:1px solid rgba(248,113,113,.3);border-radius:var(--r);padding:10px 12px;font-size:12px;margin-bottom:16px"></div>
+        <button class="btn btn-primary" id="magic-btn" style="width:100%;justify-content:center" onclick="sendMagicLink()">Send Magic Link</button>
+        <div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:10px">Check your email and click the link to sign in</div>
       </div>
     </div>
     <div id="login-reset" style="display:none">
@@ -1388,6 +1404,37 @@ async function auditLog(action, entityType, entityId, newVal={}) {
 }
 
 // ── AUTH ──────────────────────────────────────
+function _loginTab(tab) {
+  var isPwd = tab === 'password';
+  document.getElementById('login-password-section').style.display = isPwd ? 'block' : 'none';
+  document.getElementById('login-magic-section').style.display = isPwd ? 'none' : 'block';
+  document.getElementById('tab-password').style.background = isPwd ? 'var(--brand)' : 'transparent';
+  document.getElementById('tab-password').style.color = isPwd ? '#fff' : 'var(--text-2)';
+  document.getElementById('tab-magic').style.background = isPwd ? 'transparent' : 'var(--brand)';
+  document.getElementById('tab-magic').style.color = isPwd ? 'var(--text-2)' : '#fff';
+}
+
+async function sendMagicLink() {
+  var email = (document.getElementById('magic-email')?.value || '').trim();
+  if (!email) { document.getElementById('magic-error').textContent = 'Enter your email'; document.getElementById('magic-error').style.display = 'block'; return; }
+  var btn = document.getElementById('magic-btn');
+  btn.textContent = 'Sending…'; btn.disabled = true;
+  document.getElementById('magic-error').style.display = 'none';
+  document.getElementById('magic-msg').style.display = 'none';
+  var { error } = await sb.auth.signInWithOtp({
+    email: email,
+    options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+  btn.textContent = 'Send Magic Link'; btn.disabled = false;
+  if (error) {
+    document.getElementById('magic-error').textContent = error.message;
+    document.getElementById('magic-error').style.display = 'block';
+  } else {
+    document.getElementById('magic-msg').textContent = 'Link sent! Check your inbox and click it to sign in.';
+    document.getElementById('magic-msg').style.display = 'block';
+  }
+}
+
 function showLoginView() {
   document.getElementById('login-main').style.display = 'block';
   document.getElementById('login-reset').style.display = 'none';
@@ -1687,7 +1734,18 @@ function nav(page, el) {
 // ── DASHBOARD (Recruiter Personal Assistant View) ─────────────
 async function renderDashboard() {
   _pushHistory('dashboard', 'Dashboard', renderDashboard);
-  document.getElementById('topbar-actions').innerHTML = '';
+  var isAdminRole = currentUser && ['admin','manager'].includes(currentUser.role || '');
+  if (window._dashAdminAll === undefined) window._dashAdminAll = false; // default: my roles only
+  if (isAdminRole) {
+    document.getElementById('topbar-actions').innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px">'
+      + '<span style="font-size:12px;color:var(--text-3)">View:</span>'
+      + '<button id="dash-toggle-mine" onclick="window._dashAdminAll=false;renderDashboard()" style="padding:5px 12px;border-radius:var(--r);border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;background:'+(window._dashAdminAll?'transparent':'var(--brand)')+';color:'+(window._dashAdminAll?'var(--text-2)':'#fff')+'">My Roles</button>'
+      + '<button id="dash-toggle-all" onclick="window._dashAdminAll=true;renderDashboard()" style="padding:5px 12px;border-radius:var(--r);border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;background:'+(window._dashAdminAll?'var(--brand)':'transparent')+';color:'+(window._dashAdminAll?'#fff':'var(--text-2)')+'">All Roles</button>'
+      + '</div>';
+  } else {
+    document.getElementById('topbar-actions').innerHTML = '';
+  }
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading your dashboard...</div>';
 
   var now = new Date();
@@ -1701,9 +1759,10 @@ async function renderDashboard() {
   var userId = currentUser ? currentUser.id : null;
   var userRole = currentUser ? (currentUser.role || '') : '';
 
-  // Fetch recruiter's roles — admins see all open roles
+  // Fetch roles — admin can toggle between all vs assigned to them
+  var _dashAdminAll = window._dashAdminAll !== false; // default: show all for admin
   var rolesQuery = sb.from('roles').select('*').eq('status', 'open');
-  if (!['admin','manager'].includes(userRole)) {
+  if (!['admin','manager'].includes(userRole) || !_dashAdminAll) {
     rolesQuery = rolesQuery.eq('assigned_recruiter_id', userId);
   }
 
