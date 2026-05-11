@@ -3181,11 +3181,12 @@ async function renderRoles() {
 
 // ── REASSIGN RECRUITER ───────────────────────────────────────────────
 async function _reassignRecruiter(roleId) {
-  var res = await sb.from('profiles').select('id,full_name,email,role').in('role',['recruiter','admin','coordinator']).order('full_name');
+  var res = await sb.from('profiles').select('id,user_id,full_name,email,role').in('role',['recruiter','admin','coordinator']).order('full_name');
   if (res.error || !res.data?.length) { toast('Could not load recruiter list','err'); return; }
   var current = _rdData?.role?.assigned_recruiter_id || '';
   var opts = res.data.map(function(p) {
-    return '<option value="' + p.id + '"' + (p.id===current?' selected':'') + '>' + (p.full_name||p.email) + ' (' + p.role + ')</option>';
+    var uid = p.user_id || p.id;
+    return '<option value="' + uid + '"' + (uid===current?' selected':'') + '>' + (p.full_name||p.email) + ' (' + p.role + ')</option>';
   }).join('');
   // Remove any existing modal
   var old = document.getElementById('reassign-modal');
@@ -3204,13 +3205,13 @@ async function _reassignRecruiter(roleId) {
   document.body.appendChild(m);
   document.getElementById('reassign-confirm-btn').onclick = async function() {
     var selEl = document.getElementById('reassign-sel');
-    var chosenId = selEl.value;
-    var chosen = res.data.find(function(p){ return p.id === chosenId; });
-    if (!chosen) return;
+    var chosenUid = selEl.value;
+    var chosen = res.data.find(function(p){ return (p.user_id||p.id) === chosenUid; });
+    if (!chosen) { toast('Could not identify recruiter','err'); return; }
     m.remove();
-    var upd = await sb.from('roles').update({assigned_recruiter_id: chosen.id}).eq('id', roleId);
+    var upd = await sb.from('roles').update({assigned_recruiter_id: chosenUid}).eq('id', roleId);
     if (upd.error) { toast('Error: ' + upd.error.message, 'err'); return; }
-    await auditLog('update','role',roleId,{assigned_recruiter_id: chosen.id, recruiter_name: chosen.full_name});
+    await auditLog('update','role',roleId,{assigned_recruiter_id: chosenUid, recruiter_name: chosen.full_name});
     toast('Role reassigned to ' + (chosen.full_name||chosen.email) + ' ✓');
     viewRoleDetail(roleId);
   };
