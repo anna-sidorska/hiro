@@ -14089,16 +14089,21 @@ async function renderTeamUsers() {
     '<div class="card-header"><span class="card-title">Team Members (' + users.length + ')</span>' +
     '<button class="btn btn-primary btn-sm" onclick="_tuShowInvite()">+ Invite User</button></div>' +
     '<div id="tu-invite-box" style="display:none;padding:16px;background:var(--brand-light);border-bottom:1px solid var(--border)">' +
-    '<div style="font-size:13px;font-weight:600;margin-bottom:10px">Invite a new user to Hiro</div>' +
-    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
-    '<input id="tu-invite-name" type="text" placeholder="Full name" style="flex:1;min-width:160px;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit">' +
-    '<input id="tu-invite-email" type="email" placeholder="email@sovos.com" style="flex:1;min-width:200px;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit">' +
-    '<select id="tu-invite-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface)">' +
-    '<option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management (read-only)</option><option value="admin">Admin</option>' +
+    '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Add user to Hiro</div>' +
+    '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Enter name, email and role. Optionally set a temporary password — if you do, they can log in immediately with it (no email needed). Leave blank to send a magic link instead.</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center">' +
+    '<input id="tu-invite-name" type="text" placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+    '<input id="tu-invite-email" type="email" placeholder="email@sovos.com *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+    '<select id="tu-invite-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text)">' +
+    '<option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management</option><option value="admin">Admin</option>' +
     '</select>' +
-    '<button id="tu-send-invite-btn" class="btn btn-primary btn-sm" onclick="_tuSendInvite()">Send Invite</button>' +
+    '<div></div>' +
     '</div>' +
-    '<div id="tu-invite-note" style="font-size:11px;color:var(--text-3)">Creates their profile with the selected role and sends a magic link. They click it and go straight into Hiro.</div>' +
+    '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:8px">' +
+    '<input id="tu-invite-password" type="text" placeholder="Temp password (optional — leave blank to send magic link)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+    '<button id="tu-send-invite-btn" class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="_tuSendInvite()">Add User</button>' +
+    '</div>' +
+    '<div id="tu-invite-note" style="font-size:11px;color:var(--text-3)"></div>' +
     '</div>' +
     '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
     '<thead><tr style="background:var(--surface-2);font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">' +
@@ -14142,43 +14147,66 @@ window._tuShowInvite = function() {
 
 window._tuSendInvite = async function() {
   var email = (document.getElementById('tu-invite-email')?.value || '').trim().toLowerCase();
-  var role = document.getElementById('tu-invite-role')?.value || 'management';
+  var role = document.getElementById('tu-invite-role')?.value || 'recruiter';
   var fullName = (document.getElementById('tu-invite-name')?.value || '').trim();
-  if (!email) { toast('Enter an email first', 'err'); return; }
+  var tempPw = (document.getElementById('tu-invite-password')?.value || '').trim();
+  if (!email) { toast('Email is required', 'err'); return; }
+  if (!fullName) { toast('Full name is required', 'err'); return; }
   var btn = document.getElementById('tu-send-invite-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding...'; }
   var note = document.getElementById('tu-invite-note');
+  if (note) note.innerHTML = '';
   try {
-    // Step 1: check if profile already exists
+    var initials = fullName.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+
+    // Check if profile already exists
     var { data: existing } = await sb.from('profiles').select('id,user_id').ilike('email', email).maybeSingle();
-    if (!existing) {
-      // Step 2: create profile record so they can log in after clicking the magic link
-      var initials = fullName ? fullName.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase() : email.substring(0,2).toUpperCase();
-      var { error: profErr } = await sb.from('profiles').insert({
+
+    if (tempPw) {
+      // ── Path A: create auth account with password (no email needed) ──
+      if (tempPw.length < 8) throw new Error('Password must be at least 8 characters');
+      var { data: signUpData, error: signUpErr } = await sb.auth.signUp({ email: email, password: tempPw });
+      if (signUpErr) throw signUpErr;
+      var authUserId = signUpData?.user?.id;
+      if (!existing) {
+        var { error: profErr } = await sb.from('profiles').insert({
+          email: email, full_name: fullName, role: role, avatar_initials: initials,
+          user_id: authUserId || null
+        });
+        if (profErr && !profErr.message.includes('duplicate')) throw new Error('Profile error: ' + profErr.message);
+      } else if (authUserId && !existing.user_id) {
+        await sb.from('profiles').update({ user_id: authUserId, full_name: fullName, role: role }).eq('id', existing.id);
+      }
+      if (note) note.innerHTML = '<span style="color:var(--green-text)">✅ <strong>' + fullName + '</strong> added as <strong>' + role + '</strong>. '
+        + (signUpData?.user?.email_confirmed_at ? 'They can log in now with their password.' : 'Supabase sent them a confirmation email — or they can log in with the password once confirmed.')
+        + ' <br>Temp password: <code style="background:var(--surface-2);padding:1px 6px;border-radius:4px;font-size:11px">' + tempPw + '</code></span>';
+      toast(fullName + ' added ✓');
+    } else {
+      // ── Path B: magic link (requires Supabase email config) ──
+      if (!existing) {
+        var { error: profErr2 } = await sb.from('profiles').insert({
+          email: email, full_name: fullName, role: role, avatar_initials: initials
+        });
+        if (profErr2 && !profErr2.message.includes('duplicate')) throw new Error('Profile error: ' + profErr2.message);
+      }
+      var { error: otpErr } = await sb.auth.signInWithOtp({
         email: email,
-        full_name: fullName || email.split('@')[0],
-        role: role,
-        avatar_initials: initials
+        options: { emailRedirectTo: window.location.origin + window.location.pathname, shouldCreateUser: true }
       });
-      if (profErr && !profErr.message.includes('duplicate')) throw new Error('Could not create profile: ' + profErr.message);
-    } else if (existing.user_id) {
-      // Profile exists and is already linked — just re-invite (send fresh magic link)
+      if (otpErr) throw new Error('Magic link failed: ' + otpErr.message + '. Try setting a temp password instead.');
+      if (note) note.innerHTML = '<span style="color:var(--green-text)">✅ Magic link sent to <strong>' + email + '</strong> — they click it and go straight in as <strong>' + role + '</strong>.</span>';
+      toast('Invite sent to ' + email + ' ✓');
     }
-    // Step 3: send magic link
-    var { error: otpErr } = await sb.auth.signInWithOtp({
-      email: email,
-      options: { emailRedirectTo: window.location.origin + window.location.pathname, shouldCreateUser: true }
+    // Clear form and refresh
+    ['tu-invite-name','tu-invite-email','tu-invite-password'].forEach(function(id){
+      var el = document.getElementById(id); if(el) el.value = '';
     });
-    if (otpErr) throw otpErr;
-    if (note) note.innerHTML = '<span style="color:var(--green-text)">✅ Invite sent to <strong>' + email + '</strong>. They\'ll get a magic link — clicking it will log them straight in as <strong>' + role + '</strong>.</span>';
-    toast('Invite sent to ' + email + ' ✓');
-    // Refresh the table
     setTimeout(renderTeamUsers, 1500);
   } catch(e) {
-    if (note) note.textContent = 'Error: ' + (e.message || e);
-    toast('Could not send invite: ' + (e.message || e), 'err');
+    if (note) note.innerHTML = '<span style="color:var(--red-text)">❌ ' + (e.message || e) + '</span>';
+    toast('Error: ' + (e.message || e), 'err');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Send Invite'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Add User'; }
   }
 };
 
