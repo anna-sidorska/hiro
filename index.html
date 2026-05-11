@@ -11001,7 +11001,7 @@ function openMailtoCompose() {
   var to = document.getElementById('compose-to')?.value.trim() || '';
   var subject = document.getElementById('compose-subject')?.value.trim() || '';
   var body = document.getElementById('compose-body')?.value.trim() || '';
-  window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
 }
 
 // ── COMPOSE EMAIL MODAL OPENER ────────────────────────────────
@@ -11152,7 +11152,7 @@ async function sendComposedEmail() {
   }
 
   if (!sent) {
-    var mailto = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    var mailto = 'mailto:' + to + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
     window.location.href = mailto;
     toast('Opened in Outlook');
     sent = true;
