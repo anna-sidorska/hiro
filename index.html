@@ -1423,7 +1423,7 @@ async function sendMagicLink() {
   document.getElementById('magic-msg').style.display = 'none';
   var { error } = await sb.auth.signInWithOtp({
     email: email,
-    options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname }
+    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + window.location.pathname }
   });
   btn.textContent = 'Send Magic Link'; btn.disabled = false;
   if (error) {
@@ -9839,9 +9839,10 @@ function _startAuthFlow() {
   showLoginScreen();
 
   sb.auth.onAuthStateChange(async (event, session) => {
-    if(event==='PASSWORD_RECOVERY' || event==='SIGNED_IN') return;
+    if(event==='PASSWORD_RECOVERY') return;
+    if(event==='SIGNED_IN' && currentUser) return; // already handled by signIn()
     if(!session) { showLoginScreen(); return; }
-    if(currentUser) return; // already logged in via signIn()
+    if(currentUser) return;
 
     // Restore session on page reload — with timeout
     try {
