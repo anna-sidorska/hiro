@@ -10492,15 +10492,14 @@ async function _settingsLoadTeam() {
       html += '<button class="btn btn-primary btn-sm" onclick="var b=document.getElementById(\'_settInvBox\');b.style.display=b.style.display===\'none\'?\'block\':\'none\'">+ Invite Member</button>';
       html += '<div id="_settInvBox" style="display:none;margin-top:12px;background:var(--brand-light);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px">';
       html += '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Add user to Hiro</div>';
-      html += '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Set a temp password for immediate login \u2014 requires <strong>Confirm email OFF</strong> in Supabase \u2192 Auth \u2192 Providers \u2192 Email. Leave blank to send a magic link instead.</div>';
+      html += '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Sends a magic link \u2014 user clicks it to sign in straight away. <strong>Want temp passwords?</strong> Create the user in <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--accent)">Supabase \u2192 Auth \u2192 Users \u2192 Add user \u2192 Auto Confirm User</a>, then their profile will appear here automatically.</div>';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">';
       html += '<input id="_sett-inv-name" type="text" placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">';
       html += '<input id="_sett-inv-email" type="email" placeholder="email@sovos.com *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">';
       html += '<select id="_sett-inv-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text)"><option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management</option><option value="admin">Admin</option></select>';
       html += '</div>';
-      html += '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:8px">';
-      html += '<input id="_sett-inv-password" type="text" placeholder="Temp password (optional \u2014 leave blank for magic link)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">';
-      html += '<button id="_sett-inv-btn" class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="_settSendInvite()">Add User</button>';
+      html += '<div style="text-align:right;margin-bottom:8px">';
+      html += '<button id="_sett-inv-btn" class="btn btn-primary btn-sm" onclick="_settSendInvite()">Send Magic Link</button>';
       html += '</div>';
       html += '<div id="_sett-inv-note" style="font-size:11px;color:var(--text-3)"></div>';
       html += '</div>';
@@ -14117,20 +14116,18 @@ async function renderTeamUsers() {
     '<button class="btn btn-primary btn-sm" onclick="_tuShowInvite()">+ Invite User</button></div>' +
     '<div id="tu-invite-box" style="display:none;padding:16px;background:var(--brand-light);border-bottom:1px solid var(--border)">' +
     '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Add user to Hiro</div>' +
-    '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Enter name, email and role. Set a temp password so they can log in immediately — requires <strong>Confirm email OFF</strong> in Supabase → Auth → Providers → Email. Leave blank to send a magic link instead.</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center">' +
+    '<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Sends a magic link — user clicks it to sign in straight away. <strong>Want temp passwords?</strong> Create the user in <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--accent)">Supabase → Auth → Users → Add user → Auto Confirm User</a>, then their profile will appear here automatically.</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">' +
     '<input id="tu-invite-name" type="text" placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
     '<input id="tu-invite-email" type="email" placeholder="email@sovos.com *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
     '<select id="tu-invite-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text)">' +
     '<option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management</option><option value="admin">Admin</option>' +
     '</select>' +
-    '<div></div>' +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:8px">' +
-    '<input id="tu-invite-password" type="text" placeholder="Temp password (optional — leave blank to send magic link)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
-    '<button id="tu-send-invite-btn" class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="_tuSendInvite()">Add User</button>' +
+    '<div style="text-align:right">' +
+    '<button id="tu-send-invite-btn" class="btn btn-primary btn-sm" onclick="_tuSendInvite()">Send Magic Link</button>' +
     '</div>' +
-    '<div id="tu-invite-note" style="font-size:11px;color:var(--text-3)"></div>' +
+    '<div id="tu-invite-note" style="font-size:11px;color:var(--text-3);margin-top:8px"></div>' +
     '</div>' +
     '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
     '<thead><tr style="background:var(--surface-2);font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px">' +
