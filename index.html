@@ -1772,6 +1772,7 @@ async function renderDashboard() {
     sb.from('roles').select('created_at,updated_at').eq('status','filled').gte('updated_at', qStart).lte('updated_at', qEnd),
     sb.from('candidate_communications').select('candidate_id,created_at').order('created_at', {ascending:false}),
     sb.from('applications').select('*,candidates(first_name,last_name),roles(title)').not('stage','in','(hired,rejected,withdrawn)').gte('created_at', weekAgoISO),
+    sb.from('profiles').select('id,full_name,email'),
   ]);
 
   function safeVal(i) { return results[i].status === 'fulfilled' ? results[i].value : {}; }
@@ -1781,6 +1782,8 @@ async function renderDashboard() {
   var filledRoles = safeVal(2).data || [];
   var allComms = safeVal(3).data || [];
   var recentAppsWeek = safeVal(4).data || [];
+  var _dashProfiles = {};
+  (safeVal(5).data || []).forEach(function(p){ _dashProfiles[p.id] = p; });
 
   var myRoleIds = myRoles.map(function(r){ return r.id; });
 
@@ -1930,7 +1933,9 @@ async function renderDashboard() {
     html += '<div class="card-body">';
     html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">';
     html += '<div><div style="font-size:15px;font-weight:700;margin-bottom:2px">' + role.title + '</div>';
-    html += '<div style="font-size:12px;color:var(--text-3)">' + (role.department||'') + (role.region ? ' · '+role.region : '') + '</div></div>';
+    html += '<div style="font-size:12px;color:var(--text-3)">' + (role.department||'') + (role.region ? ' · '+role.region : '') + '</div>';
+    var _recruiter = _dashProfiles[role.assigned_recruiter_id];
+    html += '<div style="font-size:11px;margin-top:2px;color:var(--brand)">👤 ' + (_recruiter ? (_recruiter.full_name||_recruiter.email) : 'Unassigned') + '</div></div>';
     html += '<span style="font-size:12px;font-weight:700;color:' + daysColor + '">' + daysOpen + 'd open</span>';
     html += '</div>';
     html += buildPipelineBar(apps);
@@ -10691,7 +10696,7 @@ async function _initBookingPage(bookId) {
       card.innerHTML = `
         <div style="text-align:center">
           <div style="font-size:40px;margin-bottom:12px">✅</div>
-          <div style="font-size:18px;font-weight:700;color:#111;margin-bottom:8px">Interview Already Booked</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">Interview Already Booked</div>
           ${dt ? `<div style="font-size:15px;color:#1a56db;font-weight:600">${dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} at ${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
           <div style="font-size:13px;color:#6b7280;margin-top:12px">You'll receive a calendar invite confirmation shortly.</div>
         </div>`;
@@ -10700,7 +10705,7 @@ async function _initBookingPage(bookId) {
     const slots = booking.slots || [];
     if (!slots.length) { card.innerHTML = '<div style="color:#d97706;font-size:14px">No time slots available. Please contact your recruiter.</div>'; return; }
     card.innerHTML = `
-      <h2 style="font-size:20px;font-weight:700;color:#111;margin:0 0 6px">Choose Your Interview Time</h2>
+      <h2 style="font-size:20px;font-weight:700;color:var(--text);margin:0 0 6px">Choose Your Interview Time</h2>
       <p style="font-size:13px;color:#6b7280;margin:0 0 24px">Select a time that works for you. You'll receive a confirmation email once booked.</p>
       <div id="book-slots" style="display:flex;flex-direction:column;gap:10px">
         ${slots.map((s,i) => {
@@ -10708,7 +10713,7 @@ async function _initBookingPage(bookId) {
           const dayStr = dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
           const timeStr = dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
           return `<button onclick="_bookSlot('${bookId}',${i})" style="width:100%;padding:14px 18px;background:#fff;border:1.5px solid #e5e7eb;border-radius:8px;cursor:pointer;text-align:left;transition:all .15s;font-family:Arial,Helvetica,sans-serif" onmouseover="this.style.borderColor='#1a56db';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#e5e7eb';this.style.background='#fff'">
-            <div style="font-weight:600;color:#111;font-size:14px">${dayStr}</div>
+            <div style="font-weight:600;color:var(--text);font-size:14px">${dayStr}</div>
             <div style="color:#1a56db;font-size:13px;margin-top:2px">${timeStr} · ${booking.duration_mins} min</div>
           </button>`;
         }).join('')}
@@ -10740,9 +10745,9 @@ async function _bookSlot(bookId, slotIndex) {
     card.innerHTML = `
       <div style="text-align:center">
         <div style="font-size:48px;margin-bottom:16px">🎉</div>
-        <h2 style="font-size:20px;font-weight:700;color:#111;margin:0 0 8px">You're booked!</h2>
+        <h2 style="font-size:20px;font-weight:700;color:var(--text);margin:0 0 8px">You're booked!</h2>
         <div style="font-size:16px;color:#1a56db;font-weight:600;margin-bottom:4px">${dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
-        <div style="font-size:15px;color:#374151;margin-bottom:20px">${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} · ${booking.duration_mins} min</div>
+        <div style="font-size:15px;color:var(--text-2);margin-bottom:20px">${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} · ${booking.duration_mins} min</div>
         <div style="font-size:13px;color:#6b7280;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px">
           The recruitment team has been notified and will send a calendar invite to <strong>${booking.candidate_email}</strong> shortly.
         </div>
