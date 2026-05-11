@@ -14146,8 +14146,6 @@ window._tuInviteRow = async function(email) {
 window._tuShowInvite = function() {
   var box = document.getElementById('tu-invite-box');
   if (box) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
-  var emailEl = document.getElementById('tu-invite-email');
-  if (emailEl && !emailEl.value) emailEl.value = 'sarah.doucette@sovos.com';
 };
 
 window._tuSendInvite = async function() {
