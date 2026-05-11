@@ -1675,9 +1675,8 @@ function renderSidebarNav() {
     navHtml += '<div class="sb-section">Recruit</div>';
     if (!_isHrRole) {
       navHtml += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
-      navHtml += '<button class="sb-item" id="nav-pipeline" onclick="nav(\'pipeline\',this)">' + icon.pipeline + ' Pipeline</button>';
-      navHtml += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
       navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
+      navHtml += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
     } else {
       navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
     }
