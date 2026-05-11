@@ -9908,9 +9908,14 @@ function _startAuthFlow() {
 
   // Always show login immediately — no blank page ever
   showLoginScreen();
+  // If this is a recovery link, show set-password form immediately — don't wait for the event
+  // (PASSWORD_RECOVERY event is unreliable; checking the URL is more robust)
+  if (window._hasRecoveryToken) {
+    showSetPasswordView();
+  }
 
   sb.auth.onAuthStateChange(async (event, session) => {
-    // PASSWORD_RECOVERY: user clicked a reset link — show set-new-password form
+    // PASSWORD_RECOVERY: user clicked a reset link — show set-new-password form (backup path)
     if(event==='PASSWORD_RECOVERY') {
       document.getElementById('login').classList.add('visible');
       document.getElementById('app').classList.remove('ready');
