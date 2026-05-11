@@ -6375,6 +6375,31 @@ async function renderHmInterviews() {
 }
 
 // ── TEAM VIEW ─────────────────────────────────
+async function _sendHiroInvite(email, name) {
+  if (!email) { toast('No email on this profile','err'); return; }
+  var btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    var { error } = await sb.auth.signInWithOtp({
+      email: email,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: window.location.origin + window.location.pathname
+      }
+    });
+    if (error) throw new Error(error.message);
+    btn.textContent = '✓ Sent';
+    btn.style.background = 'var(--green)';
+    btn.style.borderColor = 'var(--green)';
+    toast('Magic link sent to ' + email + ' ✓');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '✉ Invite';
+    toast('Failed to send invite: ' + e.message, 'err');
+  }
+}
+
 async function renderTeam() {
   document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-primary btn-sm" onclick="openAddMemberModal()">+ Add Member</button>`;
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading team...</div>';
@@ -6410,6 +6435,7 @@ async function renderTeam() {
           <select style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-family:inherit;color:var(--text-2);background:var(--surface)" onchange="updateMemberRole('${p.id}',this.value)" title="Change role">
             ${['admin','recruiter','coordinator','manager','hr'].map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${r}</option>`).join('')}
           </select>
+          ${!isLinked?`<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 10px" onclick="_sendHiroInvite('${p.email}','${p.full_name||''}')">✉ Invite</button>`:''}
           <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="openEditMemberModal('${p.id}')">Edit</button>
         </div>
       </div>
