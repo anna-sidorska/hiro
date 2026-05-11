@@ -14444,9 +14444,14 @@ async function renderHiringDashboard() {
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
   var [rolesRes, profilesRes] = await Promise.all([
-    sb.from('roles').select('id,title,status,req_id,region,department,assigned_recruiter_id,created_at,updated_at,priority,hiring_stage,notes,location,function'),
+    sb.from('roles').select('*').not('status','eq','cancelled').order('created_at',{ascending:false}),
     sb.from('profiles').select('id,full_name,email').in('role',['recruiter','admin','coordinator'])
   ]);
+
+  if (rolesRes.error) {
+    document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load roles</div><div class="empty-sub">' + rolesRes.error.message + '</div></div>';
+    return;
+  }
 
   var roles = rolesRes.data || [];
   var profiles = profilesRes.data || [];
@@ -14468,7 +14473,7 @@ async function renderHiringDashboard() {
   // Quarter filled
   var qMo = Math.floor(new Date().getMonth()/3)*3;
   var qStart = new Date(new Date().getFullYear(), qMo, 1);
-  var filledQ = roles.filter(function(r){ return r.status==='filled' && r.updated_at && new Date(r.updated_at)>=qStart; }).length;
+  var filledQ = roles.filter(function(r){ return r.status==='filled' && (r.updated_at||r.created_at) && new Date(r.updated_at||r.created_at)>=qStart; }).length;
 
   var critCount = active.filter(function(r){ return r.bucket==='Critical'; }).length;
   var atRiskCount = active.filter(function(r){ return r.bucket==='At Risk'; }).length;
@@ -14585,7 +14590,7 @@ async function renderHiringDashboard() {
   }).join('') || '<tr><td colspan="7" class="text-muted">No active roles</td></tr>';
 
   var regionBars = barH(active, function(r){ return r.region; }, regionColor);
-  var deptBars = barH(active, function(r){ return r.department||r.function||'Other'; }, null);
+  var deptBars = barH(active, function(r){ return r.department||'Other'; }, null);
 
   var card = function(title, sub, body) {
     return '<div class="card"><div class="card-header"><div class="card-title">'+title+'</div>'+(sub?'<span class="text-muted" style="font-size:12px">'+sub+'</span>':'')+'</div><div class="card-body">'+body+'</div></div>';
