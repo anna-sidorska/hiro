@@ -9840,8 +9840,10 @@ function _startAuthFlow() {
 
   sb.auth.onAuthStateChange(async (event, session) => {
     if(event==='PASSWORD_RECOVERY') return;
-    // Only allow SIGNED_IN auto-login when triggered by a magic link (token in URL hash)
-    // Cached sessions should not bypass the login screen
+    // INITIAL_SESSION fires on page load from localStorage cache — always ignore (user must log in manually)
+    if(event==='INITIAL_SESSION') return;
+    // SIGNED_IN: only allow auto-login when triggered by a magic link (access_token in URL)
+    // Password logins call showApp() directly — no need to handle here
     if(event==='SIGNED_IN') {
       var hasMagicToken = window.location.hash.includes('access_token') || window.location.search.includes('access_token');
       if(!hasMagicToken || currentUser) return;
