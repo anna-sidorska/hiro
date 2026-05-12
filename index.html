@@ -1279,9 +1279,9 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth:{
     storage: _store,
     storageKey: 'hiro-auth',
-    detectSessionInUrl: false,
-    persistSession: !_HIRO_IS_PUBLIC,   // no session on eval/booking pages
-    autoRefreshToken: !_HIRO_IS_PUBLIC  // no token refresh on public pages
+    detectSessionInUrl: !_HIRO_IS_PUBLIC, // allow PKCE code exchange on auth pages
+    persistSession: !_HIRO_IS_PUBLIC,
+    autoRefreshToken: !_HIRO_IS_PUBLIC
   }
 });
 
@@ -9935,29 +9935,21 @@ function _startAuthFlow() {
   }
 
   sb.auth.onAuthStateChange(async (event, session) => {
-    console.log('[HIRO AUTH]', event, 'hasMagic='+window._hasMagicToken, 'hasRecovery='+window._hasRecoveryToken, 'session='+!!(session), 'currentUser='+!!(currentUser), 'search='+window.location.search);
-    // PASSWORD_RECOVERY: user clicked a reset link — show set-new-password form (backup path)
+    // PASSWORD_RECOVERY: show set-new-password form
     if(event==='PASSWORD_RECOVERY') {
       document.getElementById('login').classList.add('visible');
       document.getElementById('app').classList.remove('ready');
       showSetPasswordView();
       return;
     }
-    // INITIAL_SESSION fires on page load.
-    // In Supabase PKCE flow, the magic link code exchange fires INITIAL_SESSION (not SIGNED_IN).
-    // Allow it through when we have a magic token + valid session + not a recovery flow.
-    // Otherwise ignore it (cached session — user must log in manually).
-    if(event==='INITIAL_SESSION') {
-      if(window._hasMagicToken && session && !currentUser && !window._hasRecoveryToken) {
-        // fall through to profile loading below
-      } else {
-        return;
-      }
-    }
-    // SIGNED_IN: also fires in some flows — skip if already handled or recovery
-    if(event==='SIGNED_IN') {
-      if(currentUser || window._hasRecoveryToken) return;
-    }
+    // Skip if recovery flow (waiting for PASSWORD_RECOVERY instead)
+    if(window._hasRecoveryToken && event !== 'PASSWORD_RECOVERY') return;
+    // Skip if already loaded
+    if(currentUser) return;
+    // INITIAL_SESSION with no session = no cached login, stay on login screen
+    if(event==='INITIAL_SESSION' && !session) return;
+    // SIGNED_OUT = back to login
+    if(event==='SIGNED_OUT') { showLoginScreen(); return; }
     if(!session) { showLoginScreen(); return; }
     if(currentUser) return;
 
