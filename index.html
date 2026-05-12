@@ -5262,15 +5262,15 @@ async function _extractIntakeFromTranscript() {
 
   if (!transcript) { toast('Paste a transcript first', 'err'); return; }
 
-  const geminiKey = localStorage.getItem('hiro_gemini_key');
-  if (!geminiKey) {
-    statusEl.innerHTML = '<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚠️ No API key set. Add a Gemini or Claude key in Settings → General to enable AI extraction.</div>';
+  const groqKey = localStorage.getItem('hiro_groq_key');
+  if (!groqKey) {
+    statusEl.innerHTML = '<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚠️ No API key set. Add a Groq key in Settings → General to enable AI extraction.</div>';
     return;
   }
 
   btn.disabled = true;
   btn.textContent = 'Extracting...';
-  statusEl.innerHTML = '<div style="color:var(--text-3);font-size:13px">Analysing transcript with Gemini...</div>';
+  statusEl.innerHTML = '<div style="color:var(--text-3);font-size:13px">Analysing transcript with Groq AI...</div>';
 
   const prompt = `Extract recruitment intake data from this transcript. Respond with ONLY raw JSON — no markdown, no code fences, no explanation, just the JSON object starting with { and ending with }.
 
@@ -5287,7 +5287,7 @@ JSON:`;
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: {'Authorization': 'Bearer ' + geminiKey, 'content-type': 'application/json'},
+      headers: {'Authorization': 'Bearer ' + groqKey, 'content-type': 'application/json'},
       body: JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:1500,temperature:0.1})
     });
 
@@ -5523,7 +5523,7 @@ function _s2BuildQueries(roleId) {
 
 
 async function _s2OpenLinkedInRecruiter(roleId) {
-  const geminiKey = localStorage.getItem('hiro_gemini_key');
+  const groqKey = localStorage.getItem('hiro_groq_key');
   const d = _rdData;
   const role = d?.role || {};
   const intake = d?.intake || {};
@@ -5636,16 +5636,16 @@ async function _rdGenerateLinkedInPost(roleId) {
   el.style.display='block';
   el.innerHTML='<div style="text-align:center;padding:8px"><div class="spinner" style="margin:0 auto"></div></div>';
   const d=_rdData;const intake=d.intake||{};const role=d.role||{};
-  const geminiKey=localStorage.getItem('hiro_gemini_key');
+  const groqKey=localStorage.getItem('hiro_groq_key');
   const title=intake.confirmed_title||role.title||'open role';
   const dept=role.department||'';const loc=role.location||role.region||'';
   const remote=intake.remote_policy||role.work_type||'';
   const selling=intake.key_selling_points||'';const mustHave=intake.must_haves||'';
   const sal=role.salary_min&&role.salary_max?`${role.salary_currency||'USD'} ${Math.round(role.salary_min/1000)}k–${Math.round(role.salary_max/1000)}k`:'';
-  if(geminiKey){
+  if(groqKey){
     try{
       const prompt=`Write a compelling LinkedIn recruitment post. Punchy, 200-250 words, use line breaks for readability, end with 5-7 relevant hashtags. No fluff.\n\nRole: ${title}${dept?'\nDepartment: '+dept:''}${loc?'\nLocation: '+loc:''}${remote?'\nWork policy: '+remote:''}${sal?'\nSalary: '+sal:''}${selling?'\nWhy join:\n'+selling:''}${mustHave?'\nKey requirements:\n'+mustHave:''}\n\nWrite the post now:`;
-      const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+geminiKey,'content-type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:600})});
+      const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+groqKey,'content-type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:600})});
       const json=await res.json();const text=json.choices?.[0]?.message?.content||'';
       if(text){el.textContent=text;return;}
     }catch(e){}
@@ -6113,7 +6113,7 @@ async function openCandidateDrawerLegacy(appId) {
       ${app.fit_score!=null
         ? `<div style="font-size:12px;color:var(--text-2);line-height:1.6;white-space:pre-line">${(app.fit_reasoning||'').replace(/</g,'&lt;')}</div>
            <div class="text-muted" style="margin-top:6px;font-size:11px">${app.fit_scored_at?'Scored '+fmtDate(app.fit_scored_at):''}</div>`
-        : `<div class="text-muted" style="font-size:12px">${localStorage.getItem('hiro_gemini_key')?'Not scored yet — click ↻ Re-score':'Add a Gemini API key in Settings (⚙) to enable AI scoring'}</div>`}
+        : `<div class="text-muted" style="font-size:12px">${localStorage.getItem('hiro_groq_key')?'Not scored yet — click ↻ Re-score':'Add a Groq API key in Settings (⚙) to enable AI scoring'}</div>`}
     </div>` : ''}
     <div class="drawer-section">
       <div class="drawer-section-title">Interviews</div>
@@ -6718,7 +6718,7 @@ async function submitApplication() {
   await auditLog('create','application',app.id,{stage});
   toast('Application created'); closeModal('modal-apply-role'); closeDrawer();
   // Trigger fit scoring in background — silent, doesn't block UI
-  if(localStorage.getItem('hiro_gemini_key')) {
+  if(localStorage.getItem('hiro_groq_key')) {
     _scoreApplicationFit(app.id, candidateId, roleId).then(() => {
       if(currentPage==='pipeline') renderPipeline();
       if(currentPage==='roles') renderRoles();
@@ -6791,7 +6791,7 @@ async function submitCandidate() {
   // Upload pending CV if dropped to trigger modal
   if(_pendingCvFile) { await uploadCandidateCV(cand.id, _pendingCvFile); _pendingCvFile=null; }
   // Background fit scoring if role assigned and key available
-  if(newAppId && roleId && localStorage.getItem('hiro_gemini_key')) {
+  if(newAppId && roleId && localStorage.getItem('hiro_groq_key')) {
     _scoreApplicationFit(newAppId, cand.id, roleId).catch(()=>{});
   }
   toast(`${first} ${last} added`);
@@ -7481,13 +7481,13 @@ async function _extractFromTranscript() {
   var prompt = promptLines.join('\n');
 
   try {
-    var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + _evalAiKey, {
+    var res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: {'content-type':'application/json'},
-      body: JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1000,temperature:0.2}})
+      headers: {'Authorization':'Bearer '+_evalAiKey,'content-type':'application/json'},
+      body: JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:1000,temperature:0.2})
     });
     var data = await res.json();
-    var raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    var raw = data?.choices?.[0]?.message?.content || '';
     raw = raw.replace(/^```json?\s*/,'').replace(/```\s*$/,'').trim();
     var parsed = JSON.parse(raw);
     var applied = 0;
@@ -7769,7 +7769,7 @@ async function generateEvalLink() {
     include_epp:       document.getElementById('gl-epp').checked,
     competencies:      _stageCompsForValue(document.getElementById('gl-stage').value, _genLinkJdData?.competencies)||[],
     role_title:        _genLinkJdData?.title||null,
-    ai_key:            localStorage.getItem('hiro_gemini_key')||null,
+    ai_key:            localStorage.getItem('hiro_groq_key')||null,
     cv_signed_url:     cvSignedUrl,
   };
 
@@ -10397,7 +10397,7 @@ function importFromLinkedInPaste() {
 
 // ── SETTINGS (API key + preferences) ─────────────────────────────────────────
 function openSettingsModal(tabId) {
-  const k = localStorage.getItem('hiro_gemini_key') || '';
+  const k = localStorage.getItem('hiro_groq_key') || '';
   const keyEl = document.getElementById('settings-gemini-key');
   if (keyEl) keyEl.value = k;
   const status = document.getElementById('settings-score-status');
@@ -10436,10 +10436,10 @@ function _switchSettingsTab(tabId) {
 }
 
 function saveSettings() {
-  // Gemini
+  // Groq
   const key = document.getElementById('settings-gemini-key').value.trim();
-  if (key) localStorage.setItem('hiro_gemini_key', key);
-  else localStorage.removeItem('hiro_gemini_key');
+  if (key) localStorage.setItem('hiro_groq_key', key);
+  else localStorage.removeItem('hiro_groq_key');
   const status = document.getElementById('settings-score-status');
   if (status) status.textContent = key ? '✓ Key saved — scoring is active' : 'Key removed — scoring disabled';
 
@@ -11114,7 +11114,7 @@ async function testGeminiKey() {
 
 // ── FIT SCORING (Groq / Llama 3.3 — natural language reasoning, free) ────────
 async function _scoreApplicationFit(applicationId, candidateId, roleId) {
-  const key = localStorage.getItem('hiro_gemini_key');
+  const key = localStorage.getItem('hiro_groq_key');
   if (!key) return;  // scoring disabled — no key
 
   // Fetch role + candidate in parallel
@@ -11181,8 +11181,8 @@ Respond in JSON only, no markdown, no code fences:
 }
 
 async function _rescoreApplication(applicationId, candidateId, roleId) {
-  if (!localStorage.getItem('hiro_gemini_key')) {
-    toast('Add a Gemini API key in Settings (⚙) → General first','err'); return;
+  if (!localStorage.getItem('hiro_groq_key')) {
+    toast('Add a Groq API key in Settings (⚙) → General first','err'); return;
   }
   toast('Scoring…');
   await _scoreApplicationFit(applicationId, candidateId, roleId);
@@ -11194,7 +11194,7 @@ async function _rescoreApplication(applicationId, candidateId, roleId) {
 }
 
 async function _scoreAllCandidates(roleId, btn) {
-  if (!localStorage.getItem('hiro_gemini_key')) { toast('Add Gemini API key in Settings first','err'); return; }
+  if (!localStorage.getItem('hiro_groq_key')) { toast('Add Groq API key in Settings first','err'); return; }
   if (btn) { btn.disabled=true; btn.textContent='Scoring…'; }
   const {data:apps} = await sb.from('applications')
     .select('id,candidate_id,fit_score')
@@ -12357,7 +12357,7 @@ async function _cfpToggleCvViewer(cvUrl) {
 
 // ── CFP FIT SCORE HELPERS ──────────────────────────────────────────
 function _cfpFitScoreHtml(app) {
-  var hasKey = !!localStorage.getItem('hiro_gemini_key');
+  var hasKey = !!localStorage.getItem('hiro_groq_key');
   var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
   html += '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3)">AI Fit</span>';
   if (app && app.fit_score != null) html += _fitScoreBadge(app.fit_score);
@@ -12378,8 +12378,8 @@ async function _cfpScore() {
   var appId = window._cfpCurrentAppId;
   var candId = window._cfpCurrentCandidateId;
   if (!appId || !candId) { toast('Open a candidate profile first','err'); return; }
-  if (!localStorage.getItem('hiro_gemini_key')) {
-    toast('Add Gemini API key in Settings (⚙) first','err'); return;
+  if (!localStorage.getItem('hiro_groq_key')) {
+    toast('Add Groq API key in Settings (⚙) first','err'); return;
   }
   var wrap = document.getElementById('cfp-fit-wrap');
   if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><div class="spinner" style="width:16px;height:16px;border-width:2px"></div><span style="font-size:11px;color:var(--text-3)">Scoring with Claude…</span></div>';
@@ -12662,10 +12662,10 @@ async function loadCfpCommunications(candidateId, candidateEmail, candidateName,
     'background_check': 'Background check — ' + roleTitle + ' at Sovos'
   };
 
-  var hasGeminiForOutreach = !!localStorage.getItem('hiro_gemini_key');
-  var generateBtnHtml = hasGeminiForOutreach
+  var hasGroqKey = !!localStorage.getItem('hiro_groq_key');
+  var generateBtnHtml = hasGroqKey
     ? '<button class="btn btn-outline btn-sm" style="margin-bottom:12px;color:var(--purple);border-color:var(--purple)" onclick="generateCandidateOutreach(\'' + candidateId + '\',\'' + appId + '\')">✨ Generate personalised message</button>'
-    : '<div style="margin-bottom:10px;padding:8px 12px;background:var(--surface-2);border-radius:var(--r);font-size:12px;color:var(--text-3)">Add a Gemini key in Settings to enable AI message generation</div>';
+    : '<div style="margin-bottom:10px;padding:8px 12px;background:var(--surface-2);border-radius:var(--r);font-size:12px;color:var(--text-3)">Add a Groq key in Settings to enable AI message generation</div>';
 
   el.innerHTML = histHtml +
     '<div data-comms-compose="1" style="background:var(--surface-2);border-radius:var(--r-lg);padding:16px">' +
@@ -13297,7 +13297,7 @@ async function openCandidateDrawerOriginal(appId) {
     (app.fit_score!=null ?
       '<div style="font-size:12px;color:var(--text-2);line-height:1.6;white-space:pre-line">' + (app.fit_reasoning||'').replace(/</g,'&lt;') + '</div>' +
       '<div class="text-muted" style="margin-top:6px;font-size:11px">' + (app.fit_scored_at?'Scored '+fmtDate(app.fit_scored_at):'') + '</div>'
-      : '<div class="text-muted" style="font-size:12px">' + (localStorage.getItem('hiro_gemini_key')?'Not scored yet — click ↻ Re-score':'Add a Gemini API key in Settings to enable AI scoring') + '</div>') +
+      : '<div class="text-muted" style="font-size:12px">' + (localStorage.getItem('hiro_groq_key')?'Not scored yet — click ↻ Re-score':'Add a Groq API key in Settings to enable AI scoring') + '</div>') +
     '</div>' +
 
     '<div class="drawer-section"><div class="drawer-section-title">Interviews</div>' +
@@ -13654,7 +13654,7 @@ async function submitBooking(slotId, token) {
 
 // (book mode handled in initApp below)
 
-// ── AI CHAT AGENT (Gemini, public pages) ──────────────────────
+// ── AI CHAT AGENT (Groq/Llama, public pages) ──────────────────────
 function initPublicChatAgent(context) {
   var chatBtn = document.createElement('button');
   chatBtn.id = 'ai-chat-btn';
@@ -13695,7 +13695,7 @@ async function sendChatMessage(contextStr) {
   messages.innerHTML += '<div id="chat-typing" style="background:#f1f5f9;border-radius:8px;padding:10px 12px;font-size:12px;color:#94a3b8">Thinking...</div>';
   messages.scrollTop = messages.scrollHeight;
 
-  var key = localStorage.getItem('hiro_gemini_key');
+  var key = localStorage.getItem('hiro_groq_key');
   if (!key) {
     document.getElementById('chat-typing')?.remove();
     messages.innerHTML += '<div style="background:#f1f5f9;border-radius:8px;padding:10px 12px;font-size:12px">I\'m not fully configured yet. Please contact the recruiter directly.</div>';
@@ -13708,13 +13708,13 @@ async function sendChatMessage(contextStr) {
   var systemPrompt = 'You are a friendly, professional AI assistant for Sovos TA. Context: role="' + (ctx.role||'') + '", company="Sovos — global leader in tax compliance". Answer questions about the role, process, company, and benefits. Be concise (2-3 sentences max). If asked about compensation specifics, say the recruiter will discuss. Never make up facts.';
 
   try {
-    var r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + key, {
+    var r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({contents:[{parts:[{text:systemPrompt+'\n\nCandidate: '+msg}]}],generationConfig:{temperature:0.7,maxOutputTokens:256}})
+        headers: {'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+      body: JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:systemPrompt},{role:'user',content:msg}],max_tokens:256,temperature:0.7})
     });
     var d = await r.json();
-    var reply = d?.candidates?.[0]?.content?.parts?.[0]?.text || 'I couldn\'t process that. Please contact the recruiter directly.';
+    var reply = d?.choices?.[0]?.message?.content || 'I couldn\'t process that. Please contact the recruiter directly.';
     document.getElementById('chat-typing')?.remove();
     messages.innerHTML += '<div style="background:#f1f5f9;border-radius:8px;padding:10px 12px;font-size:12px">' + reply.replace(/</g,'&lt;') + '</div>';
   } catch(e) {
@@ -13835,8 +13835,8 @@ async function generateBooleanSearch(roleId) {
     var xray = _generateXRayQuery(role, jd);
     var natural = _generateNaturalQuery(role, jd);
 
-    // Try AI-enhanced query if Gemini key available
-    var key = localStorage.getItem('hiro_gemini_key');
+    // Try AI-enhanced query if Groq key available
+    var key = localStorage.getItem('hiro_groq_key');
     if (key) {
       var reqs = jd && jd.requirements ? jd.requirements.slice(0, 500) : '';
       var compsList = '';
@@ -13854,7 +13854,7 @@ async function generateBooleanSearch(roleId) {
         'Example: site:linkedin.com/in/ ("Account Executive" OR "AE") "SaaS" "EMEA"';
 
       try {
-        var r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + key, {
+        var r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
@@ -13898,8 +13898,8 @@ function searchOnLinkedIn() {
 }
 
 async function refineSourceWithAi() {
-  var key = localStorage.getItem('hiro_gemini_key');
-  if (!key) { toast('Add a Gemini key in Settings', 'err'); return; }
+  var key = localStorage.getItem('hiro_groq_key');
+  if (!key) { toast('Add a Groq key in Settings', 'err'); return; }
   var natural = document.getElementById('bool-natural') ? document.getElementById('bool-natural').value.trim() : '';
   if (!natural) { toast('No description to refine', 'err'); return; }
 
@@ -13909,7 +13909,7 @@ async function refineSourceWithAi() {
 
   try {
     var prompt = 'Convert this candidate description into a precise Google X-Ray search string for LinkedIn profiles. Start with site:linkedin.com/in/ and use quotes around terms. Description: ' + natural + '\n\nOutput ONLY the search string, nothing else.';
-    var r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + key, {
+    var r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.3,maxOutputTokens:400}})
@@ -13949,9 +13949,9 @@ function regenerateBooleanSearch() {
 // ══════════════════════════════════════════════════════════════
 
 async function generateCandidateOutreach(candidateId, applicationId) {
-  var key = localStorage.getItem('hiro_gemini_key');
+  var key = localStorage.getItem('hiro_groq_key');
   if (!key) {
-    toast('Add a Gemini key in Settings to enable AI message generation', 'err');
+    toast('Add a Groq key in Settings to enable AI message generation', 'err');
     return;
   }
 
@@ -14017,7 +14017,7 @@ async function generateCandidateOutreach(candidateId, applicationId) {
       '- Tone: direct, professional, human — not corporate\n\n' +
       'Output ONLY the message body, no subject line.';
 
-    var r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + key, {
+    var r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -14027,7 +14027,7 @@ async function generateCandidateOutreach(candidateId, applicationId) {
     });
     var d = await r.json();
     var result = (d && d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0] && d.candidates[0].content.parts[0].text) || '';
-    if (!result) { throw new Error('No response from Gemini'); }
+    if (!result) { throw new Error('No response from Groq'); }
 
     if (_isContentEditable) { bodyEl.innerHTML = result.trim().replace(/\n/g,'<br>'); }
     else { bodyEl.value = result.trim(); }
@@ -14081,7 +14081,7 @@ async function findMatchingCandidates(roleId) {
     var allCandsRes = await sb.from('candidates').select('id,first_name,last_name,location,cv_text,notes');
     var allCands = (allCandsRes.data || []).filter(function(c) { return !existingCandIds.has(c.id); });
 
-    var key = localStorage.getItem('hiro_gemini_key');
+    var key = localStorage.getItem('hiro_groq_key');
     var candidates = [];
 
     if (key) {
@@ -14093,13 +14093,13 @@ async function findMatchingCandidates(roleId) {
         var cand = candsWithCv[ci];
         try {
           var scorePrompt = 'Score 0-10 how well this candidate matches the role. Role: ' + role.title + '. Requirements: ' + requirements.slice(0, 300) + '. Candidate CV summary: ' + cand.cv_text.slice(0, 300) + '. Output only a number 0-10.';
-          var sr = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + key, {
+          var sr = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({contents:[{parts:[{text:scorePrompt}]}], generationConfig:{temperature:0, maxOutputTokens:10}})
+            headers: {'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+            body: JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:scorePrompt}],max_tokens:10,temperature:0})
           });
           var sd = await sr.json();
-          var rawScore = (sd && sd.candidates && sd.candidates[0] && sd.candidates[0].content && sd.candidates[0].content.parts && sd.candidates[0].content.parts[0] && sd.candidates[0].content.parts[0].text) || '0';
+          var rawScore = sd?.choices?.[0]?.message?.content || '0';
           var score = parseInt(rawScore.trim().replace(/[^0-9]/g, '')) || 0;
           scored.push({cand: cand, score: score});
         } catch(e) {
@@ -14153,7 +14153,7 @@ async function findMatchingCandidates(roleId) {
         '</div>';
     }).join('');
 
-    var noKeyNote = !key ? '<div style="margin-bottom:12px;padding:10px 12px;background:var(--amber-bg);border:1px solid #fde68a;border-radius:var(--r);font-size:12px;color:var(--amber-text)">Add a Gemini key in Settings to enable AI match scoring. Showing keyword-matched candidates.</div>' : '';
+    var noKeyNote = !key ? '<div style="margin-bottom:12px;padding:10px 12px;background:var(--amber-bg);border:1px solid #fde68a;border-radius:var(--r);font-size:12px;color:var(--amber-text)">Add a Groq key in Settings to enable AI match scoring. Showing keyword-matched candidates.</div>' : '';
 
     bodyEl.innerHTML = noKeyNote +
       '<div style="font-size:12px;color:var(--text-3);margin-bottom:12px">' + candidates.length + ' candidate' + (candidates.length !== 1 ? 's' : '') + ' found outside current pipeline' + (key ? ' · AI-scored' : ' · keyword-matched') + '</div>' +
