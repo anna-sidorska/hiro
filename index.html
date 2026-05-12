@@ -12250,55 +12250,65 @@ async function openCandidateFullPage(appId) {
   // Lifecycle progress bar
   rightCol += progressBar;
 
-  // Tab bar — CV first if available, then EPP, then standard tabs
+  // Tab bar — EPP first, then CV, then Comms / Interviews / Evaluations / Activity / Applications / Notes
   var hasCv  = !!(c.cv_url && _canSee('cv'));
   var hasEpp = !!(c.epp_url && _canSee('epp'));
+  var noDoc  = !hasCv && !hasEpp;
+  window._cfpCurrentAppId = appId;
+  window._cfpCurrentCandidateId = c.id;
+  window._cfpInterviewsLoaded = false;
   rightCol += '<div class="cfp-tab-bar">';
-  if (hasCv)  rightCol += '<button class="cfp-tab active" data-tab="cfp-tab-cv"  onclick="switchCfpTab(this,\'cfp-tab-cv\')">📄 CV</button>';
-  if (hasEpp) rightCol += '<button class="cfp-tab' + (hasCv?'':' active') + '" data-tab="cfp-tab-epp" onclick="switchCfpTab(this,\'cfp-tab-epp\')">🧠 EPP</button>';
-  var stdTabs = ['Applications','Activity','Communications','Evaluations','Notes'];
-  stdTabs.forEach(function(tab, i) {
-    var isActive = !hasCv && !hasEpp && i === 0;
-    rightCol += '<button class="cfp-tab' + (isActive?' active':'') + '" data-tab="cfp-tab-' + i + '" onclick="switchCfpTab(this,\'cfp-tab-' + i + '\')">' + tab + '</button>';
-  });
+  if (hasEpp) rightCol += '<button class="cfp-tab active" data-tab="cfp-tab-epp" onclick="switchCfpTab(this,\'cfp-tab-epp\')">🧠 EPP</button>';
+  if (hasCv)  rightCol += '<button class="cfp-tab' + (hasEpp?'':' active') + '" data-tab="cfp-tab-cv" onclick="switchCfpTab(this,\'cfp-tab-cv\')">📄 CV</button>';
+  rightCol += '<button class="cfp-tab' + (noDoc?' active':'') + '" data-tab="cfp-tab-comms" onclick="switchCfpTab(this,\'cfp-tab-comms\')">✉️ Comms</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-interviews" onclick="switchCfpTab(this,\'cfp-tab-interviews\')">📅 Interviews</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-evals" onclick="switchCfpTab(this,\'cfp-tab-evals\')">📋 Evaluations</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-activity" onclick="switchCfpTab(this,\'cfp-tab-activity\')">⏱ Activity</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-apps" onclick="switchCfpTab(this,\'cfp-tab-apps\')">📁 Applications</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-notes" onclick="switchCfpTab(this,\'cfp-tab-notes\')">📝 Notes</button>';
   rightCol += '</div>';
 
-  // CV pane (shown by default if CV exists)
-  if (hasCv) {
-    rightCol += '<div id="cfp-tab-cv" class="cfp-tab-pane">';
-    rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
-    rightCol += '</div>';
-  }
-
-  // EPP pane
+  // EPP pane (active first if available)
   if (hasEpp) {
-    rightCol += '<div id="cfp-tab-epp" class="cfp-tab-pane"' + (hasCv?' style="display:none"':'') + '>';
+    rightCol += '<div id="cfp-tab-epp" class="cfp-tab-pane">';
     rightCol += '<div id="cfp-epp-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
     rightCol += '</div>';
   }
 
-  // Tab 0: Applications (hidden if CV/EPP shown by default)
-  rightCol += '<div id="cfp-tab-0" class="cfp-tab-pane"' + ((hasCv||hasEpp)?' style="display:none"':'') + '>';
-  rightCol += '<div id="cfp-applications"><div class="loading"><div class="spinner"></div></div></div>';
-  rightCol += '</div>';
+  // CV pane
+  if (hasCv) {
+    rightCol += '<div id="cfp-tab-cv" class="cfp-tab-pane"' + (hasEpp?' style="display:none"':'') + '>';
+    rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
+    rightCol += '</div>';
+  }
 
-  // Tab 1: Activity
-  rightCol += '<div id="cfp-tab-1" class="cfp-tab-pane" style="display:none">';
-  rightCol += '<div id="cfp-lifecycle"><div class="loading"><div class="spinner"></div></div></div>';
-  rightCol += '</div>';
-
-  // Tab 2: Communications
-  rightCol += '<div id="cfp-tab-2" class="cfp-tab-pane" style="display:none">';
+  // Comms pane (active if no EPP/CV)
+  rightCol += '<div id="cfp-tab-comms" class="cfp-tab-pane"' + (!noDoc?' style="display:none"':'') + '>';
   rightCol += '<div id="cfp-comms-wrap"></div>';
   rightCol += '</div>';
 
-  // Tab 3: Evaluations
-  rightCol += '<div id="cfp-tab-3" class="cfp-tab-pane" style="display:none">';
+  // Interviews pane (lazy loaded on tab open)
+  rightCol += '<div id="cfp-tab-interviews" class="cfp-tab-pane" style="display:none">';
+  rightCol += '<div id="cfp-interviews-wrap"><div class="loading"><div class="spinner"></div></div></div>';
+  rightCol += '</div>';
+
+  // Evaluations pane
+  rightCol += '<div id="cfp-tab-evals" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-evals"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
 
-  // Tab 4: Notes
-  rightCol += '<div id="cfp-tab-4" class="cfp-tab-pane" style="display:none">';
+  // Activity pane
+  rightCol += '<div id="cfp-tab-activity" class="cfp-tab-pane" style="display:none">';
+  rightCol += '<div id="cfp-lifecycle"><div class="loading"><div class="spinner"></div></div></div>';
+  rightCol += '</div>';
+
+  // Applications pane
+  rightCol += '<div id="cfp-tab-apps" class="cfp-tab-pane" style="display:none">';
+  rightCol += '<div id="cfp-applications"><div class="loading"><div class="spinner"></div></div></div>';
+  rightCol += '</div>';
+
+  // Notes pane
+  rightCol += '<div id="cfp-tab-notes" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-notes-feed" style="margin-bottom:12px"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '<div style="display:flex;gap:8px"><textarea id="cfp-note-input" rows="2" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px;resize:vertical" placeholder="Add a note..."></textarea>';
   rightCol += '<button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="addCfpNote(\'' + appId + '\')">Add</button></div>';
@@ -12361,11 +12371,66 @@ function switchCfpTab(btn, tabId) {
   });
   var pane = document.getElementById(tabId);
   if (pane) pane.style.display = '';
-  // Re-populate template dropdown whenever user opens Communications tab
-  if (tabId === 'cfp-tab-2') { _populateCfpTemplates(); }
-  // Load CV/EPP viewers when respective tabs opened
+  // Lazy loaders per tab
+  if (tabId === 'cfp-tab-comms') { _populateCfpTemplates(); }
   if (tabId === 'cfp-tab-cv')  { _loadCfpCvTab(); }
   if (tabId === 'cfp-tab-epp') { _loadCfpEppTab(); }
+  if (tabId === 'cfp-tab-interviews') { loadCfpInterviews(); }
+}
+
+async function loadCfpInterviews() {
+  if (window._cfpInterviewsLoaded) return;
+  window._cfpInterviewsLoaded = true;
+  var el = document.getElementById('cfp-interviews-wrap');
+  if (!el) return;
+  var candidateId = window._cfpCurrentCandidateId;
+  var appId = window._cfpCurrentAppId;
+  try {
+    // Get all applications for this candidate to find their interview history
+    var { data: apps } = await sb.from('applications').select('id, role_id, roles(title)').eq('candidate_id', candidateId);
+    var appIds = (apps||[]).map(function(a){return a.id;});
+    var appMap = {};
+    (apps||[]).forEach(function(a){ appMap[a.id] = a; });
+
+    var { data: ivs } = await sb.from('interviews')
+      .select('*')
+      .in('application_id', appIds.length ? appIds : ['_none'])
+      .order('scheduled_at', {ascending: false});
+
+    var now = new Date();
+    if (!ivs || !ivs.length) {
+      el.innerHTML = '<div class="empty" style="padding:32px 16px"><div class="empty-icon">📅</div><div class="empty-title">No interviews yet</div><div class="empty-sub">Scheduled interviews will appear here</div></div>';
+      return;
+    }
+    var statusColor = function(iv) {
+      if (iv.status === 'completed') return 'var(--green)';
+      if (iv.status === 'cancelled') return 'var(--red)';
+      if (new Date(iv.scheduled_at) < now) return 'var(--amber)';
+      return 'var(--brand)';
+    };
+    var statusLabel = function(iv) {
+      if (iv.status === 'completed') return 'Completed';
+      if (iv.status === 'cancelled') return 'Cancelled';
+      if (new Date(iv.scheduled_at) < now) return 'Overdue';
+      return 'Scheduled';
+    };
+    el.innerHTML = ivs.map(function(iv) {
+      var roleTitle = (appMap[iv.application_id]?.roles?.title) || '';
+      var sc = statusColor(iv);
+      var sl = statusLabel(iv);
+      return '<div style="padding:12px 14px;background:var(--surface-2);border-radius:var(--r);margin-bottom:8px;border-left:3px solid ' + sc + '">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+          '<div style="font-size:13px;font-weight:600">' + (iv.interview_type||'Interview') + (roleTitle ? ' <span style="font-size:11px;font-weight:400;color:var(--text-3)">· ' + roleTitle + '</span>' : '') + '</div>' +
+          '<span style="font-size:11px;font-weight:600;color:' + sc + '">' + sl + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text-3)">' + fmtDateTime(iv.scheduled_at) + (iv.interviewer_name ? ' · ' + iv.interviewer_name : '') + '</div>' +
+        (iv.notes ? '<div style="margin-top:6px;font-size:12px;color:var(--text-2)">' + iv.notes + '</div>' : '') +
+        (iv.status === 'scheduled' ? '<div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="markInterviewDone(\'' + iv.id + '\',\'' + iv.application_id + '\');window._cfpInterviewsLoaded=false;loadCfpInterviews()">✓ Done</button></div>' : '') +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red);font-size:13px;padding:16px">Error loading interviews: ' + (e.message||'unknown') + '</div>';
+  }
 }
 
 // ── CV TAB LOADER ────────────────────────────────────────────────────
