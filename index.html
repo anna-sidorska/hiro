@@ -10786,6 +10786,13 @@ async function _outlookSendMail(toEmail, subject, htmlBody) {
 
 // ── CANDIDATE BOOKING PAGE (?book=UUID) ──────────────────────────────────────
 async function _initBookingPage(bookId) {
+  // Override dark-theme body styles for this public light-background page
+  document.documentElement.style.setProperty('--text', '#111827');
+  document.documentElement.style.setProperty('--text-2', '#374151');
+  document.documentElement.style.setProperty('--text-3', '#6b7280');
+  document.documentElement.style.setProperty('--bg', '#f8fafc');
+  document.body.style.background = '#f8fafc';
+  document.body.style.color = '#111827';
   // Replace entire body with booking UI — no auth needed, runs as anon
   document.body.innerHTML = `
     <div style="min-height:100vh;background:#f8fafc;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;font-family:Arial,Helvetica,sans-serif">
