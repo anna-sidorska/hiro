@@ -5264,7 +5264,7 @@ async function _extractIntakeFromTranscript() {
 
   const geminiKey = localStorage.getItem('hiro_gemini_key');
   if (!geminiKey) {
-    statusEl.innerHTML = '<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚠️ No Gemini API key set. Add one in Settings → General to enable AI extraction.</div>';
+    statusEl.innerHTML = '<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚠️ No API key set. Add a Gemini or Claude key in Settings → General to enable AI extraction.</div>';
     return;
   }
 
@@ -6113,7 +6113,7 @@ async function openCandidateDrawerLegacy(appId) {
       ${app.fit_score!=null
         ? `<div style="font-size:12px;color:var(--text-2);line-height:1.6;white-space:pre-line">${(app.fit_reasoning||'').replace(/</g,'&lt;')}</div>
            <div class="text-muted" style="margin-top:6px;font-size:11px">${app.fit_scored_at?'Scored '+fmtDate(app.fit_scored_at):''}</div>`
-        : `<div class="text-muted" style="font-size:12px">${localStorage.getItem('hiro_gemini_key')?'Not scored yet — click ↻ Re-score':'Add a Gemini API key in Settings (⚙) to enable AI scoring'}</div>`}
+        : `<div class="text-muted" style="font-size:12px">${localStorage.getItem('hiro_claude_key')?'Not scored yet — click ↻ Re-score':'Add a Claude API key in Settings (⚙) to enable AI scoring'}</div>`}
     </div>` : ''}
     <div class="drawer-section">
       <div class="drawer-section-title">Interviews</div>
@@ -6718,7 +6718,7 @@ async function submitApplication() {
   await auditLog('create','application',app.id,{stage});
   toast('Application created'); closeModal('modal-apply-role'); closeDrawer();
   // Trigger fit scoring in background — silent, doesn't block UI
-  if(localStorage.getItem('hiro_gemini_key')) {
+  if(localStorage.getItem('hiro_claude_key')) {
     _scoreApplicationFit(app.id, candidateId, roleId).then(() => {
       if(currentPage==='pipeline') renderPipeline();
       if(currentPage==='roles') renderRoles();
@@ -6791,7 +6791,7 @@ async function submitCandidate() {
   // Upload pending CV if dropped to trigger modal
   if(_pendingCvFile) { await uploadCandidateCV(cand.id, _pendingCvFile); _pendingCvFile=null; }
   // Background fit scoring if role assigned and key available
-  if(newAppId && roleId && localStorage.getItem('hiro_gemini_key')) {
+  if(newAppId && roleId && localStorage.getItem('hiro_claude_key')) {
     _scoreApplicationFit(newAppId, cand.id, roleId).catch(()=>{});
   }
   toast(`${first} ${last} added`);
@@ -10407,7 +10407,7 @@ function openSettingsModal(tabId) {
   const ckEl = document.getElementById('settings-claude-key');
   if (ckEl) ckEl.value = ck;
   const cStatus = document.getElementById('settings-claude-status');
-  if (cStatus) cStatus.textContent = ck ? '✓ Claude key saved — AI features active' : 'No key — LinkedIn post generation uses template fallback';
+  if (cStatus) cStatus.textContent = ck ? '✓ Claude key saved — AI fit scoring active' : 'No key — AI fit scoring disabled';
 
   // Switch to requested tab or default to 'general'
   _switchSettingsTab(tabId || 'general');
@@ -11089,36 +11089,45 @@ window._stCopyTemplate = function(idx, btn) {
   }).catch(function(){ toast('Copy failed — select text manually','err'); });
 };
 
-const GEMINI_MODEL = 'gemini-2.0-flash-lite';
-
-async function testGeminiKey() {
-  const key = document.getElementById('settings-gemini-key').value.trim();
+async function testClaudeKey() {
+  const key = document.getElementById('settings-claude-key').value.trim();
   if (!key) { toast('Enter a key first', 'err'); return; }
-  const btn = document.getElementById('settings-test-btn');
-  btn.textContent = 'Testing…'; btn.disabled = true;
+  const btn = document.getElementById('settings-claude-test-btn');
+  if (btn) { btn.textContent = 'Testing…'; btn.disabled = true; }
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`, {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: 'Say hello in one word.' }] }] })
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-allow-browser': 'true', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 16, messages: [{ role: 'user', content: 'Say hi.' }] })
     });
     const d = await r.json();
     if (!r.ok) { toast('API error: ' + (d?.error?.message || r.status), 'err'); return; }
-    const reply = d?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const reply = d?.content?.[0]?.text || '';
     if (reply.length > 0) {
-      toast('Key works ✓');
-      const status = document.getElementById('settings-score-status');
-      if (status) status.textContent = '✓ Key verified — click Save to activate scoring';
-    } else {
-      toast('No response from Gemini — check key', 'err');
-    }
+      toast('Claude key works ✓');
+      const status = document.getElementById('settings-claude-status');
+      if (status) status.textContent = '✓ Key verified — click Save to activate AI scoring';
+    } else { toast('No response — check key', 'err'); }
   } catch(e) { toast('Connection failed: ' + e.message, 'err'); }
-  finally { btn.textContent = 'Test key'; btn.disabled = false; }
+  finally { if (btn) { btn.textContent = 'Test key'; btn.disabled = false; } }
 }
 
-// ── FIT SCORING (Gemini) ──────────────────────────────────────────────────────
+// ── FIT SCORING (Claude / Anthropic) ────────────────────────────────────────
+async function _callClaude(prompt, maxTokens) {
+  const key = localStorage.getItem('hiro_claude_key');
+  if (!key) return null;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-allow-browser': 'true', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens || 512, messages: [{ role: 'user', content: prompt }] })
+  });
+  if (!r.ok) throw new Error('Claude API error ' + r.status);
+  const d = await r.json();
+  return d?.content?.[0]?.text || '';
+}
+
 async function _scoreApplicationFit(applicationId, candidateId, roleId) {
-  const key = localStorage.getItem('hiro_gemini_key');
+  const key = localStorage.getItem('hiro_claude_key');
   if (!key) return;  // scoring disabled — no key
 
   // Fetch role + candidate in parallel
@@ -11130,7 +11139,6 @@ async function _scoreApplicationFit(applicationId, candidateId, roleId) {
   const cand = candRes.data;
   if (!role || !cand) return;
 
-  // Build context strings
   const roleCtx = [
     `Job Title: ${role.title}`,
     role.department ? `Department: ${role.department}` : '',
@@ -11159,21 +11167,12 @@ ${candCtx}
 
 Analyse beyond keyword matching — consider transferable skills, career trajectory, context of their experience, and realistic suitability for this specific role and level.
 
-Respond in JSON only, no markdown:
+Respond in JSON only, no markdown, no code fences:
 {"score": <integer 0-100>, "reasoning": "<2-3 sentences explaining the score, specific to this candidate and role>", "strengths": "<one sentence>", "gaps": "<one sentence or 'None identified'>"}`;
 
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 512 }
-      })
-    });
-    const d = await r.json();
-    let raw = d?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    // Strip possible markdown code fences
+    let raw = await _callClaude(prompt, 512);
+    if (!raw) return;
     raw = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     const result = JSON.parse(raw);
     if (typeof result.score !== 'number') return;
@@ -11185,22 +11184,24 @@ Respond in JSON only, no markdown:
     }).eq('id', applicationId);
   } catch(e) {
     console.warn('Fit scoring failed:', e);
-    // Silent fail — scoring is best-effort
   }
 }
 
 async function _rescoreApplication(applicationId, candidateId, roleId) {
-  if (!localStorage.getItem('hiro_gemini_key')) {
-    toast('Add a Gemini API key in Settings (⚙) first','err'); return;
+  if (!localStorage.getItem('hiro_claude_key')) {
+    toast('Add a Claude API key in Settings (⚙) → General first','err'); return;
   }
-  toast('Scoring…');
+  toast('Scoring with Claude…');
   await _scoreApplicationFit(applicationId, candidateId, roleId);
   toast('Score updated ✓');
   if(currentPage==='roles') viewRoleDetail(roleId);
+  // Refresh candidate profile if open
+  const wrap = document.getElementById('cfp-fit-wrap');
+  if (wrap) _cfpRenderFitScore(applicationId, candidateId, roleId);
 }
 
 async function _scoreAllCandidates(roleId, btn) {
-  if (!localStorage.getItem('hiro_gemini_key')) { toast('Add Gemini key in Settings first','err'); return; }
+  if (!localStorage.getItem('hiro_claude_key')) { toast('Add Claude API key in Settings first','err'); return; }
   if (btn) { btn.disabled=true; btn.textContent='Scoring…'; }
   const {data:apps} = await sb.from('applications')
     .select('id,candidate_id,fit_score')
@@ -12226,10 +12227,10 @@ async function openCandidateFullPage(appId) {
   leftCol += '<div style="display:flex;gap:8px"><select id="cfp-stage-select" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:12px">' + stageOptions + '</select>';
   leftCol += '<button class="btn btn-primary btn-sm" onclick="updateStageFullPage(\'' + appId + '\')">Save</button></div>';
   leftCol += '</div>';
-  if (app.fit_score != null) {
-    leftCol += '<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-3)">AI Fit Score:</span>' + _fitScoreBadge(app.fit_score) + '</div>';
-    if (app.fit_reasoning) leftCol += '<div style="font-size:11px;color:var(--text-2);margin-top:4px;white-space:pre-line;line-height:1.5">' + app.fit_reasoning.replace(/</g,'&lt;') + '</div>';
-  }
+  // AI Fit Score section
+  leftCol += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)" id="cfp-fit-wrap">';
+  leftCol += _cfpFitScoreHtml(app);
+  leftCol += '</div>';
   leftCol += '</div>';
 
   // EPP card
@@ -12359,6 +12360,44 @@ async function _cfpToggleCvViewer(cvUrl) {
   // Show in iframe
   var viewerUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=true';
   inner.innerHTML = '<iframe src="' + viewerUrl + '" style="width:100%;height:520px;border:none;display:block" title="CV Viewer"></iframe>';
+}
+
+// ── CFP FIT SCORE HELPERS ──────────────────────────────────────────
+function _cfpFitScoreHtml(app) {
+  var hasKey = !!localStorage.getItem('hiro_claude_key');
+  var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+  html += '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3)">AI Fit</span>';
+  if (app && app.fit_score != null) html += _fitScoreBadge(app.fit_score);
+  html += '<button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px;padding:2px 8px" onclick="_cfpScore()">' + (app && app.fit_score != null ? '↻ Re-score' : '✦ Score') + '</button>';
+  html += '</div>';
+  if (app && app.fit_score != null && app.fit_reasoning) {
+    html += '<div style="font-size:11px;color:var(--text-2);white-space:pre-line;line-height:1.55">' + app.fit_reasoning.replace(/</g,'&lt;') + '</div>';
+    if (app.fit_scored_at) html += '<div style="font-size:10px;color:var(--text-3);margin-top:4px">Scored ' + fmtDate(app.fit_scored_at) + '</div>';
+  } else if (!hasKey) {
+    html += '<div style="font-size:11px;color:var(--text-3)">Add Claude API key in Settings to enable</div>';
+  } else {
+    html += '<div style="font-size:11px;color:var(--text-3)">Not scored yet</div>';
+  }
+  return html;
+}
+
+async function _cfpScore() {
+  var appId = window._cfpCurrentAppId;
+  var candId = window._cfpCurrentCandidateId;
+  if (!appId || !candId) { toast('Open a candidate profile first','err'); return; }
+  if (!localStorage.getItem('hiro_claude_key')) {
+    toast('Add Claude API key in Settings (⚙) first','err'); return;
+  }
+  var wrap = document.getElementById('cfp-fit-wrap');
+  if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><div class="spinner" style="width:16px;height:16px;border-width:2px"></div><span style="font-size:11px;color:var(--text-3)">Scoring with Claude…</span></div>';
+  // Get the role_id from the application
+  var { data: appRow } = await sb.from('applications').select('role_id').eq('id', appId).single();
+  if (!appRow?.role_id) { toast('No role linked to this application','err'); return; }
+  await _scoreApplicationFit(appId, candId, appRow.role_id);
+  // Refresh display
+  var { data: updated } = await sb.from('applications').select('fit_score,fit_reasoning,fit_scored_at').eq('id', appId).single();
+  if (wrap) wrap.innerHTML = _cfpFitScoreHtml(updated || {});
+  toast('Scored ✓');
 }
 
 function switchCfpTab(btn, tabId) {
@@ -15159,19 +15198,15 @@ initApp();
       <!-- GENERAL TAB -->
       <div class="settings-tab-content active" data-tab="general">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:12px">AI Fit Scoring</div>
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Automatically scores candidate-role fit using Google Gemini — free tier, no credit card needed.</div>
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Get your free key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--brand)">aistudio.google.com</a> → Get API key</div>
-        <div style="display:flex;gap:8px">
-          <input id="settings-gemini-key" type="password" placeholder="AIza..." style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit">
-          <button class="btn btn-outline btn-sm" id="settings-test-btn" onclick="testGeminiKey()">Test key</button>
-        </div>
-        <div id="settings-score-status" style="margin-top:6px;font-size:11.5px;color:var(--text-3)"></div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-top:24px;margin-bottom:12px">Claude API (AI Features)</div>
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Used for LinkedIn post generation and AI candidate insights. Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--brand)">console.anthropic.com</a></div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:12px">Claude API Key (AI Fit Scoring)</div>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Powers natural language fit scoring on every candidate profile. Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--brand)">console.anthropic.com</a> → API Keys</div>
         <div style="display:flex;gap:8px">
           <input id="settings-claude-key" type="password" placeholder="sk-ant-..." style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit">
+          <button class="btn btn-outline btn-sm" id="settings-claude-test-btn" onclick="testClaudeKey()">Test key</button>
         </div>
         <div id="settings-claude-status" style="margin-top:6px;font-size:11.5px;color:var(--text-3)"></div>
+        <input id="settings-gemini-key" type="hidden">
+        <div id="settings-score-status" style="display:none"></div>
         <div class="form-actions" style="margin-top:20px">
           <button class="btn btn-outline" onclick="closeModal('modal-settings')">Cancel</button>
           <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
