@@ -9935,6 +9935,7 @@ function _startAuthFlow() {
   }
 
   sb.auth.onAuthStateChange(async (event, session) => {
+    console.log('[HIRO AUTH]', event, 'hasMagic='+window._hasMagicToken, 'hasRecovery='+window._hasRecoveryToken, 'session='+!!(session), 'currentUser='+!!(currentUser), 'search='+window.location.search);
     // PASSWORD_RECOVERY: user clicked a reset link — show set-new-password form (backup path)
     if(event==='PASSWORD_RECOVERY') {
       document.getElementById('login').classList.add('visible');
