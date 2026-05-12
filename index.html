@@ -9921,13 +9921,15 @@ function initApp() {
 function _startAuthFlow() {
   if (_HIRO_IS_PUBLIC) return; // never run auth on public pages
   // Capture magic link / recovery token flag BEFORE Supabase clears the URL hash
-  window._hasMagicToken = window.location.hash.includes('access_token') || window.location.search.includes('access_token');
+  // Detect magic/OTP link: legacy hash token OR PKCE code param (Supabase v2 sends ?code=)
+  window._hasMagicToken = window.location.hash.includes('access_token') ||
+    window.location.search.includes('access_token') ||
+    (window.location.search.includes('code=') && !window.location.search.includes('type=recovery'));
   window._hasRecoveryToken = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
 
   // Always show login immediately — no blank page ever
   showLoginScreen();
   // If this is a recovery link, show set-password form immediately — don't wait for the event
-  // (PASSWORD_RECOVERY event is unreliable; checking the URL is more robust)
   if (window._hasRecoveryToken) {
     showSetPasswordView();
   }
@@ -9940,12 +9942,12 @@ function _startAuthFlow() {
       showSetPasswordView();
       return;
     }
-    // INITIAL_SESSION fires on page load from localStorage cache — always ignore (user must log in manually)
+    // INITIAL_SESSION fires on page load from localStorage cache — always ignore
     if(event==='INITIAL_SESSION') return;
-    // SIGNED_IN: only allow auto-login for magic links
-    // Block if: no magic token, user already set, OR this is a recovery link (wait for PASSWORD_RECOVERY instead)
+    // SIGNED_IN: auto-login from magic link or OTP
+    // Block only if: user already set (normal sign-in handled separately), OR this is a recovery flow
     if(event==='SIGNED_IN') {
-      if(!window._hasMagicToken || currentUser || window._hasRecoveryToken) return;
+      if(currentUser || window._hasRecoveryToken) return;
     }
     if(!session) { showLoginScreen(); return; }
     if(currentUser) return;
