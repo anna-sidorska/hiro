@@ -12175,7 +12175,6 @@ async function openCandidateFullPage(appId) {
     '<button class="btn btn-outline btn-sm" onclick="openApplyModal(\'' + c.id + '\')">+ Apply to Role</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openComposeModal(\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✉ Email</button>' +
     (_cfpRoleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + c.id + '\',\'' + _cfpRoleId + '\',\'' + _cfpJdId + '\')">🔗 Eval Link</button>' : '') +
-    '<button class="btn btn-outline btn-sm" onclick="_cfpOpenSelfSchedule(\'' + appId + '\',\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + _cfpRoleId + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">🗓 Self-Schedule</button>' +
     '<button class="btn btn-danger btn-sm" onclick="rejectApplication(\'' + appId + '\')">✕ Reject</button>';
 
   // EPP summary for left column
