@@ -12250,14 +12250,15 @@ async function openCandidateFullPage(appId) {
   // Tab bar — EPP first, then CV, then Comms / Interviews / Evaluations / Activity / Applications / Notes
   var hasCv  = !!(c.cv_url && _canSee('cv'));
   var hasEpp = !!(c.epp_url && _canSee('epp'));
-  var noDoc  = !hasCv && !hasEpp;
   window._cfpCurrentAppId = appId;
   window._cfpCurrentCandidateId = c.id;
   window._cfpInterviewsLoaded = false;
+  _cfpCvTabLoaded = false;
+  _cfpEppTabLoaded = false;
   rightCol += '<div class="cfp-tab-bar">';
-  if (hasEpp) rightCol += '<button class="cfp-tab active" data-tab="cfp-tab-epp" onclick="switchCfpTab(this,\'cfp-tab-epp\')">🧠 EPP</button>';
-  if (hasCv)  rightCol += '<button class="cfp-tab' + (hasEpp?'':' active') + '" data-tab="cfp-tab-cv" onclick="switchCfpTab(this,\'cfp-tab-cv\')">📄 CV</button>';
-  rightCol += '<button class="cfp-tab' + (noDoc?' active':'') + '" data-tab="cfp-tab-comms" onclick="switchCfpTab(this,\'cfp-tab-comms\')">✉️ Comms</button>';
+  rightCol += '<button class="cfp-tab active" data-tab="cfp-tab-epp" onclick="switchCfpTab(this,\'cfp-tab-epp\')">🧠 EPP</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-cv" onclick="switchCfpTab(this,\'cfp-tab-cv\')">📄 CV</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-comms" onclick="switchCfpTab(this,\'cfp-tab-comms\')">✉️ Comms</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-interviews" onclick="switchCfpTab(this,\'cfp-tab-interviews\')">📅 Interviews</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-evals" onclick="switchCfpTab(this,\'cfp-tab-evals\')">📋 Evaluations</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-activity" onclick="switchCfpTab(this,\'cfp-tab-activity\')">⏱ Activity</button>';
@@ -12265,22 +12266,26 @@ async function openCandidateFullPage(appId) {
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-notes" onclick="switchCfpTab(this,\'cfp-tab-notes\')">📝 Notes</button>';
   rightCol += '</div>';
 
-  // EPP pane (active first if available)
+  // EPP pane (always visible, active by default)
+  rightCol += '<div id="cfp-tab-epp" class="cfp-tab-pane">';
   if (hasEpp) {
-    rightCol += '<div id="cfp-tab-epp" class="cfp-tab-pane">';
     rightCol += '<div id="cfp-epp-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
-    rightCol += '</div>';
+  } else {
+    rightCol += '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No EPP uploaded for this candidate.</div>';
   }
+  rightCol += '</div>';
 
-  // CV pane
+  // CV pane (always visible)
+  rightCol += '<div id="cfp-tab-cv" class="cfp-tab-pane" style="display:none">';
   if (hasCv) {
-    rightCol += '<div id="cfp-tab-cv" class="cfp-tab-pane"' + (hasEpp?' style="display:none"':'') + '>';
     rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:780px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
-    rightCol += '</div>';
+  } else {
+    rightCol += '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV uploaded for this candidate.</div>';
   }
+  rightCol += '</div>';
 
-  // Comms pane (active if no EPP/CV)
-  rightCol += '<div id="cfp-tab-comms" class="cfp-tab-pane"' + (!noDoc?' style="display:none"':'') + '>';
+  // Comms pane
+  rightCol += '<div id="cfp-tab-comms" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-comms-wrap"></div>';
   rightCol += '</div>';
 
@@ -12322,6 +12327,8 @@ async function openCandidateFullPage(appId) {
   loadCfpCommunications(c.id, c.email, fullName, appId, app.roles ? app.roles.title : '', app.stage, app.role_id||'', app.jd_id||'');
   loadCfpEvaluations(c.id);
   loadCfpNotes(appId);
+  // EPP is the default active tab — load it immediately
+  _loadCfpEppTab();
 }
 
 // ── INLINE CV VIEWER ─────────────────────────────────────────────────
@@ -12370,7 +12377,7 @@ function _cfpFitScoreHtml(app) {
     html += '<div style="font-size:11px;color:var(--text-2);white-space:pre-line;line-height:1.55">' + app.fit_reasoning.replace(/</g,'&lt;') + '</div>';
     if (app.fit_scored_at) html += '<div style="font-size:10px;color:var(--text-3);margin-top:4px">Scored ' + fmtDate(app.fit_scored_at) + '</div>';
   } else if (!hasKey) {
-    html += '<div style="font-size:11px;color:var(--text-3)">Add Claude API key in Settings to enable</div>';
+    html += '<div style="font-size:11px;color:var(--text-3)">Add Groq API key in Settings to enable</div>';
   } else {
     html += '<div style="font-size:11px;color:var(--text-3)">Not scored yet</div>';
   }
