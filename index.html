@@ -12488,6 +12488,22 @@ function _renderPdfFrame(inner, url, title) {
   // Use browser-native PDF rendering — instant, no external service
   inner.innerHTML = '<iframe src="' + url + '#toolbar=1&view=FitH" style="width:100%;height:780px;border:none;display:block;border-radius:var(--r)" title="' + title + '"></iframe>';
 }
+async function _renderDocxFrame(inner, url, title) {
+  // Use mammoth.js to render DOCX as HTML inline — no download, no external service
+  try {
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('Could not fetch file');
+    var buf = await resp.arrayBuffer();
+    var result = await mammoth.convertToHtml({ arrayBuffer: buf });
+    var html = result.value || '<p style="color:var(--text-3)">No content</p>';
+    inner.innerHTML = '<div style="padding:24px 32px;height:780px;overflow-y:auto;background:#fff;border-radius:var(--r);font-family:Georgia,serif;font-size:14px;line-height:1.7;color:#111">' + html + '</div>';
+  } catch(e) {
+    inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not render document: ' + e.message + '</div>';
+  }
+}
+function _isDocx(url) {
+  return url && (url.toLowerCase().includes('.docx') || url.toLowerCase().includes('docx'));
+}
 
 // ── CV TAB LOADER ────────────────────────────────────────────────────
 var _cfpCvTabLoaded = false;
@@ -12501,7 +12517,7 @@ async function _loadCfpCvTab() {
   try {
     var url = await _resolveFileUrl(cvUrl);
     if (!url) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load CV — check storage bucket</div>'; return; }
-    _renderPdfFrame(inner, url, 'CV');
+    if (_isDocx(cvUrl)) { await _renderDocxFrame(inner, url, 'CV'); } else { _renderPdfFrame(inner, url, 'CV'); }
   } catch(e) {
     inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error: ' + e.message + '</div>';
   }
