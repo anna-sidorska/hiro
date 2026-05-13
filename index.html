@@ -12475,29 +12475,33 @@ async function loadCfpInterviews() {
   }
 }
 
+// ── SHARED PDF LOADER (native browser viewer, no Google Docs) ────────
+async function _resolveFileUrl(rawUrl, bucket) {
+  if (!rawUrl) return null;
+  if (!rawUrl.startsWith('storage:')) return rawUrl;
+  var path = rawUrl.replace('storage:', '');
+  var res = await sb.storage.from(bucket || 'candidate-cvs').createSignedUrl(path, 7200);
+  if (res.error || !res.data?.signedUrl) return null;
+  return res.data.signedUrl;
+}
+function _renderPdfFrame(inner, url, title) {
+  // Use browser-native PDF rendering — instant, no external service
+  inner.innerHTML = '<iframe src="' + url + '#toolbar=1&view=FitH" style="width:100%;height:780px;border:none;display:block;border-radius:var(--r)" title="' + title + '"></iframe>';
+}
+
 // ── CV TAB LOADER ────────────────────────────────────────────────────
 var _cfpCvTabLoaded = false;
 async function _loadCfpCvTab() {
   var inner = document.getElementById('cfp-cv-tab-inner');
   if (!inner || _cfpCvTabLoaded) return;
   _cfpCvTabLoaded = true;
-  var cvUrlEl = document.getElementById('cfp-cv-url-data');
-  var cvUrl = cvUrlEl ? cvUrlEl.dataset.url : null;
+  var cvUrl = (document.getElementById('cfp-cv-url-data') || {}).dataset?.url || null;
   if (!cvUrl) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV on file</div>'; return; }
-  inner.innerHTML = '<div class="spinner"></div>';
+  inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading CV...</div>';
   try {
-    var url = cvUrl;
-    if (cvUrl.startsWith('storage:')) {
-      var path = cvUrl.replace('storage:', '');
-      var res = await sb.storage.from('candidate-cvs').createSignedUrl(path, 7200);
-      if (res.error || !res.data?.signedUrl) {
-        inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load CV — check storage bucket is set up</div>';
-        return;
-      }
-      url = res.data.signedUrl;
-    }
-    var viewerUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=true';
-    inner.innerHTML = '<iframe src="' + viewerUrl + '" style="width:100%;height:780px;border:none;display:block;border-radius:var(--r)" title="CV"></iframe>';
+    var url = await _resolveFileUrl(cvUrl);
+    if (!url) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load CV — check storage bucket</div>'; return; }
+    _renderPdfFrame(inner, url, 'CV');
   } catch(e) {
     inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error: ' + e.message + '</div>';
   }
@@ -12509,23 +12513,13 @@ async function _loadCfpEppTab() {
   var inner = document.getElementById('cfp-epp-tab-inner');
   if (!inner || _cfpEppTabLoaded) return;
   _cfpEppTabLoaded = true;
-  var eppUrlEl = document.getElementById('cfp-epp-url-data');
-  var eppUrl = eppUrlEl ? eppUrlEl.dataset.url : null;
+  var eppUrl = (document.getElementById('cfp-epp-url-data') || {}).dataset?.url || null;
   if (!eppUrl) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No EPP report on file</div>'; return; }
-  inner.innerHTML = '<div class="spinner"></div>';
+  inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading EPP...</div>';
   try {
-    var url = eppUrl;
-    if (eppUrl.startsWith('storage:')) {
-      var path = eppUrl.replace('storage:', '');
-      var res = await sb.storage.from('candidate-cvs').createSignedUrl(path, 7200);
-      if (res.error || !res.data?.signedUrl) {
-        inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load EPP — check storage bucket is set up</div>';
-        return;
-      }
-      url = res.data.signedUrl;
-    }
-    var viewerUrl = 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=true';
-    inner.innerHTML = '<iframe src="' + viewerUrl + '" style="width:100%;height:780px;border:none;display:block;border-radius:var(--r)" title="EPP Report"></iframe>';
+    var url = await _resolveFileUrl(eppUrl);
+    if (!url) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load EPP — check storage bucket</div>'; return; }
+    _renderPdfFrame(inner, url, 'EPP Report');
   } catch(e) {
     inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error: ' + e.message + '</div>';
   }
