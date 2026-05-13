@@ -12252,7 +12252,10 @@ async function openCandidateFullPage(appId) {
   var hasEpp = !!(c.epp_url && _canSee('epp'));
   window._cfpCurrentAppId = appId;
   window._cfpCurrentCandidateId = c.id;
+  window._cfpCurrentCandEmail = c.email || '';
+  window._cfpCurrentRoleId = app.role_id || (app.roles ? app.roles.id : '') || '';
   window._cfpInterviewsLoaded = false;
+  window._cfpSelfSchedSlots = [];
   _cfpCvTabLoaded = false;
   _cfpEppTabLoaded = false;
   rightCol += '<div class="cfp-tab-bar">';
@@ -12425,53 +12428,186 @@ async function loadCfpInterviews() {
   window._cfpInterviewsLoaded = true;
   var el = document.getElementById('cfp-interviews-wrap');
   if (!el) return;
-  var candidateId = window._cfpCurrentCandidateId;
-  var appId = window._cfpCurrentAppId;
+  var candEmail = window._cfpCurrentCandEmail || '';
+  var roleId    = window._cfpCurrentRoleId    || '';
+
+  // ── Self-schedule form ──────────────────────────────────────────
+  var today = new Date().toISOString().split('T')[0];
+  var form =
+    '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:20px">' +
+    '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:12px">Send Self-Schedule Link</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+      '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Interview type</label>' +
+      '<select id="ss-type" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+      '<option>Screening</option><option>Interview 1</option><option>Interview 2</option><option>Final Interview</option><option>Other</option>' +
+      '</select></div>' +
+      '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Duration</label>' +
+      '<select id="ss-duration" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+      '<option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option>' +
+      '</select></div>' +
+    '</div>' +
+    '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Interviewer name</label>' +
+    '<input id="ss-interviewer" type="text" placeholder="e.g. Jane Smith" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;box-sizing:border-box;background:var(--surface);color:var(--text)"></div>' +
+    '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Add time slots</label>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+    '<input id="ss-date" type="date" min="' + today + '" style="flex:1;min-width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+    '<input id="ss-time" type="time" value="10:00" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+    '<button class="btn btn-outline btn-sm" onclick="_cfpAddSlot()">+ Add</button>' +
+    '</div></div>' +
+    '<div id="ss-slot-list" style="margin-bottom:10px"></div>' +
+    '<button class="btn btn-primary btn-sm" onclick="_cfpSendSelfSchedule()">📨 Send Link & Open Outlook</button>' +
+    '<div id="ss-result" style="margin-top:8px;font-size:12px"></div>' +
+    '</div>';
+
+  el.innerHTML = form + '<div id="cfp-confirmed-ivs"><div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading...</div></div>';
+  _cfpLoadConfirmedInterviews();
+}
+
+function _cfpAddSlot() {
+  var d = document.getElementById('ss-date');
+  var t = document.getElementById('ss-time');
+  if (!d || !d.value || !t || !t.value) { toast('Pick a date and time', 'err'); return; }
+  var iso = new Date(d.value + 'T' + t.value + ':00').toISOString();
+  var dt  = new Date(iso);
+  var label = dt.toLocaleDateString('en-GB', {weekday:'short',day:'numeric',month:'short'}) + ' ' + dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+  window._cfpSelfSchedSlots = window._cfpSelfSchedSlots || [];
+  window._cfpSelfSchedSlots.push({iso: iso, label: label});
+  _cfpRenderSlots();
+}
+
+function _cfpRenderSlots() {
+  var el = document.getElementById('ss-slot-list');
+  if (!el) return;
+  var slots = window._cfpSelfSchedSlots || [];
+  el.innerHTML = slots.map(function(s, i) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface);border-radius:var(--r);margin-bottom:4px;font-size:12px">' +
+      '<span style="color:var(--text-2)">' + s.label + '</span>' +
+      '<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:13px;color:var(--red);line-height:1" onclick="window._cfpSelfSchedSlots.splice(' + i + ',1);_cfpRenderSlots()">×</button>' +
+    '</div>';
+  }).join('');
+}
+
+async function _cfpSendSelfSchedule() {
+  var slots = window._cfpSelfSchedSlots || [];
+  if (!slots.length) { toast('Add at least one time slot', 'err'); return; }
+  var candEmail = window._cfpCurrentCandEmail || '';
+  var roleId    = window._cfpCurrentRoleId    || '';
+  var type      = (document.getElementById('ss-type') || {}).value || 'Interview';
+  var duration  = parseInt((document.getElementById('ss-duration') || {}).value) || 60;
+  var ivwer     = (document.getElementById('ss-interviewer') || {}).value || '';
+  var result    = document.getElementById('ss-result');
+  if (result) result.innerHTML = '<span style="color:var(--text-3)">Creating link…</span>';
   try {
-    // Get all applications for this candidate to find their interview history
-    var { data: apps } = await sb.from('applications').select('id, role_id, roles(title)').eq('candidate_id', candidateId);
+    var uid = (await sb.auth.getUser())?.data?.user?.id;
+    var ins = await sb.from('booking_links').insert({
+      role_id: roleId || null,
+      candidate_email: candEmail,
+      interviewer_emails: ivwer,
+      slots: slots,
+      duration_mins: duration,
+      status: 'pending',
+      created_by: uid
+    }).select('id').maybeSingle();
+    if (ins.error) throw new Error(ins.error.message);
+    var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
+    var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
+    var body = encodeURIComponent('Hi,\n\nThank you for your interest. Please use the link below to choose a time that works for you:\n\n' + bookUrl + '\n\nBest regards,\nSovos Talent Acquisition');
+    window.open('mailto:' + candEmail + '?subject=' + subj + '&body=' + body);
+    if (result) result.innerHTML =
+      '<div style="color:var(--green);margin-bottom:6px">✓ Link created — Outlook opening</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(\'' + bookUrl + '\').then(function(){toast(\'Copied\')})">Copy Link</button>' +
+        '<a href="' + bookUrl + '" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px">Preview ↗</a>' +
+      '</div>';
+    window._cfpSelfSchedSlots = [];
+    _cfpRenderSlots();
+    setTimeout(_cfpLoadConfirmedInterviews, 600);
+  } catch(e) {
+    if (result) result.innerHTML = '<div style="color:var(--red)">' + e.message + '</div>';
+  }
+}
+
+async function _cfpLoadConfirmedInterviews() {
+  var el = document.getElementById('cfp-confirmed-ivs');
+  if (!el) return;
+  var candidateId = window._cfpCurrentCandidateId;
+  var candEmail   = window._cfpCurrentCandEmail || '';
+  var now = new Date();
+  try {
+    var { data: apps } = await sb.from('applications').select('id,role_id,roles(title)').eq('candidate_id', candidateId);
     var appIds = (apps||[]).map(function(a){return a.id;});
     var appMap = {};
     (apps||[]).forEach(function(a){ appMap[a.id] = a; });
 
-    var { data: ivs } = await sb.from('interviews')
-      .select('*')
-      .in('application_id', appIds.length ? appIds : ['_none'])
-      .order('scheduled_at', {ascending: false});
+    var [ivRes, blRes] = await Promise.all([
+      sb.from('interviews').select('*').in('application_id', appIds.length ? appIds : ['_none']).order('scheduled_at', {ascending:false}),
+      candEmail ? sb.from('booking_links').select('*').eq('candidate_email', candEmail).order('created_at', {ascending:false}) : Promise.resolve({data:[]})
+    ]);
 
-    var now = new Date();
-    if (!ivs || !ivs.length) {
-      el.innerHTML = '<div class="empty" style="padding:32px 16px"><div class="empty-icon">📅</div><div class="empty-title">No interviews yet</div><div class="empty-sub">Scheduled interviews will appear here</div></div>';
-      return;
+    var ivs = ivRes.data || [];
+    var bls = blRes.data || [];
+    var pendingBls = bls.filter(function(b){ return b.status === 'pending'; });
+    var bookedBls  = bls.filter(function(b){ return b.status === 'booked'; });
+
+    var html = '';
+
+    // Pending links
+    if (pendingBls.length) {
+      html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:8px">Awaiting Candidate Response</div>';
+      html += pendingBls.map(function(bl) {
+        var bookUrl = window.location.origin + window.location.pathname + '?book=' + bl.id;
+        return '<div style="padding:10px 12px;background:var(--surface-2);border-radius:var(--r);margin-bottom:8px;border-left:3px solid var(--amber)">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+            '<span style="font-size:13px;font-weight:600">Self-schedule link sent</span>' +
+            '<span style="font-size:11px;font-weight:600;color:var(--amber)">Pending</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Sent ' + fmtDate(bl.created_at) + ' · ' + (bl.slots||[]).length + ' slot' + ((bl.slots||[]).length===1?'':'s') + ' · ' + bl.duration_mins + ' min</div>' +
+          '<div style="display:flex;gap:6px">' +
+            '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(\'' + bookUrl + '\').then(function(){toast(\'Copied\')})">Copy Link</button>' +
+            '<a href="' + bookUrl + '" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px">Preview ↗</a>' +
+          '</div></div>';
+      }).join('');
     }
-    var statusColor = function(iv) {
-      if (iv.status === 'completed') return 'var(--green)';
-      if (iv.status === 'cancelled') return 'var(--red)';
-      if (new Date(iv.scheduled_at) < now) return 'var(--amber)';
-      return 'var(--brand)';
-    };
-    var statusLabel = function(iv) {
-      if (iv.status === 'completed') return 'Completed';
-      if (iv.status === 'cancelled') return 'Cancelled';
-      if (new Date(iv.scheduled_at) < now) return 'Overdue';
-      return 'Scheduled';
-    };
-    el.innerHTML = ivs.map(function(iv) {
-      var roleTitle = (appMap[iv.application_id]?.roles?.title) || '';
-      var sc = statusColor(iv);
-      var sl = statusLabel(iv);
-      return '<div style="padding:12px 14px;background:var(--surface-2);border-radius:var(--r);margin-bottom:8px;border-left:3px solid ' + sc + '">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
-          '<div style="font-size:13px;font-weight:600">' + (iv.interview_type||'Interview') + (roleTitle ? ' <span style="font-size:11px;font-weight:400;color:var(--text-3)">· ' + roleTitle + '</span>' : '') + '</div>' +
-          '<span style="font-size:11px;font-weight:600;color:' + sc + '">' + sl + '</span>' +
-        '</div>' +
-        '<div style="font-size:12px;color:var(--text-3)">' + fmtDateTime(iv.scheduled_at) + (iv.interviewer_name ? ' · ' + iv.interviewer_name : '') + '</div>' +
-        (iv.notes ? '<div style="margin-top:6px;font-size:12px;color:var(--text-2)">' + iv.notes + '</div>' : '') +
-        (iv.status === 'scheduled' ? '<div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="markInterviewDone(\'' + iv.id + '\',\'' + iv.application_id + '\');window._cfpInterviewsLoaded=false;loadCfpInterviews()">✓ Done</button></div>' : '') +
-      '</div>';
-    }).join('');
+
+    // Confirmed: merge interviews + booked booking_links, sort by date
+    var confirmed = [];
+    bookedBls.forEach(function(bl) {
+      var sel = bl.selected_slot;
+      if (!sel) return;
+      confirmed.push({dt: new Date(sel.iso), type: 'Self-scheduled', interviewer: bl.interviewer_emails||'', status:'scheduled', source:'booking', id:bl.id, roleTitle:''});
+    });
+    ivs.forEach(function(iv) {
+      confirmed.push({dt: new Date(iv.scheduled_at), type: iv.interview_type||iv.type||'Interview', interviewer: iv.interviewer_name||'', notes:iv.notes, status:iv.status, source:'interview', id:iv.id, appId:iv.application_id, roleTitle:(appMap[iv.application_id]?.roles?.title)||''});
+    });
+    confirmed.sort(function(a,b){ return b.dt - a.dt; });
+
+    if (confirmed.length) {
+      html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:8px' + (pendingBls.length?';margin-top:16px':'') + '">Confirmed Interviews</div>';
+      html += confirmed.map(function(iv) {
+        var isCompleted = iv.status === 'completed';
+        var isCancelled = iv.status === 'cancelled';
+        var isFuture    = iv.dt > now;
+        var sc = isCompleted ? 'var(--green)' : isCancelled ? 'var(--red)' : isFuture ? 'var(--brand)' : 'var(--amber)';
+        var sl = isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : isFuture ? 'Confirmed' : 'Overdue';
+        var dateStr = iv.dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'}) + ' · ' + iv.dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+        return '<div style="padding:12px 14px;background:var(--surface-2);border-radius:var(--r);margin-bottom:8px;border-left:3px solid ' + sc + '">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+            '<div style="font-size:13px;font-weight:600">' + iv.type + (iv.roleTitle ? ' <span style="font-size:11px;font-weight:400;color:var(--text-3)">· ' + iv.roleTitle + '</span>' : '') + '</div>' +
+            '<span style="font-size:11px;font-weight:600;color:' + sc + '">' + sl + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-3)">' + dateStr + (iv.interviewer ? ' · ' + iv.interviewer : '') + '</div>' +
+          (iv.notes ? '<div style="margin-top:6px;font-size:12px;color:var(--text-2)">' + iv.notes + '</div>' : '') +
+          (iv.source === 'interview' && iv.status === 'scheduled' ?
+            '<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="markInterviewDone(\'' + iv.id + '\',\'' + iv.appId + '\');_cfpLoadConfirmedInterviews()">✓ Done</button></div>' : '') +
+        '</div>';
+      }).join('');
+    } else if (!pendingBls.length) {
+      html += '<div class="empty" style="padding:32px 16px"><div class="empty-icon">📅</div><div class="empty-title">No interviews yet</div><div class="empty-sub">Send a self-schedule link above</div></div>';
+    }
+
+    el.innerHTML = html;
   } catch(e) {
-    el.innerHTML = '<div style="color:var(--red);font-size:13px;padding:16px">Error loading interviews: ' + (e.message||'unknown') + '</div>';
+    el.innerHTML = '<div style="color:var(--red);font-size:13px;padding:16px">Error: ' + (e.message||'unknown') + '</div>';
   }
 }
 
