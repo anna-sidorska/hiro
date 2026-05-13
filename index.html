@@ -10830,7 +10830,13 @@ async function _outlookSendMail(toEmail, subject, htmlBody) {
 
 // ── CANDIDATE BOOKING PAGE (?book=UUID) ──────────────────────────────────────
 async function _initBookingPage(bookId) {
-  // Override dark-theme body styles for this public light-background page
+  // Inject a scoped style block to fully override dark theme for this light public page
+  var bStyle = document.createElement('style');
+  bStyle.id = 'booking-page-overrides';
+  bStyle.textContent = 'html,body{background:#f8fafc!important;color:#111827!important}' +
+    ':root{--bg:#f8fafc!important;--text:#111827!important;--text-2:#374151!important;--text-3:#6b7280!important;' +
+    '--surface:#ffffff!important;--surface-2:#f1f5f9!important;--border:rgba(0,0,0,0.1)!important}';
+  document.head.appendChild(bStyle);
   document.documentElement.style.setProperty('--text', '#111827');
   document.documentElement.style.setProperty('--text-2', '#374151');
   document.documentElement.style.setProperty('--text-3', '#6b7280');
@@ -10899,12 +10905,13 @@ async function _bookSlot(bookId, slotIndex) {
   document.querySelectorAll('#book-slots button').forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
   const card = document.getElementById('book-card');
   try {
-    const { error } = await sb.from('booking_links').update({
-      status: 'booked',
-      selected_slot: slot,
-      booked_at: new Date().toISOString()
-    }).eq('id', bookId).eq('status', 'pending');
+    // Use security-definer RPC so anon users can book without needing UPDATE permission on booking_links
+    const { data: rpcResult, error } = await sb.rpc('book_interview_slot', {
+      p_booking_id: bookId,
+      p_slot_index: slotIndex
+    });
     if (error) throw new Error(error.message);
+    if (rpcResult && rpcResult.error) throw new Error(rpcResult.error);
     const dt = new Date(slot.iso);
     card.innerHTML = `
       <div style="text-align:center">
