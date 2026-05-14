@@ -13088,7 +13088,7 @@ async function loadCfpCommunications(candidateId, candidateEmail, candidateName,
     '<button class="btn btn-primary" onclick="sendCfpEmail(\'' + candidateId + '\',\'' + candidateEmail + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + appId + '\')">' + (_outlookAccount ? '📧 Send via Outlook' : 'Send Email') + '</button>' +
     '</div>' +
     '<div id="cfp-ics-form" style="display:none;background:var(--surface-2);border-radius:var(--r);padding:12px;margin-top:8px">' +
-    '<div style="font-size:12px;font-weight:600;margin-bottom:10px">Schedule Interview — Download .ICS</div>' +
+    '<div style="font-size:12px;font-weight:600;margin-bottom:10px">Schedule Interview</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
     '<div class="form-group"><label style="font-size:11px">Date</label><input type="date" id="cfp-ics-date" style="width:100%;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit"></div>' +
     '<div class="form-group"><label style="font-size:11px">Time</label><input type="time" id="cfp-ics-time" value="10:00" style="width:100%;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit"></div>' +
@@ -13097,7 +13097,11 @@ async function loadCfpCommunications(candidateId, candidateEmail, candidateName,
     '<div class="form-group"><label style="font-size:11px">Interviewer Name</label><input id="cfp-ics-int-name" placeholder="Interviewer name..." style="width:100%;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit"></div>' +
     '<div class="form-group"><label style="font-size:11px">Interviewer Email</label><input id="cfp-ics-int-email" type="email" placeholder="interviewer@sovos.com" style="width:100%;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit"></div>' +
     '</div>' +
-    '<button class="btn btn-primary btn-sm" onclick="downloadIcsFromCfp(\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + (roleTitle||'').replace(/'/g,"\\'") + '\',\'' + (currentUser?currentUser.email:'') + '\',\'' + recruiterName.replace(/'/g,"\\'") + '\')">Download .ics</button>' +
+    '<div style="display:flex;gap:8px;margin-top:4px">' +
+    '<button class="btn btn-primary btn-sm" id="cfp-ics-book-btn" onclick="bookIcsFromCfp(\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + (roleTitle||'').replace(/'/g,"\\'") + '\',\'' + (currentUser?currentUser.email:'') + '\',\'' + recruiterName.replace(/'/g,"\\'") + '\',\'' + (candidateEmail||'') + '\')">' + (_outlookAccount || localStorage.getItem('hiro_pa_calendar_webhook') ? '📅 Book in Outlook' : '📅 Download .ics') + '</button>' +
+    (_outlookAccount || localStorage.getItem('hiro_pa_calendar_webhook') ? '<button class="btn btn-outline btn-sm" onclick="downloadIcsFromCfp(\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + (roleTitle||'').replace(/'/g,"\\'") + '\',\'' + (currentUser?currentUser.email:'') + '\',\'' + recruiterName.replace(/'/g,"\\'") + '\')">⬇ .ics fallback</button>' : '') +
+    '</div>' +
+    '<div id="cfp-ics-result" style="margin-top:8px;font-size:12px"></div>' +
     '</div>' +
     '</div>';
   // Populate template dropdown now that the DOM is ready
@@ -13617,6 +13621,77 @@ function downloadIcsFromCfp(candidateName, roleTitle, organizerEmail, organizerN
     organizerEmail: organizerEmail,
     organizerName: organizerName
   });
+}
+
+// Book interview directly in Outlook (Graph API or PA webhook), fallback to .ics
+async function bookIcsFromCfp(candidateName, roleTitle, organizerEmail, organizerName, candidateEmail) {
+  var date     = (document.getElementById('cfp-ics-date') || {}).value;
+  var time     = (document.getElementById('cfp-ics-time') || {}).value || '10:00';
+  var duration = parseInt((document.getElementById('cfp-ics-duration') || {}).value || '60');
+  var location = (document.getElementById('cfp-ics-location') || {}).value || '';
+  var intName  = (document.getElementById('cfp-ics-int-name') || {}).value || '';
+  var intEmail = (document.getElementById('cfp-ics-int-email') || {}).value || '';
+  if (!date) { toast('Select a date first', 'err'); return; }
+
+  var btn = document.getElementById('cfp-ics-book-btn');
+  var result = document.getElementById('cfp-ics-result');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Booking…'; }
+
+  var start = new Date(date + 'T' + time + ':00');
+  var end   = new Date(start.getTime() + duration * 60000);
+  var toIso = function(d) { return d.toISOString().replace(/\.\d{3}Z$/, ''); };
+  var subject = 'Interview – ' + candidateName + (roleTitle ? ' · ' + roleTitle : '') + ' at Sovos';
+
+  // Try Graph API first (Option B)
+  if (_outlookAccount) {
+    try {
+      var attendees = [candidateEmail, intEmail].filter(Boolean).join(',');
+      var ok = await _outlookCreateEvent({
+        title: subject,
+        date: date,
+        time: time,
+        durationMins: duration,
+        attendees: attendees,
+        location: location,
+        description: 'Interview with ' + candidateName + (roleTitle ? ' for ' + roleTitle : '') + ' at Sovos.\nOrganised by ' + (organizerName || organizerEmail)
+      });
+      if (ok) {
+        if (result) result.innerHTML = '<div style="color:var(--green)">✓ Calendar invite created and sent via Outlook</div>';
+        if (btn) { btn.textContent = '✓ Booked'; btn.style.background = 'var(--green)'; btn.style.border = 'none'; }
+        return;
+      }
+    } catch(e) { console.warn('Graph booking failed:', e.message); }
+  }
+
+  // Try PA Calendar webhook (Option A)
+  var paWebhook = localStorage.getItem('hiro_pa_calendar_webhook');
+  if (paWebhook) {
+    try {
+      var resp = await fetch(paWebhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_email: candidateEmail,
+          interviewer_email: intEmail,
+          start_datetime: toIso(start),
+          end_datetime: toIso(end),
+          duration_mins: duration,
+          subject: subject,
+          location: location
+        })
+      });
+      if (resp.ok) {
+        if (result) result.innerHTML = '<div style="color:var(--green)">✓ Calendar invite sent via Power Automate</div>';
+        if (btn) { btn.textContent = '✓ Booked'; btn.style.background = 'var(--green)'; btn.style.border = 'none'; }
+        return;
+      }
+    } catch(e) { console.warn('PA calendar webhook failed:', e.message); }
+  }
+
+  // Final fallback — download .ics
+  if (btn) { btn.disabled = false; btn.textContent = '📅 Book in Outlook'; }
+  if (result) result.innerHTML = '<div style="color:var(--amber);font-size:11px">Outlook not connected and no PA webhook set — downloading .ics instead</div>';
+  downloadIcsFromCfp(candidateName, roleTitle, organizerEmail, organizerName);
 }
 
 // ── BACKWARD COMPATIBILITY ──────────────────────────────────────
