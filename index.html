@@ -12479,7 +12479,12 @@ async function loadCfpInterviews() {
   var roleId    = window._cfpCurrentRoleId    || '';
 
   // ── Self-schedule form ──────────────────────────────────────────
-  var today = new Date().toISOString().split('T')[0];
+  var today = new Date();
+  var fromD = new Date(today.getTime() + 86400000).toISOString().slice(0,10);
+  var toD   = new Date(today.getTime() + 14*86400000).toISOString().slice(0,10);
+  var hasCalendar = !!_outlookAccount;
+  var hasWebhook  = !!localStorage.getItem('hiro_pa_slots_webhook');
+  var canFindSlots = hasCalendar || hasWebhook;
   var form =
     '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:20px">' +
     '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:12px">Send Self-Schedule Link</div>' +
@@ -12493,21 +12498,91 @@ async function loadCfpInterviews() {
       '<option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option>' +
       '</select></div>' +
     '</div>' +
-    '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Interviewer name</label>' +
-    '<input id="ss-interviewer" type="text" placeholder="e.g. Jane Smith" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;box-sizing:border-box;background:var(--surface);color:var(--text)"></div>' +
-    '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Add time slots</label>' +
-    '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-    '<input id="ss-date" type="date" min="' + today + '" style="flex:1;min-width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
-    '<input id="ss-time" type="time" value="10:00" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
-    '<button class="btn btn-outline btn-sm" onclick="_cfpAddSlot()">+ Add</button>' +
-    '</div></div>' +
-    '<div id="ss-slot-list" style="margin-bottom:10px"></div>' +
-    '<button class="btn btn-primary btn-sm" onclick="_cfpSendSelfSchedule()">📨 Send Link & Open Outlook</button>' +
+    '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Interviewer email(s)</label>' +
+    '<input id="ss-interviewer" type="text" placeholder="interviewer@sovos.com" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;box-sizing:border-box;background:var(--surface);color:var(--text)"></div>' +
+    (canFindSlots ?
+      // Smart find-slots mode
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
+        '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Search from</label>' +
+        '<input id="ss-from" type="date" value="' + fromD + '" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"></div>' +
+        '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Search to</label>' +
+        '<input id="ss-to" type="date" value="' + toD + '" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"></div>' +
+      '</div>' +
+      '<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="_cfpFindAndBookTab()">⚡ Find Slots & Create Link</button>'
+    :
+      // Manual mode — no calendar connected
+      '<div style="font-size:11px;color:var(--amber);margin-bottom:8px;padding:6px 10px;background:var(--amber-bg);border-radius:var(--r)">Connect Outlook or set up a Find Slots webhook in Settings to auto-find free slots. Or add slots manually:</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+      '<input id="ss-date" type="date" min="' + fromD + '" style="flex:1;min-width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+      '<input id="ss-time" type="time" value="10:00" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+      '<button class="btn btn-outline btn-sm" onclick="_cfpAddSlot()">+ Add</button>' +
+      '</div>' +
+      '<div id="ss-slot-list" style="margin-bottom:10px"></div>' +
+      '<button class="btn btn-primary btn-sm" onclick="_cfpSendSelfSchedule()">📨 Send Link & Open Outlook</button>'
+    ) +
     '<div id="ss-result" style="margin-top:8px;font-size:12px"></div>' +
     '</div>';
 
   el.innerHTML = form + '<div id="cfp-confirmed-ivs"><div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading...</div></div>';
   _cfpLoadConfirmedInterviews();
+}
+
+// Find slots from the Interviews tab (same logic as old panel but reads tab form IDs)
+async function _cfpFindAndBookTab() {
+  var webhook = localStorage.getItem('hiro_pa_slots_webhook');
+  if (!_outlookAccount && !webhook) { toast('Connect Outlook or set up Find Slots webhook in Settings','err'); return; }
+  var attendees = (document.getElementById('ss-interviewer') || {}).value?.trim();
+  if (!attendees) { toast('Enter interviewer email first','err'); return; }
+  var from     = (document.getElementById('ss-from') || {}).value;
+  var to       = (document.getElementById('ss-to') || {}).value;
+  var duration = parseInt((document.getElementById('ss-duration') || {}).value || '60');
+  var type     = (document.getElementById('ss-type') || {}).value || 'Interview';
+  var candEmail = window._cfpCurrentCandEmail || '';
+  var roleId    = window._cfpCurrentRoleId    || '';
+  if (!candEmail) { toast('No candidate email on file','err'); return; }
+  var result = document.getElementById('ss-result');
+  if (result) result.innerHTML = '<div style="color:var(--text-3)">⏳ Checking calendars…</div>';
+  try {
+    var suggestions = [];
+    if (_outlookAccount) {
+      suggestions = await _graphFindMeetingTimes(attendees, duration, from, to);
+    } else {
+      var resp = await fetch(webhook, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({hm_email:attendees,duration_mins:duration,start_date:from,end_date:to}) });
+      if (!resp.ok) throw new Error('Webhook returned ' + resp.status);
+      var data = await resp.json();
+      suggestions = data.meetingTimeSuggestions || [];
+    }
+    if (!suggestions.length) { if (result) result.innerHTML = '<div style="color:var(--amber)">No free slots found — try a wider date window.</div>'; return; }
+    var slots = suggestions.slice(0,8).map(function(s) {
+      var start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone==='UTC'?'Z':''));
+      return { iso: start.toISOString(), label: start.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) };
+    });
+    var uid = (await sb.auth.getUser())?.data?.user?.id;
+    var ins = await sb.from('booking_links').insert({
+      role_id: roleId || null,
+      candidate_email: candEmail,
+      interviewer_emails: attendees,
+      slots: slots,
+      duration_mins: duration,
+      status: 'pending',
+      created_by: uid
+    }).select('id').maybeSingle();
+    if (ins.error) throw new Error(ins.error.message);
+    var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
+    var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
+    var body = encodeURIComponent('Hi,\n\nThank you for your interest in Sovos. Please use the link below to choose your interview time:\n\n' + bookUrl + '\n\nBest regards,\nSovos Talent Acquisition');
+    if (result) result.innerHTML =
+      '<div style="padding:8px 10px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);color:var(--green-text);font-size:12px">' +
+      '✅ Link created with ' + slots.length + ' slots!' +
+      '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">' +
+      '<a href="mailto:' + candEmail + '?subject=' + subj + '&body=' + body + '" class="btn btn-primary btn-sm" style="font-size:11px">📨 Open in Outlook</a>' +
+      '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(\'' + bookUrl.replace(/'/g,"\\'") + '\').then(function(){toast(\'Link copied\')})">Copy Link</button>' +
+      '<a href="' + bookUrl + '" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px">Preview ↗</a>' +
+      '</div></div>';
+    setTimeout(_cfpLoadConfirmedInterviews, 600);
+  } catch(e) {
+    if (result) result.innerHTML = '<div style="color:var(--red)">' + (e.message||'Error finding slots') + '</div>';
+  }
 }
 
 function _cfpAddSlot() {
