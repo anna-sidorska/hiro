@@ -12776,12 +12776,22 @@ async function _cfpLoadConfirmedInterviews() {
       }).join('');
     }
 
+    // Auto-fire calendar invites for booked slots that haven't had one sent yet
+    // Runs silently in background — recruiter doesn't need to click anything
+    bookedBls.forEach(function(bl) {
+      if (!bl.calendar_invite_sent && bl.selected_slot && new Date(bl.selected_slot.iso) > now) {
+        _createInterviewCalendarInvite(bl, { useGraph: true }).then(function(r) {
+          if (r.ok) console.log('Auto-invite sent for booking', bl.id, 'via', r.method);
+        }).catch(function(){});
+      }
+    });
+
     // Confirmed: merge interviews + booked booking_links, sort by date
     var confirmed = [];
     bookedBls.forEach(function(bl) {
       var sel = bl.selected_slot;
       if (!sel) return;
-      confirmed.push({dt: new Date(sel.iso), type: 'Self-scheduled', interviewer: bl.interviewer_emails||'', status:'scheduled', source:'booking', id:bl.id, roleTitle:''});
+      confirmed.push({dt: new Date(sel.iso), type: 'Self-scheduled', interviewer: bl.interviewer_emails||'', status:'scheduled', source:'booking', id:bl.id, roleTitle:'', inviteSent: bl.calendar_invite_sent});
     });
     ivs.forEach(function(iv) {
       confirmed.push({dt: new Date(iv.scheduled_at), type: iv.interview_type||iv.type||'Interview', interviewer: iv.interviewer_name||'', notes:iv.notes, status:iv.status, source:'interview', id:iv.id, appId:iv.application_id, roleTitle:(appMap[iv.application_id]?.roles?.title)||''});
@@ -12806,7 +12816,10 @@ async function _cfpLoadConfirmedInterviews() {
           (iv.notes ? '<div style="margin-top:6px;font-size:12px;color:var(--text-2)">' + iv.notes + '</div>' : '') +
           '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">' +
           (iv.source === 'booking' && isFuture ?
-            '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_cfpSendCalendarInvite(\'' + iv.id + '\',this)">📅 Create Outlook Invite</button>' : '') +
+            (iv.inviteSent
+              ? '<span style="font-size:11px;color:var(--green)">✓ Invite sent</span>'
+              : '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_cfpSendCalendarInvite(\'' + iv.id + '\',this)">📅 Create Outlook Invite</button>')
+            : '') +
           (iv.source === 'interview' && iv.status === 'scheduled' ?
             '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="markInterviewDone(\'' + iv.id + '\',\'' + iv.appId + '\');_cfpLoadConfirmedInterviews()">✓ Done</button>' : '') +
           '</div>' +
