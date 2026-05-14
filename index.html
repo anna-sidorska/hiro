@@ -10562,6 +10562,18 @@ function _settingsRenderIntegrations() {
             '</div>';
         })();
 
+        // PA Calendar Invite webhook
+        html += (function(){
+          var paCalUrl = localStorage.getItem('hiro_pa_calendar_webhook') || '';
+          var calConnected = !!paCalUrl;
+          return '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">📅 Calendar Invite (Option A — works now)</div>' +
+            '<div style="font-size:12px;color:var(--text-3);margin-bottom:8px">Create a PA flow: HTTP trigger → Office 365 "Create event (V4)" with attendees from the JSON body. Hiro sends: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px">{candidate_email, interviewer_email, start_datetime, end_datetime, duration_mins, subject}</code>. Set trigger to "Anyone".</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+            '<input id="int-pa-calendar" type="text" value="' + paCalUrl.replace(/"/g,'&quot;') + '" placeholder="https://...powerplatform.com/.../invoke?..." style="flex:1;padding:6px 10px;border:1.5px solid ' + (calConnected?'var(--green)':'var(--border)') + ';border-radius:var(--r);font-size:12px;font-family:inherit">' +
+            '<button class="btn btn-sm" style="background:#1a56db;color:#fff;border:none;white-space:nowrap" onclick="var v=document.getElementById(\'int-pa-calendar\').value.trim();localStorage.setItem(\'hiro_pa_calendar_webhook\',v);toast(v?\'Calendar webhook saved ✓\':\'Cleared\');_settingsRenderIntegrations()">Save</button>' +
+            '</div>';
+        })();
+
   // Outlook — simple Connect button, credentials are hardcoded org-wide
   var olConnected = !!_outlookAccount;
   html += '<div style="border:1.5px solid ' + (olConnected?'var(--green)':'var(--border)') + ';border-radius:var(--r-lg);padding:14px;margin-bottom:10px;' + (olConnected?'background:var(--green-bg)':'') + '">' +
@@ -10828,6 +10840,73 @@ async function _outlookSendMail(toEmail, subject, htmlBody) {
   return res.ok || res.status === 202;
 }
 
+// ── INTERVIEW CALENDAR INVITE ────────────────────────────────────────────────
+// Creates an Outlook calendar invite for a confirmed booking.
+// Option B (test): calls Graph API directly using recruiter's MSAL token.
+// Option A (PA):   POSTs to hiro_pa_calendar_webhook if configured — used when
+//                  Graph API is unavailable (e.g. no admin consent yet) or from
+//                  the anonymous booking page.
+async function _createInterviewCalendarInvite(booking, { useGraph = true } = {}) {
+  var slot = booking.selected_slot || (booking.slots && booking.slots[0]);
+  if (!slot) return { ok: false, error: 'No slot data' };
+  var start = new Date(slot.iso);
+  var end   = new Date(start.getTime() + (booking.duration_mins || 60) * 60000);
+  var toIso = function(d) { return d.toISOString().replace(/\.\d{3}Z$/, ''); };
+
+  // Option B — Graph API (recruiter's Outlook session)
+  if (useGraph && _outlookAccount) {
+    try {
+      var attendees = [booking.candidate_email, booking.interviewer_emails]
+        .filter(Boolean).join(',');
+      var ok = await _outlookCreateEvent({
+        title: 'Interview at Sovos',
+        date: start.toISOString().slice(0, 10),
+        time: start.toISOString().slice(11, 16),
+        durationMins: booking.duration_mins || 60,
+        attendees: attendees,
+        description: 'Interview scheduled via Hiro self-scheduling.\n\nCandidate: ' + booking.candidate_email,
+        location: 'Microsoft Teams'
+      });
+      if (ok) {
+        // Mark calendar_invite_sent in booking_links
+        try { await sb.from('booking_links').update({ calendar_invite_sent: true }).eq('id', booking.id); } catch(e) {}
+        return { ok: true, method: 'graph' };
+      }
+    } catch(e) {
+      console.warn('Graph calendar invite failed:', e.message);
+    }
+  }
+
+  // Option A — Power Automate webhook fallback
+  var paWebhook = typeof localStorage !== 'undefined' && localStorage.getItem('hiro_pa_calendar_webhook');
+  if (paWebhook) {
+    try {
+      var resp = await fetch(paWebhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_email:   booking.candidate_email,
+          interviewer_email: booking.interviewer_emails || '',
+          start_datetime:    toIso(start),
+          end_datetime:      toIso(end),
+          duration_mins:     booking.duration_mins || 60,
+          subject:           'Interview at Sovos',
+          booking_id:        booking.id
+        })
+      });
+      if (resp.ok) {
+        try { await sb.from('booking_links').update({ calendar_invite_sent: true }).eq('id', booking.id); } catch(e) {}
+        return { ok: true, method: 'pa' };
+      }
+      return { ok: false, error: 'PA webhook returned ' + resp.status };
+    } catch(e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  return { ok: false, error: 'no_method' };
+}
+
 // ── CANDIDATE BOOKING PAGE (?book=UUID) ──────────────────────────────────────
 async function _initBookingPage(bookId) {
   // Inject a scoped style block to fully override dark theme for this light public page
@@ -10913,15 +10992,21 @@ async function _bookSlot(bookId, slotIndex) {
     if (error) throw new Error(error.message);
     if (rpcResult && rpcResult.error) throw new Error(rpcResult.error);
     const dt = new Date(slot.iso);
+    // Attempt to auto-send calendar invite via PA webhook (Option A — works from anon page)
+    const inviteResult = await _createInterviewCalendarInvite(
+      { ...booking, id: bookId, selected_slot: slot },
+      { useGraph: false }  // Graph API not available on anon booking page
+    );
+    const inviteNote = inviteResult.ok
+      ? '<div style="font-size:13px;color:#059669;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">📅 A calendar invite has been sent to <strong>' + booking.candidate_email + '</strong>.</div>'
+      : '<div style="font-size:13px;color:#6b7280;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">The recruitment team has been notified and will send a calendar invite to <strong>' + booking.candidate_email + '</strong> shortly.</div>';
     card.innerHTML = `
       <div style="text-align:center">
         <div style="font-size:48px;margin-bottom:16px">🎉</div>
         <h2 style="font-size:20px;font-weight:700;color:#111827;margin:0 0 8px">You're booked!</h2>
         <div style="font-size:16px;color:#1a56db;font-weight:600;margin-bottom:4px">${dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
-        <div style="font-size:15px;color:#374151;margin-bottom:20px">${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} · ${booking.duration_mins} min</div>
-        <div style="font-size:13px;color:#6b7280;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px">
-          The recruitment team has been notified and will send a calendar invite to <strong>${booking.candidate_email}</strong> shortly.
-        </div>
+        <div style="font-size:15px;color:#374151;margin-bottom:8px">${dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} · ${booking.duration_mins} min</div>
+        ${inviteNote}
       </div>`;
   } catch(e) {
     card.innerHTML = '<div style="color:#dc2626;font-size:14px">Booking failed: ' + (e.message||'unknown') + '. Please contact your recruiter.</div>';
@@ -12719,8 +12804,12 @@ async function _cfpLoadConfirmedInterviews() {
           '</div>' +
           '<div style="font-size:12px;color:var(--text-3)">' + dateStr + (iv.interviewer ? ' · ' + iv.interviewer : '') + '</div>' +
           (iv.notes ? '<div style="margin-top:6px;font-size:12px;color:var(--text-2)">' + iv.notes + '</div>' : '') +
+          '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">' +
+          (iv.source === 'booking' && isFuture ?
+            '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_cfpSendCalendarInvite(\'' + iv.id + '\',this)">📅 Create Outlook Invite</button>' : '') +
           (iv.source === 'interview' && iv.status === 'scheduled' ?
-            '<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="markInterviewDone(\'' + iv.id + '\',\'' + iv.appId + '\');_cfpLoadConfirmedInterviews()">✓ Done</button></div>' : '') +
+            '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="markInterviewDone(\'' + iv.id + '\',\'' + iv.appId + '\');_cfpLoadConfirmedInterviews()">✓ Done</button>' : '') +
+          '</div>' +
         '</div>';
       }).join('');
     } else if (!pendingBls.length) {
@@ -12730,6 +12819,29 @@ async function _cfpLoadConfirmedInterviews() {
     el.innerHTML = html;
   } catch(e) {
     el.innerHTML = '<div style="color:var(--red);font-size:13px;padding:16px">Error: ' + (e.message||'unknown') + '</div>';
+  }
+}
+
+// Called from confirmed interview card — tries Graph API (Option B), falls back to PA (Option A)
+async function _cfpSendCalendarInvite(bookingId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
+  try {
+    var { data: booking } = await sb.from('booking_links').select('*').eq('id', bookingId).maybeSingle();
+    if (!booking) throw new Error('Booking not found');
+    var result = await _createInterviewCalendarInvite(booking, { useGraph: true });
+    if (result.ok) {
+      toast('📅 Calendar invite sent via ' + (result.method === 'graph' ? 'Outlook' : 'Power Automate'), 'ok');
+      if (btn) { btn.textContent = '✓ Invite Sent'; btn.style.background = 'var(--green)'; btn.style.color = '#fff'; btn.style.border = 'none'; }
+      setTimeout(_cfpLoadConfirmedInterviews, 1000);
+    } else if (result.error === 'no_method') {
+      toast('Connect Outlook (Option B) or add PA Calendar webhook in Settings (Option A)', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '📅 Create Outlook Invite'; }
+    } else {
+      throw new Error(result.error);
+    }
+  } catch(e) {
+    toast('Invite failed: ' + (e.message||'unknown'), 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '📅 Create Outlook Invite'; }
   }
 }
 
