@@ -1256,7 +1256,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
 <script>
 // ── PUBLIC PAGE FLAG (eval/booking links — set before EVERYTHING) ──
-const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply'));
+const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply') || new URLSearchParams(window.location.search).get('internal'));
 
 // ── SUPABASE ──────────────────────────────────
 const SUPABASE_URL = 'https://zgecauwahfszpeungbfb.supabase.co';
@@ -1914,6 +1914,9 @@ async function renderDashboard() {
     if (newAppsByRole[a.role_id] !== undefined) newAppsByRole[a.role_id]++;
   });
 
+  // Fetch unreviewed internal candidates for IMPORTANT banner
+  var { data: newInternalCands } = await sb.from('internal_candidates').select('id,first_name,last_name,email,referrer_name,status,created_at').eq('reviewed', false).eq('status','active').order('created_at',{ascending:false});
+
   // Alerts
   var alerts = [];
   needingAttentionCands.forEach(function(cid) {
@@ -2082,6 +2085,30 @@ async function renderDashboard() {
   commissionHtml += '<div style="font-size:12px;color:var(--text-3)">Target: ' + COMMISSION_HIRE_TARGET + ' hires · ' + COMMISSION_TTH_TARGET + ' days avg TTH</div></div>';
   commissionHtml += '</div></div></div>';
 
+  // IMPORTANT: Internal candidates banner (separate from regular alerts, more prominent)
+  var internalBannerHtml = '';
+  if (newInternalCands && newInternalCands.length > 0) {
+    internalBannerHtml = '<div class="card" style="margin-bottom:20px;border:2px solid var(--amber);background:#fffbeb;animation:pulse 2s infinite">' +
+      '<div class="card-header" style="border-bottom:1px solid #fde68a;background:#fef3c7">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex:1">' +
+          '<span style="background:#d97706;color:#fff;font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px;letter-spacing:.5px">🏢 IMPORTANT — INTERNAL CANDIDATES</span>' +
+          '<span style="font-size:12px;color:#92400e;font-weight:600">' + newInternalCands.length + ' new internal application' + (newInternalCands.length !== 1 ? 's' : '') + ' awaiting review</span>' +
+        '</div>' +
+        '<button onclick="nav(\'candidates\',document.getElementById(\'nav-candidates\'));setTimeout(function(){renderInternalPool&&renderInternalPool();},300)" style="background:#d97706;color:#fff;border:none;border-radius:var(--r);padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">View Internal Pool →</button>' +
+      '</div>' +
+      '<div class="card-body">' +
+      newInternalCands.map(function(c) {
+        return '<div style="padding:6px 0;font-size:12px;color:#92400e;border-bottom:1px solid #fde68a;display:flex;align-items:center;gap:8px">' +
+          (c.referrer_name ? '<span style="background:#d97706;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;flex-shrink:0">⭐ Referred</span>' : '<span style="background:#78716c;color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:99px;flex-shrink:0">Self-reg</span>') +
+          '<span style="font-weight:600">' + c.first_name + ' ' + c.last_name + '</span>' +
+          '<span style="color:#a16207">' + c.email + '</span>' +
+          (c.referrer_name ? '<span style="color:#78716c;font-size:11px">referred by ' + c.referrer_name + '</span>' : '') +
+          '<span style="margin-left:auto;color:#a16207;font-size:11px">' + fmtDate(c.created_at) + '</span>' +
+        '</div>';
+      }).join('') +
+      '</div></div>';
+  }
+
   var alertsHtml = '';
   if (alerts.length) {
     alertsHtml = '<div class="card" style="margin-bottom:20px;border:1.5px solid var(--red);background:var(--red-bg)">';
@@ -2117,7 +2144,7 @@ async function renderDashboard() {
     (attentionCount > 0 ? '⚠ ' : '✓ ') + attentionLabel +
     '</div>' +
     '</div>' +
-    kpiRow + commissionHtml + alertsHtml +
+    internalBannerHtml + kpiRow + commissionHtml + alertsHtml +
     '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text);letter-spacing:-.3px">My Open Roles <span class="text-muted" style="font-size:12px;font-weight:400">(' + myRoles.length + ')</span></div>' +
     rolesHtml;
 }
@@ -3127,7 +3154,15 @@ async function quickStageUpdate(appId, stage, selectEl) {
 }
 
 // ── CANDIDATES ────────────────────────────────
+function _candTabBar(activeTab) {
+  return '<div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:0">' +
+    '<button onclick="window._candTab=\'all\';renderCandidates()" style="padding:8px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:' + (activeTab==='all' ? '2px solid var(--brand);color:var(--brand);margin-bottom:-2px' : 'none;color:var(--text-2)') + '">All Candidates</button>' +
+    '<button onclick="window._candTab=\'internal\';renderInternalPool()" style="padding:8px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:' + (activeTab==='internal' ? '2px solid var(--brand);color:var(--brand);margin-bottom:-2px' : 'none;color:var(--text-2)') + '">🏢 Internal Pool</button>' +
+  '</div>';
+}
+
 async function renderCandidates() {
+  window._candTab = 'all';
   _pushHistory('candidates', 'Candidates', renderCandidates);
   document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-primary btn-sm" onclick="openAddCandidateModal()">+ Add Candidate</button>`;
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading candidates...</div>';
@@ -3137,10 +3172,11 @@ async function renderCandidates() {
   const cbadge=document.getElementById('sb-cand-count');
   if(cbadge){if(data.length){cbadge.textContent=data.length;cbadge.style.display='';}else cbadge.style.display='none';}
   if(!data.length){
-    document.getElementById('content').innerHTML=`${renderCvBucket()}<div class="card"><div class="empty"><div class="empty-icon">👤</div><div class="empty-title">No candidates yet</div><div class="empty-sub">Drop a CV above to auto-create a candidate, or add one manually</div><div class="empty-action"><button class="btn btn-primary" onclick="openAddCandidateModal()">+ Add Candidate</button></div></div></div>`;return;
+    document.getElementById('content').innerHTML=`${_candTabBar('all')}${renderCvBucket()}<div class="card"><div class="empty"><div class="empty-icon">👤</div><div class="empty-title">No candidates yet</div><div class="empty-sub">Drop a CV above to auto-create a candidate, or add one manually</div><div class="empty-action"><button class="btn btn-primary" onclick="openAddCandidateModal()">+ Add Candidate</button></div></div></div>`;return;
   }
   const sources=[...new Set(data.map(c=>c.source).filter(Boolean))].sort();
   document.getElementById('content').innerHTML=`
+    ${_candTabBar('all')}
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
       <div style="position:relative;flex:0 0 260px">
         <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -3158,6 +3194,123 @@ async function renderCandidates() {
     </div>
     ${renderCvBucket()}
     <div id="candidates-table-wrap">${renderCandidateTable(data)}</div>`;
+}
+
+async function renderInternalPool() {
+  window._candTab = 'internal';
+  _pushHistory('candidates', 'Candidates', renderCandidates);
+  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openAddCandidateModal()">+ Add Candidate</button>';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading internal pool...</div>';
+
+  var { data: icData, error: icErr } = await sb.from('internal_candidates').select('*').order('created_at', {ascending: false});
+  if (icErr) { toast('Error loading internal pool', 'err'); return; }
+
+  var regLink = window.location.origin + window.location.pathname + '?internal=1';
+  var statusFilter = window._intPoolStatus || '';
+  var searchFilter = (window._intPoolSearch || '').toLowerCase();
+
+  function filterData(d) {
+    if (statusFilter && d.status !== statusFilter) return false;
+    if (searchFilter) {
+      var haystack = ((d.first_name||'') + ' ' + (d.last_name||'') + ' ' + (d.email||'') + ' ' + (d.department||'') + ' ' + (d.current_role||'')).toLowerCase();
+      if (haystack.indexOf(searchFilter) === -1) return false;
+    }
+    return true;
+  }
+
+  var filtered = (icData || []).filter(filterData);
+
+  function statusBadge(status) {
+    if (status === 'active') return '<span class="tag tag-green" style="font-size:10px">Active</span>';
+    if (status === 'hired') return '<span class="tag tag-amber" style="font-size:10px">Hired</span>';
+    return '<span class="tag tag-gray" style="font-size:10px">Inactive</span>';
+  }
+
+  var cardsHtml = '';
+  if (!filtered.length) {
+    cardsHtml = '<div class="empty" style="padding:40px"><div class="empty-icon">🏢</div><div class="empty-title">No internal candidates</div><div class="empty-sub">Share the registration link above with Sovos employees</div></div>';
+  } else {
+    cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:4px 0">';
+    filtered.forEach(function(c) {
+      var initials = ((c.first_name||'?')[0] + (c.last_name||'?')[0]).toUpperCase();
+      var canReactivate = c.status === 'inactive' && c.reactivation_eligible_at && new Date(c.reactivation_eligible_at) < new Date();
+      var skillsSnip = c.skills_interests ? (c.skills_interests.length > 80 ? c.skills_interests.slice(0, 80) + '…' : c.skills_interests) : '';
+      cardsHtml += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow);' + (!c.reviewed ? 'border-left:3px solid #d97706' : '') + '">' +
+        '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px">' +
+          '<div style="width:38px;height:38px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0">' + initials + '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:14px;font-weight:600;letter-spacing:-.2px">' + _escHtml(c.first_name) + ' ' + _escHtml(c.last_name) + '</div>' +
+            '<div style="font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _escHtml(c.email) + '</div>' +
+          '</div>' +
+          statusBadge(c.status) +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
+          (c.department ? '<span class="tag tag-blue" style="font-size:10px">' + _escHtml(c.department) + '</span>' : '') +
+          (c.current_role ? '<span class="tag tag-gray" style="font-size:10px">' + _escHtml(c.current_role) + '</span>' : '') +
+          (c.referrer_name ? '<span class="tag tag-amber" style="font-size:10px">⭐ Referred by ' + _escHtml(c.referrer_name) + '</span>' : '') +
+          (!c.reviewed ? '<span class="tag tag-amber" style="font-size:10px;font-weight:700">NEW</span>' : '') +
+        '</div>' +
+        (skillsSnip ? '<div style="font-size:11px;color:var(--text-2);margin-bottom:10px;line-height:1.4"><strong>Skills:</strong> ' + _escHtml(skillsSnip) + '</div>' : '') +
+        '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Joined pool: ' + fmtDate(c.created_at) + '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:10px;border-top:1px solid var(--border)">' +
+          (!c.reviewed ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_intPoolMarkReviewed(\'' + c.id + '\')">&#10003; Mark Reviewed</button>' : '') +
+          (c.status === 'active' ? '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_intPoolMarkHired(\'' + c.id + '\')">&#127881; Mark Hired</button>' : '') +
+          (c.cv_url ? '<a href="' + _escHtml(c.cv_url) + '" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px">&#128196; View CV</a>' : '') +
+          (canReactivate ? '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_intPoolReactivate(\'' + c.id + '\')">&#8634; Reactivate</button>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    cardsHtml += '</div>';
+  }
+
+  var total = (icData || []).length;
+  var active = (icData || []).filter(function(c){ return c.status === 'active'; }).length;
+  var unreviewed = (icData || []).filter(function(c){ return !c.reviewed && c.status === 'active'; }).length;
+
+  document.getElementById('content').innerHTML =
+    _candTabBar('internal') +
+    '<div style="margin-bottom:16px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+      '<span style="font-size:12px;color:var(--text-2)">&#128279; Share registration link with Sovos employees:</span>' +
+      '<code style="font-size:11px;background:var(--surface-2,#f8fafc);border:1px solid var(--border);padding:4px 8px;border-radius:var(--r);color:var(--brand);flex:1;overflow:auto;white-space:nowrap">' + regLink + '</code>' +
+      '<button class="btn btn-ghost btn-sm" style="font-size:11px;flex-shrink:0" onclick="navigator.clipboard.writeText(\'' + regLink + '\').then(function(){toast(\'Link copied!\')})">Copy</button>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">' +
+      '<input id="int-pool-search" placeholder="Search pool..." value="' + _escHtml(window._intPoolSearch || '') + '" oninput="window._intPoolSearch=this.value;renderInternalPool()" ' +
+        'style="flex:0 0 220px;padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface)">' +
+      '<select id="int-pool-status" onchange="window._intPoolStatus=this.value;renderInternalPool()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface)">' +
+        '<option value="' + (!statusFilter ? '" selected' : '"') + '>All Statuses</option>' +
+        '<option value="active"' + (statusFilter === 'active' ? ' selected' : '') + '>Active</option>' +
+        '<option value="hired"' + (statusFilter === 'hired' ? ' selected' : '') + '>Hired</option>' +
+        '<option value="inactive"' + (statusFilter === 'inactive' ? ' selected' : '') + '>Inactive</option>' +
+      '</select>' +
+      '<span style="font-size:12px;color:var(--text-3);margin-left:auto">' + total + ' total \xB7 ' + active + ' active \xB7 ' + unreviewed + ' unreviewed</span>' +
+    '</div>' +
+    cardsHtml;
+}
+
+async function _intPoolMarkReviewed(id) {
+  var { error } = await sb.from('internal_candidates').update({ reviewed: true, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  toast('Marked as reviewed');
+  renderInternalPool();
+}
+
+async function _intPoolMarkHired(id) {
+  if (!confirm('Mark this candidate as hired? They will be locked for 12 months.')) return;
+  var now = new Date().toISOString();
+  var reactivationDate = new Date(Date.now() + 365 * 86400000).toISOString();
+  var { error } = await sb.from('internal_candidates').update({ status: 'hired', hired_at: now, reactivation_eligible_at: reactivationDate, reviewed: true, updated_at: now }).eq('id', id);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  toast('Candidate marked as hired');
+  renderInternalPool();
+}
+
+async function _intPoolReactivate(id) {
+  var now = new Date().toISOString();
+  var { error } = await sb.from('internal_candidates').update({ status: 'active', reviewed: false, hired_at: null, reactivation_eligible_at: null, updated_at: now }).eq('id', id);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  toast('Candidate reactivated');
+  renderInternalPool();
 }
 
 function renderCandidateTable(data) {
@@ -6784,6 +6937,18 @@ async function submitCandidate() {
   };
   const {data:cand,error:ce}=await sb.from('candidates').insert(candidateData).select().single();
   if(ce){toast('Error: '+ce.message,'err');return;}
+  // Auto-detect @sovos.com email — add to internal pool
+  if(email.toLowerCase().endsWith('@sovos.com')) {
+    var { data: existingInternal } = await sb.from('internal_candidates').select('id').eq('email', email.toLowerCase()).maybeSingle();
+    if (!existingInternal) {
+      await sb.from('internal_candidates').insert({
+        first_name: first, last_name: last, email: email.toLowerCase(),
+        source: 'sovos-application', status: 'active', reviewed: false,
+        linked_candidate_id: cand.id,
+      });
+      toast('Internal Sovos candidate detected — added to Internal Pool');
+    }
+  }
   const roleId=document.getElementById('c-role').value;
   let newAppId = null;
   if(roleId) {
@@ -11020,6 +11185,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const bookId = urlParams.get('book');
   if (bookId) { _initBookingPage(bookId); }
+  // Check for ?internal=1 internal candidate self-registration page
+  const internalReg = urlParams.get('internal');
+  if (internalReg) { _initInternalRegistrationPage(); }
 });
 
 
@@ -12732,6 +12900,164 @@ async function _cfpSendSelfSchedule() {
   } catch(e) {
     if (result) result.innerHTML = '<div style="color:var(--red)">' + e.message + '</div>';
   }
+}
+
+// ── INTERNAL CANDIDATE SELF-REGISTRATION PAGE ─────────────────
+async function _initInternalRegistrationPage() {
+  // Hide the normal app chrome
+  var sidebar = document.getElementById('sidebar');
+  var topbar = document.getElementById('topbar');
+  var mainWrap = document.getElementById('main-wrap') || document.getElementById('app-wrap');
+  if (sidebar) sidebar.style.display = 'none';
+  if (topbar) topbar.style.display = 'none';
+  if (mainWrap) mainWrap.style.cssText = 'margin:0;padding:0;max-width:100%;display:block';
+
+  document.body.style.background = '#f8fafc';
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:#f8fafc;font-family:inherit">
+      <div style="background:var(--sidebar,#1e293b);padding:24px 32px;display:flex;align-items:center;gap:16px">
+        <div style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:20px">🏢</div>
+        <div>
+          <div style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-.3px">Internal Talent Pool</div>
+          <div style="color:rgba(255,255,255,.55);font-size:13px">Register your interest in internal opportunities at Sovos</div>
+        </div>
+      </div>
+      <div style="max-width:620px;margin:40px auto;padding:0 16px">
+        <div id="int-reg-wrap">
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+            <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:4px">Your Profile</div>
+            <div style="font-size:13px;color:#64748b;margin-bottom:24px">Fill in your details so our talent team can match you to future openings.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">First Name <span style="color:#dc2626">*</span></label>
+                <input id="ir-first" placeholder="e.g. Sarah" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Last Name <span style="color:#dc2626">*</span></label>
+                <input id="ir-last" placeholder="e.g. Doucette" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+              </div>
+            </div>
+            <div style="margin-bottom:14px">
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Work Email <span style="color:#dc2626">*</span></label>
+              <input id="ir-email" type="email" placeholder="yourname@sovos.com" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+              <div style="font-size:11px;color:#6b7280;margin-top:4px">Must be a @sovos.com email address</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Department</label>
+                <input id="ir-dept" placeholder="e.g. Finance, Engineering" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Current Role</label>
+                <input id="ir-role" placeholder="e.g. Senior Accountant" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+              </div>
+            </div>
+            <div style="margin-bottom:14px">
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Manager Name</label>
+              <input id="ir-mgr" placeholder="e.g. James Thornton" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+            </div>
+            <div style="margin-bottom:14px">
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Skills &amp; Areas of Interest</label>
+              <textarea id="ir-skills" rows="3" placeholder="e.g. Finance roles, EMEA region, people management..." style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;resize:vertical;box-sizing:border-box"></textarea>
+            </div>
+            <div style="margin-bottom:14px">
+              <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Upload CV (PDF or Word)</label>
+              <input id="ir-cv" type="file" accept=".pdf,.doc,.docx" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+            </div>
+            <div style="margin-bottom:14px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#374151;font-weight:500">
+                <input id="ir-referred-chk" type="checkbox" onchange="document.getElementById('ir-referred-wrap').style.display=this.checked?'block':'none'" style="width:16px;height:16px;cursor:pointer">
+                I was referred by a colleague
+              </label>
+              <div id="ir-referred-wrap" style="display:none;margin-top:10px">
+                <input id="ir-referrer" placeholder="Referrer name" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box;margin-bottom:8px">
+                <input id="ir-referrer-email" type="email" placeholder="Referrer email (optional)" style="width:100%;padding:8px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box">
+              </div>
+            </div>
+            <div id="ir-err" style="display:none;color:#dc2626;font-size:13px;margin-bottom:12px;padding:8px 12px;background:#fef2f2;border-radius:7px;border:1px solid #fecaca"></div>
+            <button onclick="_irSubmit()" style="width:100%;padding:12px;background:#1e293b;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:-.2px" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">Register My Profile</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function _irSubmit() {
+  var first = (document.getElementById('ir-first').value || '').trim();
+  var last = (document.getElementById('ir-last').value || '').trim();
+  var email = (document.getElementById('ir-email').value || '').trim().toLowerCase();
+  var dept = (document.getElementById('ir-dept').value || '').trim() || null;
+  var role = (document.getElementById('ir-role').value || '').trim() || null;
+  var mgr = (document.getElementById('ir-mgr').value || '').trim() || null;
+  var skills = (document.getElementById('ir-skills').value || '').trim() || null;
+  var cvFile = document.getElementById('ir-cv').files[0] || null;
+  var referred = document.getElementById('ir-referred-chk').checked;
+  var referrerName = referred ? ((document.getElementById('ir-referrer').value || '').trim() || null) : null;
+  var referrerEmail = referred ? ((document.getElementById('ir-referrer-email').value || '').trim() || null) : null;
+  var errEl = document.getElementById('ir-err');
+
+  function showErr(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+  errEl.style.display = 'none';
+
+  if (!first || !last || !email) { showErr('First name, last name and email are required.'); return; }
+  if (!email.endsWith('@sovos.com')) { showErr('Please use your Sovos work email (@sovos.com).'); return; }
+
+  var submitBtn = document.querySelector('button[onclick="_irSubmit()"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Registering...'; }
+
+  // Check for duplicate email
+  var { data: existing } = await sb.from('internal_candidates').select('id').eq('email', email).maybeSingle();
+  if (existing) {
+    document.getElementById('int-reg-wrap').innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:40px 32px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)">' +
+      '<div style="font-size:40px;margin-bottom:16px">📋</div>' +
+      '<div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:8px">Already registered</div>' +
+      '<div style="font-size:14px;color:#64748b">Your profile is already in our internal talent pool. We\'ll reach out when a suitable role opens.</div>' +
+      '</div>';
+    return;
+  }
+
+  // Upload CV if provided
+  var cvUrl = null;
+  if (cvFile) {
+    try {
+      var ext = cvFile.name.split('.').pop();
+      var fileName = 'internal-cv-' + Date.now() + '-' + first.toLowerCase() + '-' + last.toLowerCase() + '.' + ext;
+      var { data: uploadData, error: uploadErr } = await sb.storage.from('internal-cvs').upload(fileName, cvFile, { upsert: false });
+      if (!uploadErr && uploadData) {
+        var { data: urlData } = sb.storage.from('internal-cvs').getPublicUrl(fileName);
+        cvUrl = urlData ? urlData.publicUrl : null;
+      }
+    } catch(e) { /* silently skip CV upload errors */ }
+  }
+
+  var { error: insertErr } = await sb.from('internal_candidates').insert({
+    first_name: first,
+    last_name: last,
+    email: email,
+    department: dept,
+    current_role: role,
+    manager_name: mgr,
+    skills_interests: skills,
+    cv_url: cvUrl,
+    referrer_name: referrerName,
+    referrer_email: referrerEmail,
+    source: 'self-registered',
+    status: 'active',
+    reviewed: false,
+  });
+
+  if (insertErr) {
+    showErr('Registration failed: ' + (insertErr.message || 'unknown error. Please try again.'));
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Register My Profile'; }
+    return;
+  }
+
+  document.getElementById('int-reg-wrap').innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:40px 32px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)">' +
+    '<div style="font-size:48px;margin-bottom:16px">✅</div>' +
+    '<div style="font-size:20px;font-weight:700;color:#0f172a;margin-bottom:8px">Profile registered!</div>' +
+    '<div style="font-size:14px;color:#64748b">We\'ll reach out when a suitable role opens. Thank you, ' + first + '!</div>' +
+    '</div>';
 }
 
 async function _cfpLoadConfirmedInterviews() {
