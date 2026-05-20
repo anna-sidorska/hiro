@@ -1179,46 +1179,29 @@ function toggleVoice() {
 }
 
 // ── START ──
-// Load voices async
+// Pre-load voices
 if (window.speechSynthesis) {
-  speechSynthesis.onvoiceschanged = () => {};
   speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = () => {};
 }
 
-document.addEventListener('click', () => { startMusic(); }, { once: true });
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') nextSlide();
   if (e.key === 'ArrowLeft') prevSlide();
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
 });
 
-// Init counter dynamically
+// Init counter and title
 document.getElementById('counter').textContent = '1 / ' + SLIDES.length;
 document.getElementById('slide-title').textContent = SLIDES[0].title;
 
-// Show first callout
+// Show first callout after a moment
 setTimeout(() => {
   const c = document.getElementById('c0');
   if (c) c.classList.add('visible');
 }, 800);
 
-// Browsers block speechSynthesis until a user gesture has occurred.
-// Defer the first narration until the first interaction, then it works
-// for all subsequent slides automatically.
-window._slideStartTime = Date.now();
-resetProgress();
-scheduleNext();
-
-let _speechUnlocked = false;
-function _unlockSpeech() {
-  if (_speechUnlocked) return;
-  _speechUnlocked = true;
-  speak(SLIDES[current].narration);
-  document.removeEventListener('click', _unlockSpeech);
-  document.removeEventListener('keydown', _unlockSpeech);
-}
-document.addEventListener('click', _unlockSpeech, { once: true });
-document.addEventListener('keydown', _unlockSpeech, { once: true });
+// Start paused — Play button starts everything
 </script>
 </body>
 </html>
