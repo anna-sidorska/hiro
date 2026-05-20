@@ -3445,7 +3445,7 @@ async function openInternalProfile(id) {
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;margin-bottom:16px;background:var(--surface-2);border-radius:var(--r);padding:14px">';
     fields.forEach(function(f){ if(!f[1])return; html+='<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:2px">'+f[0]+'</div><div style="font-size:13px;color:var(--text)">'+_escHtml(f[1])+'</div></div>'; });
     html += '</div>';
-    if (c.cv_url) html += '<div style="margin-bottom:14px"><button class="btn btn-outline btn-sm" onclick="viewCv(\''+_escHtml(c.cv_url)+'\',this)">&#128196; View CV</button></div>';
+    if (c.cv_url || c.cv_base64) html += '<div style="margin-bottom:14px"><button class="btn btn-outline btn-sm" onclick="viewCv(\''+_escHtml(c.cv_url||\'base64:inline\')+'\',this)">&#128196; '+(c.cv_filename?_escHtml(c.cv_filename):'View CV')+'</button></div>';
     // Assign section
     html += '<div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px">' +
       '<div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text)">&#127919; Assign to a Role</div>' +
@@ -8746,13 +8746,31 @@ async function viewEpp(eppUrl, btn) {
   if (btn) { btn.disabled = false; btn.textContent = origText; }
 }
 
-// View a CV — generates a 1-hour signed URL for private bucket files
-// Prefixes: storage: → candidate-cvs bucket, istorage: → internal-cvs bucket
+// View a CV — handles base64 inline, storage: (candidate-cvs), istorage: (internal-cvs)
 async function viewCv(cvUrl, btn) {
   if (!cvUrl) return;
   const origText = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   try {
+    // Base64 stored inline in DB — fetch from internal_candidates
+    if (cvUrl === 'base64:inline') {
+      // Find the candidate id from the page context
+      var icId = window._intProfileId;
+      if (icId) {
+        var { data: ic } = await sb.from('internal_candidates').select('cv_base64,cv_filename,cv_mimetype').eq('id', icId).single();
+        if (ic?.cv_base64) {
+          var a = document.createElement('a');
+          a.href = ic.cv_base64;
+          a.download = ic.cv_filename || 'cv.pdf';
+          a.click();
+          if (btn) { btn.disabled = false; btn.textContent = origText; }
+          return;
+        }
+      }
+      toast('CV data not found', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+      return;
+    }
     var url = cvUrl;
     if (cvUrl.startsWith('storage:') || cvUrl.startsWith('istorage:')) {
       const isInternal = cvUrl.startsWith('istorage:');
@@ -13499,30 +13517,29 @@ async function _irSubmit() {
     return;
   }
 
-  // Upload CV to internal-cvs (private bucket) — upsert:false only needs INSERT policy
-  var cvUrl = null;
+  // Read CV as base64 and store directly in DB — no storage bucket needed
+  var cvBase64 = null;
   var cvFilename = null;
+  var cvMimetype = null;
   if (cvFile) {
+    if (cvFile.size > 5 * 1024 * 1024) {
+      showErr('CV file must be under 5MB. Please compress or use a smaller file.');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Register My Profile'; }
+      return;
+    }
     try {
-      var ext = cvFile.name.split('.').pop();
-      var safeName = (first + '-' + last).toLowerCase().replace(/[^a-z0-9]/g, '-');
-      var storagePath = safeName + '-' + Date.now() + '.' + ext;
-      var { data: uploadData, error: uploadErr } = await sb.storage
-        .from('internal-cvs')
-        .upload(storagePath, cvFile, { upsert: false, contentType: cvFile.type || 'application/octet-stream' });
-      if (!uploadErr) {
-        cvUrl = 'istorage:' + storagePath;
-        cvFilename = cvFile.name;
-      } else {
-        // Show error permanently so user can read it — don't block profile submission
-        showErr('⚠ CV upload failed: ' + uploadErr.message + '. Your profile will be saved without the CV. You can ask the TA team to add it manually.');
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Register My Profile (without CV)'; }
-        await new Promise(r => setTimeout(r, 4000));
-        errEl.style.display = 'none';
-        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Registering...'; }
-      }
+      cvBase64 = await new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) { resolve(e.target.result); };
+        reader.onerror = function() { reject(new Error('Could not read file')); };
+        reader.readAsDataURL(cvFile);
+      });
+      cvFilename = cvFile.name;
+      cvMimetype = cvFile.type || 'application/octet-stream';
     } catch(e) {
-      console.warn('CV upload exception:', e.message);
+      showErr('Could not read CV file: ' + e.message);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Register My Profile'; }
+      return;
     }
   }
 
@@ -13534,8 +13551,8 @@ async function _irSubmit() {
     role_title: role,
     manager_name: mgr,
     skills_interests: skills,
-    cv_url: cvUrl,
-    ...(cvFilename ? { cv_filename: cvFilename } : {}),
+    cv_url: cvBase64 ? 'base64:inline' : null,
+    ...(cvBase64 ? { cv_base64: cvBase64, cv_filename: cvFilename, cv_mimetype: cvMimetype } : {}),
     referrer_name: referrerName,
     referrer_email: referrerEmail,
     source: 'self-registered',
