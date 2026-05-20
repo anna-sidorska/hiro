@@ -13296,16 +13296,33 @@ async function _irSubmit() {
 
   // Upload CV if provided
   var cvUrl = null;
+  var cvFilename = null;
   if (cvFile) {
-    try {
-      var ext = cvFile.name.split('.').pop();
-      var fileName = 'internal-cv-' + Date.now() + '-' + first.toLowerCase() + '-' + last.toLowerCase() + '.' + ext;
-      var { data: uploadData, error: uploadErr } = await sb.storage.from('internal-cvs').upload(fileName, cvFile, { upsert: false });
-      if (!uploadErr && uploadData) {
-        var { data: urlData } = sb.storage.from('internal-cvs').getPublicUrl(fileName);
-        cvUrl = urlData ? urlData.publicUrl : null;
+    var ext = cvFile.name.split('.').pop();
+    var fileName = 'internal-cv-' + Date.now() + '-' + first.toLowerCase().replace(/[^a-z0-9]/g,'-') + '-' + last.toLowerCase().replace(/[^a-z0-9]/g,'-') + '.' + ext;
+    // Try candidate-cvs first (already exists), fall back to internal-cvs
+    var buckets = ['candidate-cvs', 'internal-cvs'];
+    for (var bi = 0; bi < buckets.length; bi++) {
+      try {
+        var bucket = buckets[bi];
+        var storagePath = 'internal/' + fileName;
+        var { data: uploadData, error: uploadErr } = await sb.storage.from(bucket).upload(storagePath, cvFile, { upsert: true, contentType: cvFile.type || 'application/octet-stream' });
+        if (!uploadErr) {
+          var { data: urlData } = await sb.storage.from(bucket).createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+          cvUrl = urlData ? urlData.signedUrl : null;
+          cvFilename = cvFile.name;
+          break;
+        } else if (bi === buckets.length - 1) {
+          // Last bucket also failed — warn but don't block submission
+          console.warn('CV upload failed:', uploadErr.message);
+          showErr('CV upload failed: ' + uploadErr.message + '. Your profile will still be submitted without the CV.');
+          await new Promise(r => setTimeout(r, 2000));
+          errEl.style.display = 'none';
+        }
+      } catch(e) {
+        if (bi === buckets.length - 1) console.warn('CV upload exception:', e.message);
       }
-    } catch(e) { /* silently skip CV upload errors */ }
+    }
   }
 
   var { error: insertErr } = await sb.from('internal_candidates').insert({
@@ -13317,6 +13334,7 @@ async function _irSubmit() {
     manager_name: mgr,
     skills_interests: skills,
     cv_url: cvUrl,
+    cv_filename: cvFilename,
     referrer_name: referrerName,
     referrer_email: referrerEmail,
     source: 'self-registered',
