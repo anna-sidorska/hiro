@@ -1692,7 +1692,6 @@ function renderSidebarNav() {
       navHtml += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
       navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
       navHtml += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
-      navHtml += '<button class="sb-item" id="nav-pipeline" onclick="nav(\'pipeline\',this)">' + icon.pipeline + ' Pipeline</button>';
       navHtml += '<button class="sb-item" id="nav-interviews" onclick="nav(\'interviews\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</button>';
     } else {
       navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
@@ -3793,13 +3792,10 @@ async function viewRoleDetail(roleId) {
       <span style="font-size:12px;color:var(--brand);font-weight:600;margin-left:auto">${activeApps.length} active · ${hiredApps.length} hired</span>
     </div>
 
-    <!-- TIMELINE + CONTENT -->
-    <div style="display:grid;grid-template-columns:230px 1fr;gap:16px;align-items:start">
-      <!-- LEFT: VERTICAL TIMELINE -->
-      <div id="rd-timeline" style="position:sticky;top:16px"></div>
-      <!-- RIGHT: STAGE CONTENT -->
-      <div id="rd-stage-content"></div>
-    </div>
+    <!-- HORIZONTAL TAB BAR -->
+    <div id="rd-timeline"></div>
+    <!-- STAGE CONTENT (full width) -->
+    <div id="rd-stage-content" style="margin-top:20px"></div>
   `;
 
   _rdRenderTimeline();
@@ -3850,40 +3846,27 @@ function _rdRenderTimeline() {
   if(!el) return;
   const cur=_rdData._stage||'s1';
   const stages=[
-    {key:'s0', num:0, label:'HR Approval', icon:'✅', sub:'Headcount · Budget · Targets'},
-    {key:'s1', num:1, label:'Intake', icon:'🤝', sub:'Meeting · Form · JD'},
-    {key:'s2', num:2, label:'Post Role', icon:'📢', sub:'Job boards · LinkedIn'},
-    {key:'s3', num:3, label:'Pipeline', icon:'👤', sub:'Source · Review'},
-    {key:'s4', num:4, label:'Interviews', icon:'🗓', sub:'Schedule · Feedback'},
-    {key:'s5', num:5, label:'Offer', icon:'💼', sub:'Offer · Decision'},
-    {key:'s6', num:6, label:'Onboarding', icon:'🚀', sub:'Docs · IT · Payroll'},
+    {key:'s0', label:'HR Approval', icon:'✅'},
+    {key:'s1', label:'Intake', icon:'🤝'},
+    {key:'s2', label:'Post Role', icon:'📢'},
+    {key:'s3', label:'Pipeline', icon:'👤'},
+    {key:'s4', label:'Interviews', icon:'🗓'},
+    {key:'s5', label:'Offer', icon:'💼'},
+    {key:'s6', label:'Onboarding', icon:'🚀'},
   ];
-  const stageCount=(_rdData.apps||[]);
-  el.innerHTML='<div class="card" style="padding:8px 0">'
-    +stages.map((s,i)=>{
+  el.innerHTML=`<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;padding-bottom:0;scrollbar-width:none">`
+    +stages.map(s=>{
       const st=_rdStageStatus(s.key);
       const isActive=s.key===cur;
       const isDone=st==='done';
       const isInProg=st==='active';
-      const circleColor=isDone?'var(--green)':isInProg?'var(--brand)':isActive?'var(--brand)':'var(--surface-3)';
-      const textColor=isDone?'var(--green-text)':isInProg?'var(--brand)':isActive?'var(--brand)':'var(--text-3)';
-      const bg=isActive?'var(--brand-light)':'transparent';
-      const showLine=i<stages.length-1;
-      return `<div>
-        <div onclick="_rdStage('${s.key}')" style="display:flex;align-items:flex-start;gap:12px;padding:10px 16px;cursor:pointer;background:${bg};border-right:${isActive?'3px solid var(--brand)':'3px solid transparent'};transition:background .15s" onmouseover="if('${s.key}'!=='${cur}')this.style.background='var(--surface-2)'" onmouseout="this.style.background='${bg}'">
-          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
-            <div style="width:28px;height:28px;border-radius:50%;background:${circleColor};display:flex;align-items:center;justify-content:center;font-size:${isDone?'13':'12'}px;font-weight:700;color:${isDone?'white':isActive||isInProg?'white':'var(--text-3)'}">
-              ${isDone?'✓':s.num}
-            </div>
-            ${showLine?`<div style="width:2px;height:24px;background:${isDone?'var(--green)':isInProg?'var(--brand)':'var(--border)'};margin-top:2px"></div>`:''}
-          </div>
-          <div style="flex:1;min-width:0;${showLine?'padding-bottom:24px':''}">
-            <div style="font-size:13px;font-weight:700;color:${isActive||isInProg||isDone?'var(--text)':'var(--text-3)'};display:flex;align-items:center;gap:6px">${s.icon} ${s.label}</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:1px">${s.sub}</div>
-            ${isDone?'<span style="font-size:10px;font-weight:600;color:var(--green-text);background:var(--green-bg);padding:1px 6px;border-radius:99px;display:inline-block;margin-top:3px">Complete</span>':isInProg?'<span style="font-size:10px;font-weight:600;color:var(--brand);background:var(--brand-light);padding:1px 6px;border-radius:99px;display:inline-block;margin-top:3px">In progress</span>':''}
-          </div>
-        </div>
-      </div>`;
+      const dot=isDone?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-left:5px;vertical-align:middle"></span>':isInProg?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brand);margin-left:5px;vertical-align:middle"></span>':'';
+      const tabStyle=isActive
+        ?'border-bottom:2px solid var(--brand);color:var(--brand);font-weight:700;background:var(--brand-light)'
+        :'border-bottom:2px solid transparent;color:var(--text-3);font-weight:500';
+      return `<button onclick="_rdStage('${s.key}')" style="display:flex;align-items:center;gap:5px;padding:10px 16px;font-size:13px;background:none;border:none;border-bottom:2px solid ${isActive?'var(--brand)':'transparent'};color:${isActive?'var(--brand)':isDone?'var(--text-2)':'var(--text-3)'};font-weight:${isActive?'700':'500'};cursor:pointer;white-space:nowrap;transition:color .15s;margin-bottom:-1px" onmouseover="if(!${isActive})this.style.color='var(--text)'" onmouseout="if(!${isActive})this.style.color='${isDone?'var(--text-2)':'var(--text-3)'}'">
+        <span>${s.icon}</span><span>${s.label}</span>${dot}
+      </button>`;
     }).join('')
     +'</div>';
 }
@@ -6027,23 +6010,87 @@ async function renderInterviews() {
     .select('*, applications(*, candidates(first_name,last_name), roles(title)), profiles(full_name)')
     .order('scheduled_at',{ascending:true});
   if(error){toast('Error loading interviews','err');return;}
-  const upcoming=data.filter(i=>i.status!=='cancelled'&&new Date(i.scheduled_at)>=new Date());
-  const past=data.filter(i=>i.status!=='cancelled'&&new Date(i.scheduled_at)<new Date());
-  const tableHead=`<thead><tr><th>Candidate</th><th>Role</th><th>Type</th><th>When</th><th>Duration</th><th>Platform</th><th>Interviewer</th><th>Status</th></tr></thead>`;
-  const renderRows=arr=>arr.map(i=>`<tr>
-    <td class="fw-600">${i.applications?.candidates?.first_name||''} ${i.applications?.candidates?.last_name||''}</td>
-    <td>${i.applications?.roles?.title||'—'}</td>
-    <td><span class="tag tag-blue">${i.interview_type||i.type||'Interview'}</span></td>
-    <td>${fmtDateTime(i.scheduled_at)}</td>
-    <td>${i.duration_minutes} min</td>
-    <td>${i.location||'—'}</td>
-    <td>${i.profiles?.full_name||'—'}</td>
-    <td>${i.status==='confirmed'?'<span class="tag tag-green">Confirmed</span>':i.status==='completed'?'<span class="tag tag-gray">Done</span>':i.status==='rescheduled'?'<span class="tag tag-amber">Rescheduled</span>':'<span class="tag tag-blue">Scheduled</span>'}</td>
-  </tr>`).join('');
+  const now=new Date();
+  const upcoming=data.filter(i=>i.status!=='cancelled'&&new Date(i.scheduled_at)>=now).sort((a,b)=>new Date(a.scheduled_at)-new Date(b.scheduled_at));
+  const past=data.filter(i=>i.status!=='cancelled'&&new Date(i.scheduled_at)<now).sort((a,b)=>new Date(b.scheduled_at)-new Date(a.scheduled_at));
+  const awaitingFeedback=past.filter(i=>i.status!=='completed').length;
+
+  const ivTypeColors={'Phone Screen':'tag-blue','Technical':'tag-purple','Competency':'tag-green','Panel':'tag-amber','Final':'tag-red','Culture Fit':'tag-gray'};
+  const ivTypeColor=t=>ivTypeColors[t]||'tag-blue';
+
+  const ivCard=i=>{
+    const c=i.applications?.candidates;
+    const name=`${c?.first_name||'?'} ${c?.last_name||''}`.trim();
+    const role=i.applications?.roles?.title||'—';
+    const dt=i.scheduled_at?new Date(i.scheduled_at):null;
+    const dayStr=dt?dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}):'—';
+    const timeStr=dt?dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+    const isPast=dt&&dt<now;
+    const statusLabel=i.status==='completed'?'Done':i.status==='cancelled'?'Cancelled':isPast?'Needs update':'Scheduled';
+    const statusClass=i.status==='completed'?'tag-green':i.status==='cancelled'?'tag-red':isPast?'tag-amber':'tag-blue';
+    const initials=(c?.first_name||'?').charAt(0)+(c?.last_name||'').charAt(0)||'?';
+    const grads=['linear-gradient(135deg,#6366f1,#a855f7)','linear-gradient(135deg,#0891b2,#06b6d4)','linear-gradient(135deg,#059669,#10b981)','linear-gradient(135deg,#d97706,#f59e0b)','linear-gradient(135deg,#dc2626,#f87171)','linear-gradient(135deg,#7c3aed,#a78bfa)'];
+    const grad=grads[((c?.first_name||'').charCodeAt(0)||(c?.last_name||'').charCodeAt(0))%grads.length];
+    return `<div class="card" style="padding:16px;display:flex;gap:14px;align-items:flex-start;cursor:pointer" onclick="openInterviewModal()">
+      <div style="flex-shrink:0;text-align:center;min-width:52px;padding:8px 10px;border-radius:var(--r);background:var(--brand-light);border:1px solid rgba(0,196,238,.2)">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--brand);letter-spacing:.5px">${dt?dt.toLocaleDateString('en-GB',{weekday:'short'}):'—'}</div>
+        <div style="font-size:22px;font-weight:800;color:var(--brand);line-height:1.1">${dt?dt.getDate():'—'}</div>
+        <div style="font-size:10px;color:var(--text-3)">${dt?dt.toLocaleDateString('en-GB',{month:'short'}):''}</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:50%;background:${grad};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${initials.toUpperCase()}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${name}</div>
+          <span class="tag ${statusClass}" style="font-size:10px;margin-left:auto">${statusLabel}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:6px">${role}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="tag ${ivTypeColor(i.interview_type)}" style="font-size:10px">${i.interview_type||'Interview'}</span>
+          <span style="font-size:12px;color:var(--text-3)">🕐 ${timeStr}${i.duration_minutes?` · ${i.duration_minutes} min`:''}</span>
+          ${i.location?`<span style="font-size:12px;color:var(--text-3)">📍 ${i.location}</span>`:''}
+          ${i.profiles?.full_name?`<span style="font-size:12px;color:var(--text-3)">👤 ${i.profiles.full_name}</span>`:''}
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const tableHead=`<thead><tr><th>Candidate</th><th>Role</th><th>Type</th><th>When</th><th>Duration</th><th>Interviewer</th><th>Status</th></tr></thead>`;
+  const renderPastRows=arr=>arr.slice(0,20).map(i=>{
+    const c=i.applications?.candidates;
+    const isPast=new Date(i.scheduled_at)<now;
+    const statusClass=i.status==='completed'?'tag-green':i.status==='cancelled'?'tag-gray':isPast?'tag-amber':'tag-blue';
+    const statusLabel=i.status==='completed'?'Done':i.status==='cancelled'?'Cancelled':isPast?'Needs update':'Scheduled';
+    return `<tr>
+      <td class="fw-600">${c?.first_name||''} ${c?.last_name||''}</td>
+      <td>${i.applications?.roles?.title||'—'}</td>
+      <td><span class="tag ${ivTypeColor(i.interview_type)}" style="font-size:10px">${i.interview_type||'Interview'}</span></td>
+      <td style="white-space:nowrap">${fmtDateTime(i.scheduled_at)}</td>
+      <td>${i.duration_minutes||60} min</td>
+      <td>${i.profiles?.full_name||'—'}</td>
+      <td><span class="tag ${statusClass}" style="font-size:10px">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+
   document.getElementById('content').innerHTML=`
-    ${upcoming.length?`<div class="card mb-24"><div class="card-header"><div class="card-title">Upcoming (${upcoming.length})</div></div><table>${tableHead}<tbody>${renderRows(upcoming)}</tbody></table></div>`:''}
-    ${past.length?`<div class="card"><div class="card-header"><div class="card-title">Past (${past.length})</div></div><table>${tableHead}<tbody>${renderRows(past)}</tbody></table></div>`:''}
-    ${!data.length?`<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">No interviews yet</div></div></div>`:''}`;
+    <!-- KPI strip -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+      ${[
+        {label:'Total Scheduled',val:data.length,color:'var(--brand)',bg:'var(--brand-light)'},
+        {label:'Upcoming',val:upcoming.length,color:'var(--green)',bg:'var(--green-bg)'},
+        {label:'Completed',val:data.filter(i=>i.status==='completed').length,color:'var(--text-2)',bg:'var(--surface-2)'},
+        {label:'Awaiting Feedback',val:awaitingFeedback,color:'var(--amber)',bg:'var(--amber-bg)'},
+      ].map(s=>`<div style="padding:14px 16px;border-radius:var(--r);background:${s.bg};border:1px solid var(--border)">
+        <div style="font-size:24px;font-weight:800;color:${s.color}">${s.val}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:3px">${s.label}</div>
+      </div>`).join('')}
+    </div>
+    ${upcoming.length?`
+    <div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--brand);margin-bottom:10px">Upcoming · ${upcoming.length}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-bottom:24px">
+      ${upcoming.map(ivCard).join('')}
+    </div>`:''}
+    ${past.length?`<div class="card"><div class="card-header"><div class="card-title">Past Interviews (${past.length})</div></div><table>${tableHead}<tbody>${renderPastRows(past)}</tbody></table></div>`:''}
+    ${!data.length?`<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-title">No interviews yet</div><div class="empty-sub">Schedule your first interview using the button above</div></div></div>`:''}`;
   loadInterviewSelects();
 }
 
