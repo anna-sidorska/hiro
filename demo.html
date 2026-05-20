@@ -697,6 +697,161 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Se
       <div class="callout" id="c7">Week view — see your full interview schedule at a glance, navigate week by week 🗓</div>
     </div>
 
+
+    <!-- SLIDE 9: REPORTS -->
+    <div class="slide" id="slide-8">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div><hr class="msb-sep"><div class="msb-section">Reports</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Reports</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Hiring Dashboard</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Reports</div>
+            <div class="mock-actions"><button class="btn btn-outline" style="font-size:10px">Export CSV</button></div>
+          </div>
+          <div class="mock-content" style="padding:12px">
+            <!-- 7 KPI cards -->
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:12px">
+              <div class="kpi" style="padding:10px 12px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(168,85,247,.15));border:1px solid rgba(99,102,241,.3)"><div class="kpi-val" style="font-size:22px">14</div><div class="kpi-label">Total Candidates</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px">3</div><div class="kpi-label">Open Roles</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px">12</div><div class="kpi-label">Active Apps</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px">1</div><div class="kpi-label">Interviews</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px;color:var(--green)">1</div><div class="kpi-label">Hired (30d)</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px;color:var(--text-3)">0</div><div class="kpi-label">In Offer</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px;color:var(--brand)">12d</div><div class="kpi-label">Avg TTH</div></div>
+            </div>
+            <!-- Two columns -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+              <!-- Weekly Snapshot -->
+              <div class="card" style="padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:12px;font-weight:700">Weekly Snapshot</div><div style="font-size:10px;color:var(--text-3)">Last 7 days</div></div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+                  <div><div style="font-size:20px;font-weight:800;color:var(--brand)">0</div><div style="font-size:10px;color:var(--text-3)">New Candidates</div></div>
+                  <div><div style="font-size:20px;font-weight:800;color:var(--amber)">0</div><div style="font-size:10px;color:var(--text-3)">Offers</div></div>
+                  <div><div style="font-size:20px;font-weight:800;color:var(--green)">0</div><div style="font-size:10px;color:var(--text-3)">Hires</div></div>
+                </div>
+              </div>
+              <!-- Pipeline by Stage -->
+              <div class="card" style="padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:12px;font-weight:700">Pipeline by Stage</div><div style="font-size:10px;color:var(--text-3)">12 active</div></div>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:11px">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Applied</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:75%;height:100%;background:var(--brand);border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">3</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Screening</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:2%;height:100%;background:var(--text-3);border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">0</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Shortlisted</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:75%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">3</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Interview 1</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:#f59e0b;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">4</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Interview 2</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:25%;height:100%;background:#f59e0b;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">1</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Final Int.</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:25%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">1</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Offer</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:2%;height:100%;background:var(--green);border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">0</div></div>
+                </div>
+              </div>
+            </div>
+            <!-- Bottom row -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <!-- Conversion Funnel -->
+              <div class="card" style="padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:12px;font-weight:700">Conversion Funnel</div><div style="font-size:10px;color:var(--text-3)">% stage-to-stage</div></div>
+                <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Applied</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:var(--brand);border-radius:3px"></div></div><div style="width:24px;text-align:right">3</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Screening</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:2%;height:100%;background:var(--text-3);border-radius:3px"></div></div><div style="width:24px;text-align:right;color:var(--red)">0%</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Shortlisted</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:75%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="width:24px;text-align:right">300%</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Interview 1</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:#f59e0b;border-radius:3px"></div></div><div style="width:24px;text-align:right">133%</div></div>
+                </div>
+              </div>
+              <!-- Candidates by Source -->
+              <div class="card" style="padding:14px">
+                <div style="font-size:12px;font-weight:700;margin-bottom:10px">Candidates by Source</div>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:11px">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:60px;color:var(--text-2)">LinkedIn</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:var(--brand);border-radius:3px"></div></div><div style="font-size:10px;color:var(--text-3)">6 (43%)</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:60px;color:var(--text-2)">Referral</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:50%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="font-size:10px;color:var(--text-3)">3 (21%)</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:60px;color:var(--text-2)">Unknown</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:50%;height:100%;background:#6b7280;border-radius:3px"></div></div><div style="font-size:10px;color:var(--text-3)">3 (21%)</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c8">Live pipeline health — stage breakdown, source mix, funnel conversion, all in one view 📊</div>
+    </div>
+
+    <!-- SLIDE 10: HIRING DASHBOARD -->
+    <div class="slide" id="slide-9">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div><hr class="msb-sep"><div class="msb-section">Reports</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Reports</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Hiring Dashboard</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar"><div class="mock-topbar-title">Hiring Dashboard</div></div>
+          <div class="mock-content" style="padding:14px">
+            <!-- Header -->
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:14px">
+                <div style="font-size:13px;font-weight:900;letter-spacing:1px;color:var(--brand)">SOVOS</div>
+                <div>
+                  <div style="font-size:13px;font-weight:700">FY2026 Talent Acquisition Dashboard</div>
+                  <div style="font-size:10px;color:var(--text-3)">Global Talent Acquisition · Onboarding · Learning Development</div>
+                </div>
+              </div>
+              <div style="text-align:right;font-size:10px;color:var(--text-3)">Last updated<br><span style="color:var(--text-2)">20 May 2026 19:37</span></div>
+            </div>
+            <!-- Tabs -->
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">
+              <div style="padding:7px 16px;font-size:12px;font-weight:600;color:var(--brand);border-bottom:2px solid var(--brand);cursor:pointer">Team Overview</div>
+              <div style="padding:7px 16px;font-size:12px;color:var(--text-3);cursor:pointer">By Recruiter</div>
+            </div>
+            <!-- KPI grid 3x2 -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Total Reqs Open</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Open, Not Offered</div>
+                <div style="font-size:36px;font-weight:800;color:var(--brand)">3</div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px"># Hires Pending</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Offered, Not Started</div>
+                <div style="font-size:36px;font-weight:800;color:var(--text-2)">0</div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Aging</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Avg # Days Open (Not Offered)</div>
+                <div style="font-size:36px;font-weight:800;color:var(--brand)">30.0 <span style="font-size:13px;font-weight:400;color:var(--text-3)">Days</span></div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Time to Fill</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Date Req Approved → Date Offered</div>
+                <div style="font-size:36px;font-weight:800;color:var(--brand)">32.5 <span style="font-size:13px;font-weight:400;color:var(--text-3)">Days · Avg TTF</span></div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Offer to Start</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Date Offer Approved → Start Date</div>
+                <div style="font-size:36px;font-weight:800;color:var(--text-3)">— <span style="font-size:13px;font-weight:400">Days</span></div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Time to Start</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Date Req Approved → Start Date</div>
+                <div style="font-size:36px;font-weight:800;color:var(--text-3)">— <span style="font-size:13px;font-weight:400">Days</span></div>
+              </div>
+            </div>
+            <!-- Bottom row -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Roles Open 60–90 Days</div>
+                <div style="font-size:36px;font-weight:800;color:var(--amber)">0</div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Roles Open 91+ Days</div>
+                <div style="font-size:36px;font-weight:800;color:var(--red)">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c9">FY2026 TA Dashboard — req health, time to fill, aging, and offer-to-start tracked for leadership 🎯</div>
+    </div>
+
   </div><!-- /slide-viewport -->
 
   <!-- CONTROLS -->
@@ -720,6 +875,8 @@ const SLIDES = [
   { title:'Candidate Profile', narration:'Every candidate gets a full profile. Lifecycle tracker shows exactly where they are. CV, evaluations, comms, and AI fit score are all one click away.' },
   { title:'Interviews — List View', narration:'The interviews page gives you a full overview. Four KPI cards at the top, with clickable rows to open any interview detail.' },
   { title:'Interviews — Week View', narration:'Switch to the week view for a calendar of your interview schedule. Navigate week by week to plan ahead.' },
+  { title:'Reports', narration:'The reports page gives a live snapshot of your entire pipeline. Pipeline by stage, conversion funnel, source breakdown, and all key metrics in one place.' },
+  { title:'Hiring Dashboard', narration:'The FY2026 Talent Acquisition Dashboard tracks req health across the team. Time to fill, aging roles, pending hires, and offer-to-start — built for TA leadership.' },
 ];
 
 let current = 0;
