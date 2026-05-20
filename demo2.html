@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hiro · Demo</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brand:#00c4ee;--brand-dark:#0099cc;--brand-light:rgba(0,196,238,.12);
+  --sidebar:#07101f;--bg:#07101f;--surface:#0e1b30;--surface-2:#0b1525;--surface-3:#132038;
+  --text:#eef4ff;--text-2:rgba(255,255,255,.62);--text-3:rgba(255,255,255,.38);
+  --border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.15);
+  --brand-gradient:linear-gradient(135deg,#6366f1 0%,#a855f7 50%,#ec4899 100%);
+  --green:#10b981;--green-bg:rgba(16,185,129,.12);--green-text:#34d399;
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.12);--amber-text:#fbbf24;
+  --red:#ef4444;--red-bg:rgba(239,68,68,.12);--red-text:#f87171;
+  --purple:#a855f7;--purple-bg:rgba(168,85,247,.12);
+  --r:8px;
+}
+html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+
+/* ── SHELL ── */
+#demo-shell{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+.mobile-msg{display:none;position:fixed;inset:0;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:32px;z-index:9999}
+@media(max-width:700px){.mobile-msg{display:flex}#demo-shell{display:none!important}}
+
+/* ── HEADER ── */
+.demo-header{height:48px;flex-shrink:0;background:var(--surface-2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:14px;z-index:100}
+.logo-pill{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.logo-circle{width:28px;height:28px;border-radius:9px;background:var(--brand-gradient);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
+.logo-name{font-size:15px;font-weight:800;letter-spacing:-.3px}
+.slide-title{font-size:12px;font-weight:600;color:var(--text-2);flex:1;text-align:center}
+.demo-badge{background:var(--brand);color:#000;font-size:9px;font-weight:700;letter-spacing:.8px;padding:3px 8px;border-radius:99px}
+.progress-dots{display:flex;gap:5px;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--border-strong);cursor:pointer;transition:all .25s}
+.dot.active{background:var(--brand);transform:scale(1.35)}
+.dot:hover:not(.active){background:var(--brand-dark)}
+
+/* ── VIEWPORT ── */
+.slide-viewport{flex:1;position:relative;overflow:hidden}
+.slide{position:absolute;inset:0;opacity:0;transition:opacity .35s ease;pointer-events:none}
+.slide.active{opacity:1;pointer-events:all}
+
+/* ── CONTROLS ── */
+.demo-controls{height:48px;flex-shrink:0;background:var(--surface-2);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:10px;z-index:100}
+.ctrl-btn{background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text-2);padding:5px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
+.ctrl-btn:hover{background:var(--surface);color:var(--brand);border-color:var(--brand)}
+.ctrl-btn.play{background:var(--brand);color:#000;border-color:var(--brand)}
+.ctrl-btn.play:hover{background:var(--brand-dark)}
+.slide-counter{font-size:11px;color:var(--text-3);white-space:nowrap}
+.progress-bar-wrap{flex:1;height:3px;background:var(--border);border-radius:99px;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--brand);border-radius:99px;width:0%;transition:width 6s linear}
+.voice-btn{margin-left:auto;background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text-3);padding:5px 10px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.voice-btn.on{color:var(--brand);border-color:var(--brand)}
+
+/* ── CALLOUT ── */
+@keyframes popIn{from{opacity:0;transform:translateX(16px) scale(.96)}to{opacity:1;transform:translateX(0) scale(1)}}
+.callout{position:absolute;bottom:70px;right:24px;background:var(--brand);color:#000;padding:11px 16px;border-radius:12px;font-size:12px;font-weight:700;max-width:240px;box-shadow:0 6px 28px rgba(0,196,238,.4);animation:popIn .35s ease forwards;z-index:50;line-height:1.45;display:none}
+.callout::before{content:'';position:absolute;left:-7px;top:50%;transform:translateY(-50%);border:7px solid transparent;border-right-color:var(--brand);border-left:none}
+.callout.visible{display:block}
+
+/* ── SHARED MOCK UI ── */
+.app-frame{display:flex;height:100%;background:var(--bg)}
+.mock-sidebar{width:192px;flex-shrink:0;background:var(--sidebar);display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.msb-brand{padding:12px 12px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.msb-logo{width:28px;height:28px;border-radius:9px;background:var(--brand-gradient);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0}
+.msb-name{font-size:13px;font-weight:800;letter-spacing:-.3px}
+.msb-role{font-size:10px;color:var(--text-3)}
+.msb-nav{flex:1;padding:8px 0;overflow-y:auto}
+.msb-section{font-size:9px;font-weight:700;letter-spacing:.8px;color:var(--text-3);padding:10px 14px 4px;text-transform:uppercase}
+.msb-item{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12px;font-weight:500;color:var(--text-2);cursor:pointer;margin:1px 6px;border-radius:6px}
+.msb-item.active{background:linear-gradient(135deg,rgba(0,196,238,.22),rgba(99,102,241,.18));color:#fff;border-left:3px solid var(--brand);font-weight:600;margin-left:3px}
+.msb-item svg{opacity:.7;flex-shrink:0}
+.msb-item.active svg{opacity:1}
+.msb-sep{border:none;border-top:1px solid var(--border);margin:4px 10px}
+.msb-user{padding:10px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.msb-avatar{width:28px;height:28px;border-radius:50%;background:#dc2626;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.mock-main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.mock-topbar{height:46px;flex-shrink:0;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:10px;background:var(--bg)}
+.mock-topbar-title{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.mock-topbar-sub{font-size:11px;color:var(--brand);cursor:pointer}
+.mock-search{flex:1;max-width:280px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:5px 10px;font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.mock-actions{display:flex;gap:6px;margin-left:auto}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:none;font-family:inherit}
+.btn-primary{background:var(--brand);color:#000}
+.btn-outline{background:transparent;border:1px solid var(--border-strong);color:var(--text-2)}
+.btn-danger{background:var(--red-bg);border:1px solid var(--red);color:var(--red-text)}
+.mock-content{flex:1;overflow-y:auto;padding:18px 20px}
+.mock-content::-webkit-scrollbar{width:4px}
+.mock-content::-webkit-scrollbar-thumb{background:var(--border)}
+
+/* ── TAGS ── */
+.tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600}
+.tag-blue{background:rgba(0,196,238,.15);color:var(--brand)}
+.tag-green{background:var(--green-bg);color:var(--green-text)}
+.tag-amber{background:var(--amber-bg);color:var(--amber-text)}
+.tag-red{background:var(--red-bg);color:var(--red-text)}
+.tag-purple{background:var(--purple-bg);color:var(--purple)}
+.tag-gray{background:var(--surface-3);color:var(--text-3)}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden}
+.kpi-val{font-size:28px;font-weight:800;letter-spacing:-1px;color:var(--brand)}
+.kpi-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-top:4px}
+.kpi-sub{font-size:10px;color:var(--brand);margin-top:6px;cursor:pointer}
+.kpi::after{content:'';position:absolute;top:-20px;right:-20px;width:70px;height:70px;border-radius:50%;opacity:.06}
+
+/* ── ROLE DETAIL TABS ── */
+.rd-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto}
+.rd-tab{display:flex;align-items:center;gap:5px;padding:9px 14px;font-size:12px;font-weight:500;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit;margin-bottom:-1px}
+.rd-tab.active{color:var(--brand);font-weight:700;border-bottom-color:var(--brand)}
+.rd-tab .dot-ind{width:5px;height:5px;border-radius:50%;background:var(--brand);display:inline-block}
+
+/* ── ROLE HEADER ── */
+.rd-header{display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid var(--border);margin-bottom:14px;font-size:12px}
+
+/* ── CANDIDATE LAYOUT ── */
+.cfp-grid{display:grid;grid-template-columns:260px 1fr;gap:18px}
+.cfp-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:14px;overflow-x:auto}
+.cfp-tab{padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit;margin-bottom:-1px}
+.cfp-tab.active{color:var(--brand);border-bottom-color:var(--brand)}
+
+/* LIFECYCLE */
+.lifecycle{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;overflow-x:auto}
+.lifecycle-inner{display:flex;align-items:center;gap:0;min-width:max-content}
+.lc-dot{display:flex;flex-direction:column;align-items:center;gap:3px}
+.lc-circle{width:9px;height:9px;border-radius:50%;border:2px solid #e2e8f0;background:transparent}
+.lc-circle.past{border-color:#94a3b8;background:#94a3b8}
+.lc-circle.current{background:var(--amber);border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.2)}
+.lc-label{font-size:9px;font-weight:500;color:#94a3b8;white-space:nowrap}
+.lc-label.current{color:var(--amber);font-weight:700}
+.lc-line{width:40px;height:2px;background:#e2e8f0;margin:0 2px;margin-bottom:11px;flex-shrink:0}
+.lc-line.past{background:#94a3b8}
+
+/* HOME TILES */
+.home-slide{background:var(--bg);display:flex;align-items:center;justify-content:center;height:100%;position:relative;overflow:hidden}
+.home-grid-bg{position:absolute;inset:0;background-image:linear-gradient(rgba(0,196,238,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,196,238,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}
+.home-grid-bg::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 70% at 50% 50%,transparent 20%,var(--bg) 90%)}
+.home-inner{position:relative;z-index:1;text-align:center;max-width:680px;width:100%;padding:0 20px}
+.home-logo{width:64px;height:64px;border-radius:18px;background:var(--brand-gradient);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:26px;font-weight:800;color:#fff;box-shadow:0 8px 32px rgba(99,102,241,.4)}
+.home-title{font-size:34px;font-weight:800;letter-spacing:-1.5px;margin-bottom:6px}
+.home-sub{font-size:13px;color:var(--text-3);margin-bottom:32px}
+.tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:20px;text-align:left;cursor:pointer;transition:all .2s}
+.tile:hover{border-color:rgba(0,196,238,.35);background:var(--surface-2);transform:translateY(-2px)}
+.tile.disabled{opacity:.4;cursor:default}
+.tile-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;color:#fff}
+.tile-label{font-size:14px;font-weight:700;margin-bottom:3px}
+.tile-sub{font-size:11px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="mobile-msg"><h2>Best on desktop</h2><p>Open this demo on a laptop or desktop for the best experience.</p></div>
+
+<div id="demo-shell">
+  <!-- HEADER -->
+  <div class="demo-header">
+    <div class="logo-pill">
+      <div class="logo-circle">Hi</div>
+      <span class="logo-name">Hiro</span>
+    </div>
+    <div class="slide-title" id="slide-title">Home</div>
+    <div class="demo-badge">DEMO</div>
+    <div class="progress-dots" id="dots"></div>
+  </div>
+
+  <!-- SLIDES -->
+  <div class="slide-viewport">
+
+    <!-- SLIDE 1: HOME -->
+    <div class="slide active" id="slide-0">
+      <div class="home-slide">
+        <div class="home-grid-bg"></div>
+        <div class="home-inner">
+          <div class="home-logo">Hi</div>
+          <div class="home-title">Hiro</div>
+          <div class="home-sub">Built by Sovos TA. For Sovos TA.</div>
+          <div class="tile-grid">
+            <div class="tile"><div class="tile-icon" style="background:linear-gradient(135deg,#6366f1,#a855f7)"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div><div class="tile-label">Dashboard</div><div class="tile-sub">My roles &amp; commission</div></div>
+            <div class="tile"><div class="tile-icon" style="background:linear-gradient(135deg,#0891b2,#06b6d4)"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></div><div class="tile-label">Roles</div><div class="tile-sub">Open positions &amp; tracking</div></div>
+            <div class="tile"><div class="tile-icon" style="background:linear-gradient(135deg,#059669,#10b981)"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6m3-3h-6"/></svg></div><div class="tile-label">Candidates</div><div class="tile-sub">Talent pipeline &amp; profiles</div></div>
+            <div class="tile"><div class="tile-icon" style="background:linear-gradient(135deg,#d97706,#f59e0b)"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><div class="tile-label">Interviews</div><div class="tile-sub">Schedule &amp; weekly view</div></div>
+            <div class="tile"><div class="tile-icon" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><div class="tile-label">Reports</div><div class="tile-sub">Analytics &amp; hiring data</div></div>
+            <div class="tile"><div class="tile-icon" style="background:linear-gradient(135deg,#be185d,#f472b6)"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="tile-label">Internal Pool</div><div class="tile-sub">Sovos talent first</div></div>
+          </div>
+        </div>
+        <div class="callout" id="c0">Your TA command centre — everything in one place 🚀</div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: DASHBOARD -->
+    <div class="slide" id="slide-1">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav">
+            <div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div>
+            <hr class="msb-sep">
+            <div class="msb-section">Recruit</div>
+            <div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Roles</div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates <span style="background:var(--brand);color:#000;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;margin-left:4px">14</span></div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div>
+            <div class="msb-section">Manage</div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Tasks</div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> JD Library</div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email Templates</div>
+          </div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Dashboard</div>
+            <div class="mock-search"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search candidates, roles…</div>
+            <div class="mock-actions">
+              <button class="btn btn-outline" style="font-size:10px">My Roles</button>
+              <button class="btn btn-outline" style="font-size:10px">All Roles</button>
+            </div>
+          </div>
+          <div class="mock-content">
+            <!-- greeting -->
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,.18),rgba(168,85,247,.12));border:1px solid rgba(99,102,241,.2);border-radius:12px;padding:16px 20px;margin-bottom:16px">
+              <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">Good evening, Anna ✦</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">Wednesday, 20 May 2026</div>
+              <div style="font-size:12px;font-weight:600;color:var(--amber-text);margin-top:4px">⚠ 11 items needing attention</div>
+            </div>
+            <!-- KPI row -->
+            <div class="kpi-row">
+              <div class="kpi"><div class="kpi-val">2</div><div class="kpi-label">Total open roles</div><div class="kpi-sub">View all →</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:var(--text)">10</div><div class="kpi-label">Active candidates in pipeline</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:var(--green)">33d</div><div class="kpi-label">Avg TTH this quarter</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:var(--red)">9</div><div class="kpi-label">Candidates needing attention</div></div>
+            </div>
+            <!-- commission -->
+            <div style="background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--purple);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+              <div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">💎 Commission Progress — Q2 2026</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+                <div>
+                  <div style="font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Hires this quarter</div>
+                  <div style="font-size:28px;font-weight:800;color:var(--brand)">2 <span style="font-size:13px;color:var(--text-3);font-weight:400">/ 15 target</span></div>
+                  <div style="height:6px;background:var(--surface-3);border-radius:99px;overflow:hidden;margin:7px 0 4px"><div style="width:13%;height:100%;background:var(--brand);border-radius:99px"></div></div>
+                  <div style="font-size:10px;color:var(--text-3)">13% to target — 13 more needed</div>
+                </div>
+                <div>
+                  <div style="font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Avg TTH vs target</div>
+                  <div style="font-size:28px;font-weight:800;color:var(--green)">33d <span style="font-size:13px;color:var(--text-3);font-weight:400">/ 44d target</span></div>
+                  <div style="font-size:11px;color:var(--green-text);font-weight:600;margin-top:8px">✓ On track for commission</div>
+                </div>
+                <div style="background:var(--surface-3);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;justify-content:center">
+                  <div style="font-size:12px;font-weight:700;margin-bottom:3px">📊 13 hires to go</div>
+                  <div style="font-size:10px;color:var(--text-3)">Target: 15 hires · 44 days avg TTH</div>
+                </div>
+              </div>
+            </div>
+            <!-- action needed -->
+            <div style="background:var(--red-bg);border:1.5px solid var(--red);border-radius:10px;padding:10px 14px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">⚠ Action needed</span>
+                <span style="font-size:11px;color:var(--text-3)">11 items requiring attention</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c1">Commission tracker, attention alerts &amp; active roles — all above the fold 👀</div>
+    </div>
+
+    <!-- SLIDE 3: ROLES -->
+    <div class="slide" id="slide-2">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav">
+            <div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep">
+            <div class="msb-section">Recruit</div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</div>
+            <div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Roles</div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates <span style="background:var(--brand);color:#000;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;margin-left:4px">14</span></div>
+            <div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div>
+          </div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Roles</div>
+            <div class="mock-search"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search roles…</div>
+            <div class="mock-actions"><button class="btn btn-outline" style="font-size:10px">All Depts</button><button class="btn btn-outline" style="font-size:10px">All Regions</button><button class="btn btn-primary">+ Add Role</button></div>
+          </div>
+          <div class="mock-content">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--brand);margin-bottom:10px">Open Roles &nbsp;<span style="font-size:14px;font-weight:800">3</span></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
+              <!-- Recruiter -->
+              <div class="card" style="padding:16px;border-top:2px solid var(--brand)">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:14px;font-weight:700">Recruiter</div><span class="tag tag-green">Open</span></div>
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">Talent · EMEA</div>
+                <div style="display:flex;gap:5px;margin-bottom:10px"><span class="tag tag-purple">Remote</span><span class="tag tag-gray">GBP 45k–55k</span></div>
+                <div style="font-size:11px;color:var(--text-2);margin-bottom:4px"><span style="font-weight:600">0</span> candidates &nbsp;·&nbsp; <span style="color:var(--green-text)">8d open</span></div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">HM: Anna Sidorska</div>
+                <div style="display:flex;gap:6px"><button class="btn btn-outline" style="font-size:10px;flex:1">Edit</button><button class="btn btn-primary" style="flex:1">View Role</button></div>
+              </div>
+              <!-- SSE -->
+              <div class="card" style="padding:16px;border-top:2px solid var(--brand)">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:14px;font-weight:700">Senior Software Engineer</div><span class="tag tag-green">Open</span></div>
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">Engineering · EMEA</div>
+                <div style="display:flex;gap:5px;margin-bottom:10px"><span class="tag tag-gray">On-site</span></div>
+                <div style="font-size:11px;color:var(--text-2);margin-bottom:4px"><span style="font-weight:600">1</span> candidates &nbsp;·&nbsp; <span style="color:var(--amber-text)">41d open</span></div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">HM: Anna Sidorska</div>
+                <div style="display:flex;gap:6px"><button class="btn btn-outline" style="font-size:10px;flex:1">Edit</button><button class="btn btn-primary" style="flex:1">View Role</button></div>
+              </div>
+              <!-- BDR -->
+              <div class="card" style="padding:16px;border-top:2px solid var(--amber)">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:14px;font-weight:700">BDR</div><span class="tag tag-green">Open</span></div>
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">Sales · US</div>
+                <div style="display:flex;gap:5px;margin-bottom:10px"><span class="tag tag-purple">Remote</span></div>
+                <div style="font-size:11px;color:var(--text-2);margin-bottom:4px"><span style="font-weight:600">11</span> candidates &nbsp;·&nbsp; <span style="color:var(--amber-text)">41d open</span></div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">HM: Anna Sidorska</div>
+                <div style="display:flex;gap:6px"><button class="btn btn-outline" style="font-size:10px;flex:1">Edit</button><button class="btn btn-primary" style="flex:1">View Role</button></div>
+              </div>
+            </div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px">Filled &nbsp;<span style="font-size:14px;font-weight:800">2</span></div>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+              <div class="card" style="padding:14px;opacity:.7"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;font-weight:700">VAT Consultant</span><span class="tag tag-blue">Filled</span></div><div style="font-size:10px;color:var(--text-3)">Tax · EMEA · 2 candidates</div></div>
+              <div class="card" style="padding:14px;opacity:.7"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;font-weight:700">Sales Engineer</span><span class="tag tag-blue">Filled</span></div><div style="font-size:10px;color:var(--text-3)">Sales · APAC · 2 candidates · HM: Sarah Doucette</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c2">5 roles tracked — open, filled, on hold. Filter by dept, region, status in one click 🎯</div>
+    </div>
+
+    <!-- SLIDE 4: ROLE DETAIL — INTAKE TAB -->
+    <div class="slide" id="slide-3">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">BDR</div>
+            <div class="mock-topbar-sub">← Roles</div>
+            <div class="mock-search" style="max-width:220px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search…</div>
+            <div class="mock-actions"><button class="btn btn-outline" style="font-size:10px">Edit Role</button><button class="btn btn-outline" style="font-size:10px">📄 JD</button><button class="btn btn-primary">+ Candidate</button></div>
+          </div>
+          <div class="mock-content">
+            <!-- role header -->
+            <div class="rd-header">
+              <span style="color:var(--green);font-weight:600">● Open</span>
+              <span style="color:var(--text-2)">Sales</span><span style="color:var(--border)">·</span>
+              <span class="tag tag-blue">US</span>
+              <span class="tag tag-purple">Remote</span>
+              <span style="color:var(--text-2)">HC: 1</span>
+              <span style="color:var(--text-2)">41d open</span>
+              <span style="color:var(--text-2)">HM: Anna Sidorska</span>
+              <span style="margin-left:auto;color:var(--brand);font-weight:600;font-size:11px">9 active · 0 hired</span>
+            </div>
+            <!-- horizontal tabs -->
+            <div class="rd-tabs">
+              <button class="rd-tab">✅ HR Approval <span class="dot-ind"></span></button>
+              <button class="rd-tab active">🤝 Intake <span class="dot-ind"></span></button>
+              <button class="rd-tab">📢 Post Role <span class="dot-ind"></span></button>
+              <button class="rd-tab">👤 Pipeline</button>
+              <button class="rd-tab">🗓 Interviews</button>
+              <button class="rd-tab">💼 Offer</button>
+              <button class="rd-tab">🚀 Onboarding</button>
+            </div>
+            <!-- stage content -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-size:15px;font-weight:700">🤝 Stage 1: Intake</div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <span class="tag tag-green" style="font-size:10px">✓ Meeting</span>
+                <span class="tag tag-green" style="font-size:10px">✓ Intake Form</span>
+                <span class="tag tag-gray" style="font-size:10px">JD Draft</span>
+                <span class="tag tag-green" style="font-size:10px">✓ Approved</span>
+                <button class="btn btn-outline" style="font-size:10px">📋 Paste Transcript</button>
+              </div>
+            </div>
+            <div class="card" style="padding:16px;margin-bottom:12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font-size:12px;font-weight:700">Schedule Intake Meeting</span><span class="tag tag-green" style="font-size:10px">✓ Done</span><button class="btn btn-outline" style="font-size:10px;margin-left:auto">Undo</button></div>
+              <div style="background:var(--brand-light);border:1px solid rgba(0,196,238,.25);border-radius:var(--r);padding:12px;margin-bottom:12px">
+                <div style="font-size:10px;font-weight:700;color:var(--brand);margin-bottom:8px">⚡ Smart Scheduler → Check HM Calendars</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+                  <div><div style="font-size:10px;color:var(--text-3);margin-bottom:3px">From</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:11px">21/05/2026</div></div>
+                  <div><div style="font-size:10px;color:var(--text-3);margin-bottom:3px">To</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:11px">03/06/2026</div></div>
+                  <button class="btn btn-primary" style="font-size:10px">Find Slots</button>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+                <div><div style="font-size:10px;color:var(--text-3);margin-bottom:3px">Date</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:11px">27/05/2026</div></div>
+                <div><div style="font-size:10px;color:var(--text-3);margin-bottom:3px">Time</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:11px">14:30</div></div>
+                <div><div style="font-size:10px;color:var(--text-3);margin-bottom:3px">Duration</div><div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:11px">30 min</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c3">7-stage workflow per role — horizontal tabs, smart scheduler, and progress dots showing status ✨</div>
+    </div>
+
+    <!-- SLIDE 5: ROLE DETAIL — PIPELINE TAB -->
+    <div class="slide" id="slide-4">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">BDR</div>
+            <div class="mock-topbar-sub">← Roles</div>
+            <div class="mock-actions" style="margin-left:auto"><button class="btn btn-outline" style="font-size:10px">✓ Mark Sourcing Active</button><button class="btn btn-primary">+ Candidate</button></div>
+          </div>
+          <div class="mock-content">
+            <div class="rd-header">
+              <span style="color:var(--green);font-weight:600">● Open</span>
+              <span style="color:var(--text-2)">Sales</span><span style="color:var(--border)">·</span>
+              <span class="tag tag-blue">US</span><span class="tag tag-purple">Remote</span>
+              <span style="color:var(--text-2)">HC: 1</span><span style="color:var(--text-2)">41d open</span>
+              <span style="margin-left:auto;color:var(--brand);font-weight:600;font-size:11px">9 active · 0 hired</span>
+            </div>
+            <div class="rd-tabs">
+              <button class="rd-tab">✅ HR Approval <span class="dot-ind"></span></button>
+              <button class="rd-tab">🤝 Intake <span class="dot-ind"></span></button>
+              <button class="rd-tab">📢 Post Role <span class="dot-ind"></span></button>
+              <button class="rd-tab active">👤 Pipeline</button>
+              <button class="rd-tab">🗓 Interviews</button>
+              <button class="rd-tab">💼 Offer</button>
+              <button class="rd-tab">🚀 Onboarding</button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-size:15px;font-weight:700">👤 Stage 3: Pipeline</div>
+            </div>
+            <div class="card" style="padding:16px;margin-bottom:12px">
+              <div style="font-size:12px;font-weight:700;margin-bottom:12px">🔍 Sourcing Tools</div>
+              <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+                <button class="btn btn-outline" style="font-size:10px">🔗 LinkedIn Recruiter →</button>
+                <button class="btn btn-primary" style="font-size:10px">+ Add Candidate</button>
+                <button class="btn btn-outline" style="font-size:10px">Source from Database</button>
+                <button class="btn btn-outline" style="font-size:10px">Find Past Candidates</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px">Target Companies</div>
+                  <div style="font-size:11px;color:var(--text-2);line-height:1.8">– Avalara &amp; other B2B SaaS<br>– Vertex · Thomson Reuters Tax<br>– Taxjar · Workiva<br>– HubSpot · Gartner<br>– Salesforce BDR shops<br>– Fintech / regtech firms</div>
+                </div>
+                <div>
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px">Target Titles</div>
+                  <div style="font-size:11px;color:var(--text-2);line-height:1.8">– Sales Development Representative<br>– Business Development Representative<br>– Outbound Sales Rep<br>– Junior Account Executive</div>
+                </div>
+              </div>
+            </div>
+            <!-- candidate mini-cards -->
+            <div style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px">Active Candidates (9)</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">AS</div>
+                <div><div style="font-size:11px;font-weight:600">Anna Sidorska</div><div style="font-size:10px;color:var(--text-3)">Interview 1</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#0891b2,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">MH</div>
+                <div><div style="font-size:11px;font-weight:600">Marcus Holt</div><div style="font-size:10px;color:var(--text-3)">Screening</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#059669,#10b981);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">TB</div>
+                <div><div style="font-size:11px;font-weight:600">Tom Bradley</div><div style="font-size:10px;color:var(--text-3)">Shortlisted</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">SL</div>
+                <div><div style="font-size:11px;font-weight:600">Sofia López</div><div style="font-size:10px;color:var(--text-3)">Interview 2</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a78bfa);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">JK</div>
+                <div><div style="font-size:11px;font-weight:600">James Kim</div><div style="font-size:10px;color:var(--text-3)">Applied</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#be185d,#f472b6);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">NR</div>
+                <div><div style="font-size:11px;font-weight:600">Nina Reyes</div><div style="font-size:10px;color:var(--text-3)">Shortlisted</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c4">Pipeline tab: sourcing tools, target companies, and all 9 active candidates in view 🎯</div>
+    </div>
+
+    <!-- SLIDE 6: CANDIDATE PROFILE -->
+    <div class="slide" id="slide-5">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Roles</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Anna Sidorska</div>
+            <div class="mock-topbar-sub">← Candidates</div>
+            <div class="mock-search" style="max-width:200px"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search…</div>
+            <div class="mock-actions"><button class="btn btn-danger" style="font-size:10px">✕ Reject</button><button class="btn btn-outline" style="font-size:10px">+ Apply to Role</button><button class="btn btn-outline" style="font-size:10px">✉ Email</button><button class="btn btn-outline" style="font-size:10px">🔗 Eval Link</button></div>
+          </div>
+          <div class="mock-content">
+            <div class="cfp-grid">
+              <!-- LEFT -->
+              <div>
+                <div class="card" style="padding:20px;margin-bottom:10px">
+                  <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+                    <div style="width:48px;height:48px;border-radius:13px;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">AS</div>
+                    <div>
+                      <div style="font-size:15px;font-weight:700;letter-spacing:-.3px">Anna Sidorska</div>
+                      <div style="font-size:11px;color:var(--text-3)">BDR</div>
+                      <div style="margin-top:5px"><span class="tag tag-amber" style="font-size:10px">● Interview 1</span></div>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
+                    <div style="color:var(--brand)">✉ sidorskaa@gmail.com</div>
+                    <div style="color:var(--text-2)">📞 00447000000000</div>
+                    <div style="color:var(--text-2)">📍 United Kingdom</div>
+                    <div style="color:var(--brand)">🔗 LinkedIn Profile</div>
+                  </div>
+                </div>
+                <div class="card" style="padding:14px;margin-bottom:10px">
+                  <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:10px">Details</div>
+                  <div style="display:flex;flex-direction:column;gap:6px;font-size:11px">
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-3)">Notice Period</span><span style="font-weight:600">30 days</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-3)">Salary Expectation</span><span style="font-weight:600">€100,000</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-3)">Source</span><span style="font-weight:600">LinkedIn</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-3)">GDPR Consent</span><span style="color:var(--green-text);font-weight:600">✓ Given</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-3)">Added</span><span>17 Apr 2026</span></div>
+                  </div>
+                  <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:6px">Move Stage</div>
+                    <div style="display:flex;gap:6px">
+                      <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 8px;font-size:11px;color:var(--text-2)">Interview 1 ▾</div>
+                      <button class="btn btn-primary" style="font-size:10px">Save</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- RIGHT -->
+              <div>
+                <div class="lifecycle" style="margin-bottom:12px">
+                  <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px">Lifecycle</div>
+                  <div class="lifecycle-inner">
+                    <div class="lc-dot"><div class="lc-circle past"></div><div class="lc-label">Applied</div></div>
+                    <div class="lc-line past"></div>
+                    <div class="lc-dot"><div class="lc-circle past"></div><div class="lc-label">Screening</div></div>
+                    <div class="lc-line past"></div>
+                    <div class="lc-dot"><div class="lc-circle past"></div><div class="lc-label">Shortlisted</div></div>
+                    <div class="lc-line past"></div>
+                    <div class="lc-dot"><div class="lc-circle current"></div><div class="lc-label current">Interview 1</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Interview 2</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Final Interview</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Offer</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Hired</div></div>
+                  </div>
+                </div>
+                <div class="cfp-tabs">
+                  <button class="cfp-tab active">🧠 EPP</button>
+                  <button class="cfp-tab">📄 CV</button>
+                  <button class="cfp-tab">✉️ Comms</button>
+                  <button class="cfp-tab">📅 Interviews</button>
+                  <button class="cfp-tab">📋 Evaluations</button>
+                  <button class="cfp-tab">⏱ Activity</button>
+                  <button class="cfp-tab">📁 Applications</button>
+                </div>
+                <div style="text-align:center;padding:30px;color:var(--text-3);font-size:12px;background:var(--surface);border-radius:var(--r)">No EPP uploaded for this candidate.<br><span style="font-size:10px">Upload a PDF via the CV tab to auto-generate scores.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c5">Full candidate profile — lifecycle tracker, comms, CV, evaluations and AI fit score in one view 💡</div>
+    </div>
+
+    <!-- SLIDE 7: INTERVIEWS LIST -->
+    <div class="slide" id="slide-6">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Interviews</div>
+            <div class="mock-search"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search…</div>
+            <div class="mock-actions">
+              <button class="btn btn-primary" style="font-size:10px;background:var(--brand)">☰ List</button>
+              <button class="btn btn-outline" style="font-size:10px">📅 Week</button>
+              <button class="btn btn-primary">+ Schedule Interview</button>
+            </div>
+          </div>
+          <div class="mock-content">
+            <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)">
+              <div class="kpi"><div class="kpi-val">1</div><div class="kpi-label">Total Scheduled</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:var(--green)">0</div><div class="kpi-label">Upcoming</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:var(--text-2)">0</div><div class="kpi-label">Completed</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:var(--amber)">1</div><div class="kpi-label">Awaiting Feedback</div></div>
+            </div>
+            <div class="card">
+              <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700">Past Interviews (1)</div>
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr style="background:var(--surface-2)"><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Candidate</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Role</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Type</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">When</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Duration</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Interviewer</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Status</th></tr></thead>
+                <tbody>
+                  <tr style="cursor:pointer;border-top:1px solid var(--border)">
+                    <td style="padding:10px 12px;font-weight:600;font-size:12px">Test Test</td>
+                    <td style="padding:10px 12px;font-size:12px">BDR</td>
+                    <td style="padding:10px 12px"><span class="tag tag-blue" style="font-size:10px">Interview</span></td>
+                    <td style="padding:10px 12px;font-size:11px;white-space:nowrap">09 Apr, 10:30</td>
+                    <td style="padding:10px 12px;font-size:11px">30 min</td>
+                    <td style="padding:10px 12px;font-size:11px">Anna Sidorska</td>
+                    <td style="padding:10px 12px"><span class="tag tag-amber" style="font-size:10px">Needs update</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c6">All interviews in one place — KPI summary, click any row to open details, switch to week view 📅</div>
+    </div>
+
+    <!-- SLIDE 8: INTERVIEWS WEEK VIEW -->
+    <div class="slide" id="slide-7">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Interviews</div>
+            <div class="mock-search"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search…</div>
+            <div class="mock-actions">
+              <button class="btn btn-outline" style="font-size:10px">☰ List</button>
+              <button class="btn btn-primary" style="font-size:10px">📅 Week</button>
+              <button class="btn btn-primary">+ Schedule Interview</button>
+            </div>
+          </div>
+          <div class="mock-content">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <button class="btn btn-outline" style="font-size:11px">← Prev</button>
+              <div style="flex:1;text-align:center;font-size:13px;font-weight:600">18 May — 24 May</div>
+              <button class="btn btn-outline" style="font-size:11px">Next →</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Mon</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">18</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Tue</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">19</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--brand-light,rgba(0,196,238,.08));border-radius:var(--r);border:1px solid rgba(0,196,238,.35);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--brand);text-align:center;margin-bottom:3px">Wed</div>
+                <div style="font-size:22px;font-weight:800;color:var(--brand);text-align:center;margin-bottom:8px">20</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Thu</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">21</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Fri</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">22</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Sat</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">23</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Sun</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">24</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+            </div>
+            <div style="margin-top:16px;padding:12px 16px;background:var(--surface-2);border-radius:var(--r);font-size:11px;color:var(--text-3);text-align:center">No interviews this week yet. <span style="color:var(--brand);cursor:pointer">+ Schedule one →</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c7">Week view — see your full interview schedule at a glance, navigate week by week 🗓</div>
+    </div>
+
+
+    <!-- SLIDE 9: REPORTS -->
+    <div class="slide" id="slide-8">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div><hr class="msb-sep"><div class="msb-section">Reports</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Reports</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Hiring Dashboard</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Reports</div>
+            <div class="mock-actions"><button class="btn btn-outline" style="font-size:10px">Export CSV</button></div>
+          </div>
+          <div class="mock-content" style="padding:12px">
+            <!-- 7 KPI cards -->
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:12px">
+              <div class="kpi" style="padding:10px 12px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(168,85,247,.15));border:1px solid rgba(99,102,241,.3)"><div class="kpi-val" style="font-size:22px">14</div><div class="kpi-label">Total Candidates</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px">3</div><div class="kpi-label">Open Roles</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px">12</div><div class="kpi-label">Active Apps</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px">1</div><div class="kpi-label">Interviews</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px;color:var(--green)">1</div><div class="kpi-label">Hired (30d)</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px;color:var(--text-3)">0</div><div class="kpi-label">In Offer</div></div>
+              <div class="kpi" style="padding:10px 12px"><div class="kpi-val" style="font-size:22px;color:var(--brand)">12d</div><div class="kpi-label">Avg TTH</div></div>
+            </div>
+            <!-- Two columns -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+              <!-- Weekly Snapshot -->
+              <div class="card" style="padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:12px;font-weight:700">Weekly Snapshot</div><div style="font-size:10px;color:var(--text-3)">Last 7 days</div></div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+                  <div><div style="font-size:20px;font-weight:800;color:var(--brand)">0</div><div style="font-size:10px;color:var(--text-3)">New Candidates</div></div>
+                  <div><div style="font-size:20px;font-weight:800;color:var(--amber)">0</div><div style="font-size:10px;color:var(--text-3)">Offers</div></div>
+                  <div><div style="font-size:20px;font-weight:800;color:var(--green)">0</div><div style="font-size:10px;color:var(--text-3)">Hires</div></div>
+                </div>
+              </div>
+              <!-- Pipeline by Stage -->
+              <div class="card" style="padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:12px;font-weight:700">Pipeline by Stage</div><div style="font-size:10px;color:var(--text-3)">12 active</div></div>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:11px">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Applied</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:75%;height:100%;background:var(--brand);border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">3</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Screening</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:2%;height:100%;background:var(--text-3);border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">0</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Shortlisted</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:75%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">3</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Interview 1</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:#f59e0b;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">4</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Interview 2</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:25%;height:100%;background:#f59e0b;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">1</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Final Int.</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:25%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">1</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:55px;color:var(--text-2)">Offer</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:2%;height:100%;background:var(--green);border-radius:3px"></div></div><div style="width:16px;text-align:right;font-weight:600">0</div></div>
+                </div>
+              </div>
+            </div>
+            <!-- Bottom row -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <!-- Conversion Funnel -->
+              <div class="card" style="padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:12px;font-weight:700">Conversion Funnel</div><div style="font-size:10px;color:var(--text-3)">% stage-to-stage</div></div>
+                <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Applied</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:var(--brand);border-radius:3px"></div></div><div style="width:24px;text-align:right">3</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Screening</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:2%;height:100%;background:var(--text-3);border-radius:3px"></div></div><div style="width:24px;text-align:right;color:var(--red)">0%</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Shortlisted</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:75%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="width:24px;text-align:right">300%</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:70px;color:var(--text-2)">Interview 1</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:#f59e0b;border-radius:3px"></div></div><div style="width:24px;text-align:right">133%</div></div>
+                </div>
+              </div>
+              <!-- Candidates by Source -->
+              <div class="card" style="padding:14px">
+                <div style="font-size:12px;font-weight:700;margin-bottom:10px">Candidates by Source</div>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:11px">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:60px;color:var(--text-2)">LinkedIn</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:100%;height:100%;background:var(--brand);border-radius:3px"></div></div><div style="font-size:10px;color:var(--text-3)">6 (43%)</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:60px;color:var(--text-2)">Referral</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:50%;height:100%;background:#a855f7;border-radius:3px"></div></div><div style="font-size:10px;color:var(--text-3)">3 (21%)</div></div>
+                  <div style="display:flex;align-items:center;gap:8px"><div style="width:60px;color:var(--text-2)">Unknown</div><div style="flex:1;background:var(--surface-2);border-radius:3px;height:6px"><div style="width:50%;height:100%;background:#6b7280;border-radius:3px"></div></div><div style="font-size:10px;color:var(--text-3)">3 (21%)</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c8">Live pipeline health — stage breakdown, source mix, funnel conversion, all in one view 📊</div>
+    </div>
+
+    <!-- SLIDE 10: HIRING DASHBOARD -->
+    <div class="slide" id="slide-9">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg> Candidates</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</div><hr class="msb-sep"><div class="msb-section">Reports</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Reports</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Hiring Dashboard</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar"><div class="mock-topbar-title">Hiring Dashboard</div></div>
+          <div class="mock-content" style="padding:14px">
+            <!-- Header -->
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:14px">
+                <div style="font-size:13px;font-weight:900;letter-spacing:1px;color:var(--brand)">SOVOS</div>
+                <div>
+                  <div style="font-size:13px;font-weight:700">FY2026 Talent Acquisition Dashboard</div>
+                  <div style="font-size:10px;color:var(--text-3)">Global Talent Acquisition · Onboarding · Learning Development</div>
+                </div>
+              </div>
+              <div style="text-align:right;font-size:10px;color:var(--text-3)">Last updated<br><span style="color:var(--text-2)">20 May 2026 19:37</span></div>
+            </div>
+            <!-- Tabs -->
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">
+              <div style="padding:7px 16px;font-size:12px;font-weight:600;color:var(--brand);border-bottom:2px solid var(--brand);cursor:pointer">Team Overview</div>
+              <div style="padding:7px 16px;font-size:12px;color:var(--text-3);cursor:pointer">By Recruiter</div>
+            </div>
+            <!-- KPI grid 3x2 -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Total Reqs Open</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Open, Not Offered</div>
+                <div style="font-size:36px;font-weight:800;color:var(--brand)">3</div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px"># Hires Pending</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Offered, Not Started</div>
+                <div style="font-size:36px;font-weight:800;color:var(--text-2)">0</div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Aging</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Avg # Days Open (Not Offered)</div>
+                <div style="font-size:36px;font-weight:800;color:var(--brand)">30.0 <span style="font-size:13px;font-weight:400;color:var(--text-3)">Days</span></div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Time to Fill</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Date Req Approved → Date Offered</div>
+                <div style="font-size:36px;font-weight:800;color:var(--brand)">32.5 <span style="font-size:13px;font-weight:400;color:var(--text-3)">Days · Avg TTF</span></div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Offer to Start</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Date Offer Approved → Start Date</div>
+                <div style="font-size:36px;font-weight:800;color:var(--text-3)">— <span style="font-size:13px;font-weight:400">Days</span></div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Average Time to Start</div>
+                <div style="font-size:10px;color:var(--text-3);margin-bottom:10px">Date Req Approved → Start Date</div>
+                <div style="font-size:36px;font-weight:800;color:var(--text-3)">— <span style="font-size:13px;font-weight:400">Days</span></div>
+              </div>
+            </div>
+            <!-- Bottom row -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Roles Open 60–90 Days</div>
+                <div style="font-size:36px;font-weight:800;color:var(--amber)">0</div>
+              </div>
+              <div class="card" style="padding:16px">
+                <div style="font-size:11px;font-weight:600;margin-bottom:4px">Roles Open 91+ Days</div>
+                <div style="font-size:36px;font-weight:800;color:var(--red)">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c9">FY2026 TA Dashboard — req health, time to fill, aging, and offer-to-start tracked for leadership 🎯</div>
+    </div>
+
+
+    <!-- SLIDE 11: ROLES TRACKER -->
+    <div class="slide" id="slide-10">
+      <div class="app-frame">
+        <div class="mock-sidebar">
+          <div class="msb-brand"><div class="msb-logo">Hi</div><div><div class="msb-name">Hiro</div><div class="msb-role">TA OPS</div></div></div>
+          <div class="msb-nav"><div class="msb-item" style="margin:5px 6px 3px;border-radius:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</div><hr class="msb-sep"><div class="msb-section">Recruit</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/></svg> Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/></svg> Roles</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/></svg> Candidates</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/></svg> Interviews</div><hr class="msb-sep"><div class="msb-section">Reports</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Reports</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/></svg> Hiring Dashboard</div><div class="msb-item"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/></svg> Recruiter Stats</div><div class="msb-item active"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> Roles Tracker</div></div>
+          <div class="msb-user"><div class="msb-avatar">AS</div><div><div style="font-size:11px;font-weight:600">Anna S.</div><div style="font-size:9px;color:var(--text-3)">admin</div></div></div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-topbar">
+            <div class="mock-topbar-title">Roles Tracker</div>
+            <div class="mock-actions"><button class="btn btn-primary" style="font-size:10px">+ Add Role</button></div>
+          </div>
+          <div class="mock-content" style="padding:14px">
+            <div style="margin-bottom:10px">
+              <div style="font-size:15px;font-weight:700;margin-bottom:3px">Roles Tracker</div>
+              <div style="font-size:11px;color:var(--text-3)">Live overview of all open roles · Click a row to open · Click recruiter to reassign</div>
+            </div>
+            <!-- Filters -->
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+              <input placeholder="Search title, notes..." style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:11px;background:var(--surface);color:var(--text);width:160px">
+              <select style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:11px;background:var(--surface);color:var(--text)"><option>All Statuses</option></select>
+              <select style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:11px;background:var(--surface);color:var(--text)"><option>All Regions</option></select>
+              <select style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:11px;background:var(--surface);color:var(--text)"><option>All Recruiters</option></select>
+              <select style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:11px;background:var(--surface);color:var(--text)"><option>All Aging</option></select>
+              <span style="font-size:11px;color:var(--text-3)">5 roles</span>
+            </div>
+            <!-- Table -->
+            <div class="card" style="padding:0;overflow:hidden">
+              <table style="width:100%;border-collapse:collapse;font-size:11px">
+                <thead><tr style="background:var(--surface-2)">
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);white-space:nowrap">Status</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Job Title</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Req ID</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Aging</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Bucket</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Recruiter</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Function</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Location</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Region</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Open Date</th>
+                  <th style="padding:9px 10px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3)">Hiring Stage</th>
+                </tr></thead>
+                <tbody>
+                  <tr style="border-top:1px solid var(--border);cursor:pointer">
+                    <td style="padding:9px 10px"><span class="tag tag-green" style="font-size:9px">Open</span></td>
+                    <td style="padding:9px 10px;font-weight:600">Recruiter</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">EME-???</td>
+                    <td style="padding:9px 10px;font-weight:600;color:var(--green)">8d</td>
+                    <td style="padding:9px 10px"><span class="tag tag-green" style="font-size:9px">Healthy</span></td>
+                    <td style="padding:9px 10px;color:var(--brand)">Sarah Doucette</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Talent</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">London</td>
+                    <td style="padding:9px 10px"><span style="background:rgba(99,102,241,.2);color:#a5b4fc;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">EMEA</span></td>
+                    <td style="padding:9px 10px;color:var(--text-3)">11 May 2026</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">—</td>
+                  </tr>
+                  <tr style="border-top:1px solid var(--border);cursor:pointer">
+                    <td style="padding:9px 10px"><span class="tag tag-gray" style="font-size:9px">Filled</span></td>
+                    <td style="padding:9px 10px;font-weight:600">VAT Consultant</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">EME-???</td>
+                    <td style="padding:9px 10px;font-weight:600;color:var(--amber)">41d</td>
+                    <td style="padding:9px 10px"><span class="tag tag-amber" style="font-size:9px">Needs Attention</span></td>
+                    <td style="padding:9px 10px;color:var(--text-3)">—</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Tax</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Lisbon, Portugal</td>
+                    <td style="padding:9px 10px"><span style="background:rgba(99,102,241,.2);color:#a5b4fc;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">EMEA</span></td>
+                    <td style="padding:9px 10px;color:var(--text-3)">08 Apr 2026</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">interview_1</td>
+                  </tr>
+                  <tr style="border-top:1px solid var(--border);cursor:pointer">
+                    <td style="padding:9px 10px"><span class="tag tag-green" style="font-size:9px">Open</span></td>
+                    <td style="padding:9px 10px;font-weight:600">Senior Software Engineer</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">EME-???</td>
+                    <td style="padding:9px 10px;font-weight:600;color:var(--amber)">41d</td>
+                    <td style="padding:9px 10px"><span class="tag tag-amber" style="font-size:9px">Needs Attention</span></td>
+                    <td style="padding:9px 10px;color:var(--brand)">Anna Sidorska</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Engineering</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Remote – EU</td>
+                    <td style="padding:9px 10px"><span style="background:rgba(99,102,241,.2);color:#a5b4fc;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">EMEA</span></td>
+                    <td style="padding:9px 10px;color:var(--text-3)">08 Apr 2026</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">interview_1</td>
+                  </tr>
+                  <tr style="border-top:1px solid var(--border);cursor:pointer">
+                    <td style="padding:9px 10px"><span class="tag tag-green" style="font-size:9px">Open</span></td>
+                    <td style="padding:9px 10px;font-weight:600">BDR</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">US-???</td>
+                    <td style="padding:9px 10px;font-weight:600;color:var(--amber)">41d</td>
+                    <td style="padding:9px 10px"><span class="tag tag-amber" style="font-size:9px">Needs Attention</span></td>
+                    <td style="padding:9px 10px;color:var(--brand)">Anna Sidorska</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Sales</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">New York, US</td>
+                    <td style="padding:9px 10px"><span style="background:rgba(59,130,246,.2);color:#93c5fd;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">US</span></td>
+                    <td style="padding:9px 10px;color:var(--text-3)">08 Apr 2026</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">Applied</td>
+                  </tr>
+                  <tr style="border-top:1px solid var(--border);cursor:pointer">
+                    <td style="padding:9px 10px"><span class="tag tag-gray" style="font-size:9px">Filled</span></td>
+                    <td style="padding:9px 10px;font-weight:600">Sales Engineer</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">APA-???</td>
+                    <td style="padding:9px 10px;font-weight:600;color:var(--amber)">41d</td>
+                    <td style="padding:9px 10px"><span class="tag tag-amber" style="font-size:9px">Needs Attention</span></td>
+                    <td style="padding:9px 10px;color:var(--brand)">Anna Sidorska</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Sales</td>
+                    <td style="padding:9px 10px;color:var(--text-2)">Kuala Lumpur</td>
+                    <td style="padding:9px 10px"><span style="background:rgba(16,185,129,.2);color:#6ee7b7;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">APAC</span></td>
+                    <td style="padding:9px 10px;color:var(--text-3)">08 Apr 2026</td>
+                    <td style="padding:9px 10px;color:var(--text-3)">Applied</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="callout" id="c10">Every req in one table — aging, health bucket, recruiter, region, and stage. Filter and click to drill in 🗂</div>
+    </div>
+
+  </div><!-- /slide-viewport -->
+
+  <!-- CONTROLS -->
+  <div class="demo-controls">
+    <button class="ctrl-btn" onclick="prevSlide()">← Prev</button>
+    <button class="ctrl-btn play" id="playBtn" onclick="togglePlay()">⏸ Pause</button>
+    <button class="ctrl-btn" onclick="nextSlide()">Next →</button>
+    <div class="slide-counter" id="counter">1 / 8</div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <button class="voice-btn on" id="voiceBtn" onclick="toggleVoice()">🔊 Voice</button>
+  </div>
+</div>
+
+<script>
+const SLIDES = [
+  { title:'Home',       narration:'Welcome to Hiro — built by Sovos TA, for Sovos TA. Your recruitment command centre, right here in the browser.' },
+  { title:'Dashboard',  narration:'Your personal dashboard. Commission progress, action alerts, and all active roles — everything above the fold at a glance.' },
+  { title:'Roles',      narration:'All open roles in one view. Filter by department, region, and status. Click any role to open its full workflow.' },
+  { title:'Role Detail — Intake', narration:'Each role has a seven-stage horizontal workflow. Here\'s the Intake tab, with the smart scheduler to book meetings directly from Outlook calendars.' },
+  { title:'Role Detail — Pipeline', narration:'The Pipeline tab shows sourcing tools, target companies, and all active candidates — everything a recruiter needs to source for this role.' },
+  { title:'Candidate Profile', narration:'Every candidate gets a full profile. Lifecycle tracker shows exactly where they are. CV, evaluations, comms, and AI fit score are all one click away.' },
+  { title:'Interviews — List View', narration:'The interviews page gives you a full overview. Four KPI cards at the top, with clickable rows to open any interview detail.' },
+  { title:'Interviews — Week View', narration:'Switch to the week view for a calendar of your interview schedule. Navigate week by week to plan ahead.' },
+  { title:'Reports', narration:'The reports page gives a live snapshot of your entire pipeline. Pipeline by stage, conversion funnel, source breakdown, and all key metrics in one place.' },
+  { title:'Hiring Dashboard', narration:'The FY2026 Talent Acquisition Dashboard tracks req health across the team. Time to fill, aging roles, pending hires, and offer-to-start — built for TA leadership.' },
+  { title:'Roles Tracker', narration:'The Roles Tracker gives a live view of every open req — aging, health bucket, recruiter, region, and current hiring stage. Filter, search, and click any row to open the full role.' },
+];
+
+let current = 0;
+let playing = true;
+let voiceOn = true;
+let timer = null;
+let fillTimer = null;
+let progressInterval = null;
+const MIN_DURATION = 3000;   // minimum ms before advancing
+const PAUSE_AFTER_SPEECH = 1500; // ms pause after voice finishes before next slide
+
+// ── AUDIO ──
+let audioCtx = null;
+let gainNode = null;
+let musicStarted = false;
+
+function startMusic() {
+  if (musicStarted) return;
+  musicStarted = true;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  gainNode = audioCtx.createGain();
+  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 3);
+  gainNode.connect(audioCtx.destination);
+  playAmbient();
+}
+
+function playAmbient() {
+  if (!audioCtx) return;
+  const notes = [220, 246.94, 261.63, 293.66, 329.63, 349.23, 392, 440];
+  const pattern = [0,2,4,5,7,5,4,2,0,2,4,7,5,4,2,0];
+  let t = audioCtx.currentTime;
+  pattern.forEach((ni, i) => {
+    const osc = audioCtx.createOscillator();
+    const env = audioCtx.createGain();
+    osc.connect(env); env.connect(gainNode);
+    osc.type = 'sine';
+    osc.frequency.value = notes[ni];
+    env.gain.setValueAtTime(0, t + i * 0.55);
+    env.gain.linearRampToValueAtTime(0.4, t + i * 0.55 + 0.1);
+    env.gain.exponentialRampToValueAtTime(0.001, t + i * 0.55 + 0.9);
+    osc.start(t + i * 0.55);
+    osc.stop(t + i * 0.55 + 1);
+  });
+  const totalLen = pattern.length * 0.55 + 1;
+  setTimeout(playAmbient, totalLen * 1000 - 500);
+}
+
+// ── SPEECH ──
+let speechEndTime = 0;
+
+function speak(text) {
+  speechSynthesis.cancel();
+  speechEndTime = 0;
+  if (!voiceOn || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.88; u.pitch = 1.02; u.volume = 0.95;
+  const voices = speechSynthesis.getVoices();
+  const pref = voices.find(v => /samantha|karen|daniel|google uk|google us/i.test(v.name));
+  if (pref) u.voice = pref;
+  u.onend = () => { speechEndTime = Date.now(); };
+  speechSynthesis.speak(u);
+}
+
+// ── INIT DOTS ──
+const dotsEl = document.getElementById('dots');
+SLIDES.forEach((_, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i === 0 ? ' active' : '');
+  d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function getDots() { return [...document.querySelectorAll('.dot')]; }
+function getSlides() { return [...document.querySelectorAll('.slide')]; }
+
+function goTo(n) {
+  const slides = getSlides();
+  const dots = getDots();
+  slides[current].classList.remove('active');
+  dots[current].classList.remove('active');
+  // hide old callout
+  const oldC = document.getElementById('c' + current);
+  if (oldC) { oldC.classList.remove('visible'); }
+  current = (n + SLIDES.length) % SLIDES.length;
+  slides[current].classList.add('active');
+  dots[current].classList.add('active');
+  document.getElementById('slide-title').textContent = SLIDES[current].title;
+  document.getElementById('counter').textContent = (current + 1) + ' / ' + SLIDES.length;
+  // callout
+  setTimeout(() => {
+    const c = document.getElementById('c' + current);
+    if (c) c.classList.add('visible');
+  }, 800);
+  window._slideStartTime = Date.now();
+  speak(SLIDES[current].narration);
+  resetProgress();
+  if (playing) scheduleNext();
+}
+
+function resetProgress() {
+  const fill = document.getElementById('progressFill');
+  fill.style.transition = 'none';
+  fill.style.width = '0%';
+  clearTimeout(fillTimer);
+  clearInterval(progressInterval);
+  // progress bar crawls forward, pausing at 90% until speech finishes
+  const startTime = Date.now();
+  const slowPhase = 9000; // 9s to reach 90% (matches ~10s narrations)
+  progressInterval = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const speechDone = speechEndTime > 0;
+    let pct;
+    if (!speechDone) {
+      pct = Math.min(90, (elapsed / slowPhase) * 90);
+    } else {
+      const afterSpeech = Date.now() - speechEndTime;
+      pct = 90 + Math.min(10, (afterSpeech / PAUSE_AFTER_SPEECH) * 10);
+    }
+    fill.style.transition = 'none';
+    fill.style.width = pct + '%';
+  }, 100);
+}
+
+function scheduleNext() {
+  clearTimeout(timer);
+  function checkReady() {
+    if (!playing) return;
+    const elapsed = Date.now() - (window._slideStartTime || Date.now());
+    const speechDone = !voiceOn || speechEndTime > 0;
+    const minMet = elapsed >= MIN_DURATION;
+    const pauseMet = !speechDone || (Date.now() - speechEndTime >= PAUSE_AFTER_SPEECH);
+    if (speechDone && minMet && pauseMet) {
+      clearInterval(progressInterval);
+      goTo(current + 1);
+    } else {
+      timer = setTimeout(checkReady, 300);
+    }
+  }
+  timer = setTimeout(checkReady, MIN_DURATION);
+}
+
+function nextSlide() { goTo(current + 1); }
+function prevSlide() { goTo(current - 1); }
+
+function togglePlay() {
+  playing = !playing;
+  const btn = document.getElementById('playBtn');
+  if (playing) {
+    btn.textContent = '⏸ Pause'; btn.classList.add('play');
+    if (voiceOn && window.speechSynthesis.paused) speechSynthesis.resume();
+    scheduleNext(); resetProgress();
+  } else {
+    btn.textContent = '▶ Play'; btn.classList.remove('play');
+    clearTimeout(timer);
+    clearInterval(progressInterval);
+    if (voiceOn && window.speechSynthesis.speaking) speechSynthesis.pause();
+    document.getElementById('progressFill').style.transition = 'none';
+  }
+}
+
+function toggleVoice() {
+  voiceOn = !voiceOn;
+  const btn = document.getElementById('voiceBtn');
+  btn.textContent = voiceOn ? '🔊 Voice' : '🔇 Voice';
+  btn.classList.toggle('on', voiceOn);
+  if (!voiceOn) speechSynthesis.cancel();
+}
+
+// ── START ──
+// Load voices async
+if (window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = () => {};
+  speechSynthesis.getVoices();
+}
+
+document.addEventListener('click', () => { startMusic(); }, { once: true });
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') nextSlide();
+  if (e.key === 'ArrowLeft') prevSlide();
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+});
+
+// Show first callout
+setTimeout(() => {
+  const c = document.getElementById('c0');
+  if (c) c.classList.add('visible');
+}, 800);
+
+// Browsers block speechSynthesis until a user gesture has occurred.
+// Defer the first narration until the first interaction, then it works
+// for all subsequent slides automatically.
+window._slideStartTime = Date.now();
+resetProgress();
+scheduleNext();
+
+let _speechUnlocked = false;
+function _unlockSpeech() {
+  if (_speechUnlocked) return;
+  _speechUnlocked = true;
+  speak(SLIDES[current].narration);
+  document.removeEventListener('click', _unlockSpeech);
+  document.removeEventListener('keydown', _unlockSpeech);
+}
+document.addEventListener('click', _unlockSpeech, { once: true });
+document.addEventListener('keydown', _unlockSpeech, { once: true });
+</script>
+</body>
+</html>
+<!-- cache-bust: 1779303402 -->
