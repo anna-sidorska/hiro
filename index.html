@@ -154,6 +154,9 @@ tr:hover td{background:var(--brand-light)!important;box-shadow:inset 0 -1px 0 va
 .form-group label .req{color:var(--red);font-size:11px;margin-left:2px;font-weight:500}
 .form-group input,.form-group select,.form-group textarea{padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);transition:border-color .15s,box-shadow .15s}
 input[type=date],input[type=time],input[type=datetime-local],input[type=month],input[type=week]{color-scheme:dark;color:var(--text)}
+input,select,textarea{color:var(--text)}
+input::placeholder,textarea::placeholder{color:var(--text-3)}
+select option{background:var(--surface);color:var(--text)}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(0,196,238,.15)}
 #global-search-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(0,196,238,.15);width:320px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
@@ -3412,8 +3415,8 @@ async function renderInternalPool() {
     '</div>' +
     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">' +
       '<input id="int-pool-search" placeholder="Search pool..." value="' + _escHtml(window._intPoolSearch || '') + '" oninput="window._intPoolSearch=this.value;renderInternalPool()" ' +
-        'style="flex:0 0 220px;padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface)">' +
-      '<select id="int-pool-status" onchange="window._intPoolStatus=this.value;renderInternalPool()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface)">' +
+        'style="flex:0 0 220px;padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+      '<select id="int-pool-status" onchange="window._intPoolStatus=this.value;renderInternalPool()" style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
         '<option value="' + (!statusFilter ? '" selected' : '"') + '>All Statuses</option>' +
         '<option value="active"' + (statusFilter === 'active' ? ' selected' : '') + '>Active</option>' +
         '<option value="hired"' + (statusFilter === 'hired' ? ' selected' : '') + '>Hired</option>' +
@@ -3446,7 +3449,7 @@ async function openInternalProfile(id) {
   fields.forEach(function(f) {
     if (!f[1]) return;
     html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:2px">' + f[0] + '</div>' +
-      '<div style="font-size:12px;color:var(--text)">' + _escHtml(f[1]) + '</div></div>';
+      '<div style="font-size:13px;color:#eef4ff;font-weight:500">' + _escHtml(f[1]) + '</div></div>';
   });
   html += '</div>';
 
