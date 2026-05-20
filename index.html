@@ -3220,7 +3220,7 @@ async function renderInternalPool() {
   function filterData(d) {
     if (statusFilter && d.status !== statusFilter) return false;
     if (searchFilter) {
-      var haystack = ((d.first_name||'') + ' ' + (d.last_name||'') + ' ' + (d.email||'') + ' ' + (d.department||'') + ' ' + (d.current_role||'')).toLowerCase();
+      var haystack = ((d.first_name||'') + ' ' + (d.last_name||'') + ' ' + (d.email||'') + ' ' + (d.department||'') + ' ' + (d.role_title||'')).toLowerCase();
       if (haystack.indexOf(searchFilter) === -1) return false;
     }
     return true;
@@ -3265,7 +3265,7 @@ async function renderInternalPool() {
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
           (c.department ? '<span class="tag tag-blue" style="font-size:10px">' + _escHtml(c.department) + '</span>' : '') +
-          (c.current_role ? '<span class="tag tag-gray" style="font-size:10px">' + _escHtml(c.current_role) + '</span>' : '') +
+          (c.role_title ? '<span class="tag tag-gray" style="font-size:10px">' + _escHtml(c.role_title) + '</span>' : '') +
           (c.referrer_name ? '<span class="tag tag-amber" style="font-size:10px">⭐ Referred by ' + _escHtml(c.referrer_name) + '</span>' : '') +
           (!c.reviewed ? '<span class="tag tag-amber" style="font-size:10px;font-weight:700">NEW</span>' : '') +
         '</div>' +
@@ -13047,7 +13047,7 @@ async function _irSubmit() {
     last_name: last,
     email: email,
     department: dept,
-    current_role: role,
+    role_title: role,
     manager_name: mgr,
     skills_interests: skills,
     cv_url: cvUrl,
