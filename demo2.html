@@ -978,7 +978,7 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Se
     <button class="ctrl-btn" onclick="prevSlide()">← Prev</button>
     <button class="ctrl-btn play" id="playBtn" onclick="togglePlay()">⏸ Pause</button>
     <button class="ctrl-btn" onclick="nextSlide()">Next →</button>
-    <div class="slide-counter" id="counter">1 / 8</div>
+    <div class="slide-counter" id="counter">1 / 11</div>
     <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
     <button class="voice-btn on" id="voiceBtn" onclick="toggleVoice()">🔊 Voice</button>
   </div>
@@ -1179,6 +1179,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') prevSlide();
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
 });
+
+// Init counter dynamically
+document.getElementById('counter').textContent = '1 / ' + SLIDES.length;
+document.getElementById('slide-title').textContent = SLIDES[0].title;
 
 // Show first callout
 setTimeout(() => {
