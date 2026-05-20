@@ -13349,7 +13349,7 @@ async function _irSubmit() {
     manager_name: mgr,
     skills_interests: skills,
     cv_url: cvUrl,
-    cv_filename: cvFilename,
+    ...(cvFilename ? { cv_filename: cvFilename } : {}),
     referrer_name: referrerName,
     referrer_email: referrerEmail,
     source: 'self-registered',
