@@ -656,6 +656,21 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         </div>
         <div id="li-status" style="margin-top:6px;font-size:11.5px;color:var(--text-3)"></div>
       </div>
+      <!-- CV upload -->
+      <div id="modal-cv-upload-zone" style="border:2px dashed var(--border-strong);border-radius:var(--r);padding:12px 16px;background:var(--surface-2);margin-bottom:14px;cursor:pointer;transition:all .2s;position:relative" onclick="document.getElementById('modal-cv-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--brand)'" ondragleave="this.style.borderColor=''" ondrop="event.preventDefault();this.style.borderColor='';_modalCvDrop(event)">
+        <input type="file" id="modal-cv-input" accept=".pdf,.doc,.docx" style="display:none" onchange="_modalCvPicked(event)">
+        <div id="modal-cv-label" style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">📄</span>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text)">Attach CV</div>
+            <div style="font-size:11px;color:var(--text-3)">Click to browse or drag &amp; drop · PDF, DOC, DOCX</div>
+          </div>
+        </div>
+        <div id="modal-cv-selected" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--brand)">
+          <span>📎</span><span id="modal-cv-filename"></span>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:11px" onclick="event.stopPropagation();_clearModalCv()">✕</button>
+        </div>
+      </div>
       <!-- Pending CV badge (set when file dropped to open modal) -->
       <div id="pending-cv-badge" style="display:none;padding:8px 12px;background:rgba(0,196,238,0.1);border:1.5px solid rgba(0,196,238,0.3);border-radius:var(--r);font-size:12px;color:var(--brand-mid);margin-bottom:12px;align-items:center;gap:8px">
         <span>📎</span><span id="pending-cv-name">CV ready to upload</span>
@@ -7091,6 +7106,7 @@ async function openAddCandidateModal(preRoleId) {
   const notesEl=document.getElementById('c-notes');if(notesEl)notesEl.value='';
   const consent=document.getElementById('c-consent');if(consent)consent.checked=false;
   _pendingCvFile=null;
+  _resetModalCvZone();
   const badge=document.getElementById('pending-cv-badge');if(badge)badge.style.display='none';
   openModal('modal-add-candidate');
 }
@@ -7134,8 +7150,9 @@ async function submitCandidate() {
     newAppId = newApp?.id;
   }
   await auditLog('create','candidate',cand.id,{name:`${first} ${last}`});
-  // Upload pending CV if dropped to trigger modal
-  if(_pendingCvFile) { await uploadCandidateCV(cand.id, _pendingCvFile); _pendingCvFile=null; }
+  // Upload CV — from inline picker or drag-drop-to-open
+  const cvToUpload = _modalCvFile || _pendingCvFile;
+  if(cvToUpload) { await uploadCandidateCV(cand.id, cvToUpload); _pendingCvFile=null; _modalCvFile=null; }
   // Background fit scoring if role assigned and key available
   if(newAppId && roleId && localStorage.getItem('hiro_groq_key')) {
     _scoreApplicationFit(newAppId, cand.id, roleId).catch(()=>{});
@@ -7148,6 +7165,7 @@ async function submitCandidate() {
   document.getElementById('c-consent').checked=false;
   _pendingCvFile=null;
   const badge=document.getElementById('pending-cv-badge');if(badge)badge.style.display='none';
+  _resetModalCvZone();
   const liStatus=document.getElementById('li-status');if(liStatus)liStatus.textContent='';
   const liPaste=document.getElementById('li-paste');if(liPaste)liPaste.value='';
   const liPasteWrap=document.getElementById('li-paste-wrap');if(liPasteWrap)liPasteWrap.style.display='none';
@@ -10392,6 +10410,39 @@ function _clearPendingCv() {
   _pendingCvFile = null;
   const badge = document.getElementById('pending-cv-badge');
   if (badge) badge.style.display = 'none';
+}
+
+// ── Modal CV inline picker ──
+let _modalCvFile = null;
+function _modalCvPicked(e) {
+  const file = e.target.files[0]; if (!file) return;
+  _modalCvFile = file;
+  document.getElementById('modal-cv-filename').textContent = file.name;
+  document.getElementById('modal-cv-label').style.display = 'none';
+  document.getElementById('modal-cv-selected').style.display = 'flex';
+  document.getElementById('modal-cv-upload-zone').style.borderColor = 'var(--brand)';
+}
+function _modalCvDrop(e) {
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  _modalCvFile = file;
+  document.getElementById('modal-cv-filename').textContent = file.name;
+  document.getElementById('modal-cv-label').style.display = 'none';
+  document.getElementById('modal-cv-selected').style.display = 'flex';
+  document.getElementById('modal-cv-upload-zone').style.borderColor = 'var(--brand)';
+}
+function _clearModalCv() {
+  _modalCvFile = null;
+  document.getElementById('modal-cv-input').value = '';
+  document.getElementById('modal-cv-label').style.display = 'flex';
+  document.getElementById('modal-cv-selected').style.display = 'none';
+  document.getElementById('modal-cv-upload-zone').style.borderColor = '';
+}
+function _resetModalCvZone() {
+  _modalCvFile = null;
+  const inp = document.getElementById('modal-cv-input'); if(inp) inp.value='';
+  const lbl = document.getElementById('modal-cv-label'); if(lbl) lbl.style.display='flex';
+  const sel = document.getElementById('modal-cv-selected'); if(sel) sel.style.display='none';
+  const zone = document.getElementById('modal-cv-upload-zone'); if(zone) zone.style.borderColor='';
 }
 
 function renderCvBucket(preRoleId) {
