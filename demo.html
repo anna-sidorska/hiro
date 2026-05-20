@@ -1060,14 +1060,29 @@ document.addEventListener('keydown', e => {
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
 });
 
-// Show first callout & start
+// Show first callout
 setTimeout(() => {
   const c = document.getElementById('c0');
   if (c) c.classList.add('visible');
 }, 800);
-speak(SLIDES[0].narration);
+
+// Browsers block speechSynthesis until a user gesture has occurred.
+// Defer the first narration until the first interaction, then it works
+// for all subsequent slides automatically.
+window._slideStartTime = Date.now();
 resetProgress();
 scheduleNext();
+
+let _speechUnlocked = false;
+function _unlockSpeech() {
+  if (_speechUnlocked) return;
+  _speechUnlocked = true;
+  speak(SLIDES[current].narration);
+  document.removeEventListener('click', _unlockSpeech);
+  document.removeEventListener('keydown', _unlockSpeech);
+}
+document.addEventListener('click', _unlockSpeech, { once: true });
+document.addEventListener('keydown', _unlockSpeech, { once: true });
 </script>
 </body>
 </html>
