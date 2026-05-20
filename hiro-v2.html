@@ -976,7 +976,7 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Se
   <!-- CONTROLS -->
   <div class="demo-controls">
     <button class="ctrl-btn" onclick="prevSlide()">← Prev</button>
-    <button class="ctrl-btn play" id="playBtn" onclick="togglePlay()">⏸ Pause</button>
+    <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">▶ Play</button>
     <button class="ctrl-btn" onclick="nextSlide()">Next →</button>
     <div class="slide-counter" id="counter">1 / 11</div>
     <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
@@ -1000,7 +1000,7 @@ const SLIDES = [
 ];
 
 let current = 0;
-let playing = true;
+let playing = false;
 let voiceOn = true;
 let timer = null;
 let fillTimer = null;
@@ -1142,13 +1142,25 @@ function scheduleNext() {
 function nextSlide() { goTo(current + 1); }
 function prevSlide() { goTo(current - 1); }
 
+let _speechUnlocked = false;
+
 function togglePlay() {
   playing = !playing;
   const btn = document.getElementById('playBtn');
   if (playing) {
     btn.textContent = '⏸ Pause'; btn.classList.add('play');
-    if (voiceOn && window.speechSynthesis.paused) speechSynthesis.resume();
-    scheduleNext(); resetProgress();
+    // First Play click = user gesture — unlock speech and speak slide 0
+    if (!_speechUnlocked) {
+      _speechUnlocked = true;
+      speechEndTime = 0;
+      speak(SLIDES[current].narration);
+    } else if (voiceOn && window.speechSynthesis.paused) {
+      speechSynthesis.resume();
+    }
+    window._slideStartTime = Date.now();
+    speechEndTime = _speechUnlocked && !window.speechSynthesis.speaking ? speechEndTime : 0;
+    resetProgress();
+    scheduleNext();
   } else {
     btn.textContent = '▶ Play'; btn.classList.remove('play');
     clearTimeout(timer);
