@@ -1420,8 +1420,8 @@ async function confirmDeleteCandidate() {
     toast(name + ' deleted');
     closeDrawer();
     loadSidebarCounts();
-    if (currentPage === 'candidates') renderCandidates();
-    else if (currentPage === 'pipeline') renderPipeline();
+    // Navigate back to candidates list
+    nav('candidates', document.getElementById('nav-candidates'));
   } catch(e) { toast('Error: ' + e.message, 'err'); if (btn) { btn.disabled=false; btn.textContent='🗑 Delete'; } }
 }
 
@@ -12842,11 +12842,14 @@ async function openCandidateFullPage(appId) {
 
   var _cfpRoleId = app.role_id || '';
   var _cfpJdId = app.jd_id || '';
+  window._drawerCandidateId = c.id;
+  window._drawerCandidateName = fullName;
   document.getElementById('topbar-actions').innerHTML =
     '<button class="btn btn-outline btn-sm" onclick="openApplyModal(\'' + c.id + '\')">+ Apply to Role</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openComposeModal(\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✉ Email</button>' +
     (_cfpRoleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + c.id + '\',\'' + _cfpRoleId + '\',\'' + _cfpJdId + '\')">🔗 Eval Link</button>' : '') +
-    '<button class="btn btn-danger btn-sm" onclick="rejectApplication(\'' + appId + '\')">✕ Reject</button>';
+    '<button class="btn btn-danger btn-sm" onclick="rejectApplication(\'' + appId + '\')">✕ Reject</button>' +
+    ((currentUser?.role==='admin'||currentUser?.role==='manager') ? '<button class="btn btn-danger btn-sm" onclick="confirmDeleteCandidate()" style="background:var(--red-bg);color:var(--red-text);border:1px solid var(--red)">🗑 Delete</button>' : '');
 
   // EPP summary for left column
   function buildEppSummary(cand) {
