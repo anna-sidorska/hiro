@@ -3344,7 +3344,7 @@ async function renderInternalPool() {
         '<div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:10px;border-top:1px solid var(--border)">' +
           (!c.reviewed ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_intPoolMarkReviewed(\'' + c.id + '\')">&#10003; Mark Reviewed</button>' : '') +
           (c.status === 'active' ? '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_intPoolMarkHired(\'' + c.id + '\')">&#127881; Mark Hired</button>' : '') +
-          (c.cv_url ? '<a href="' + _escHtml(c.cv_url) + '" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px">&#128196; View CV</a>' : '') +
+          (c.cv_url ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="viewCv(\'' + _escHtml(c.cv_url) + '\',this)">&#128196; View CV</button>' : '') +
           (canReactivate ? '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_intPoolReactivate(\'' + c.id + '\')">&#8634; Reactivate</button>' : '') +
         '</div>' +
       '</div>';
@@ -8548,17 +8548,20 @@ async function viewEpp(eppUrl, btn) {
 }
 
 // View a CV — generates a 1-hour signed URL for private bucket files
+// Prefixes: storage: → candidate-cvs bucket, istorage: → internal-cvs bucket
 async function viewCv(cvUrl, btn) {
   if (!cvUrl) return;
   const origText = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   try {
     var url = cvUrl;
-    if (cvUrl.startsWith('storage:')) {
-      const path = cvUrl.replace('storage:', '');
-      const { data, error } = await sb.storage.from('candidate-cvs').createSignedUrl(path, 3600);
+    if (cvUrl.startsWith('storage:') || cvUrl.startsWith('istorage:')) {
+      const isInternal = cvUrl.startsWith('istorage:');
+      const bucket = isInternal ? 'internal-cvs' : 'candidate-cvs';
+      const path = cvUrl.replace(isInternal ? 'istorage:' : 'storage:', '');
+      const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 3600);
       if (error || !data?.signedUrl) {
-        toast('Could not generate view link — check storage bucket is set up', 'err');
+        toast('Could not generate view link: ' + (error?.message || 'check storage bucket policies'), 'err');
         if (btn) { btn.disabled = false; btn.textContent = origText; }
         return;
       }
@@ -13294,34 +13297,27 @@ async function _irSubmit() {
     return;
   }
 
-  // Upload CV if provided
+  // Upload CV to internal-cvs (private bucket) — store path reference, not a URL
   var cvUrl = null;
   var cvFilename = null;
   if (cvFile) {
-    var ext = cvFile.name.split('.').pop();
-    var fileName = 'internal-cv-' + Date.now() + '-' + first.toLowerCase().replace(/[^a-z0-9]/g,'-') + '-' + last.toLowerCase().replace(/[^a-z0-9]/g,'-') + '.' + ext;
-    // Try candidate-cvs first (already exists), fall back to internal-cvs
-    var buckets = ['candidate-cvs', 'internal-cvs'];
-    for (var bi = 0; bi < buckets.length; bi++) {
-      try {
-        var bucket = buckets[bi];
-        var storagePath = 'internal/' + fileName;
-        var { data: uploadData, error: uploadErr } = await sb.storage.from(bucket).upload(storagePath, cvFile, { upsert: true, contentType: cvFile.type || 'application/octet-stream' });
-        if (!uploadErr) {
-          var { data: urlData } = await sb.storage.from(bucket).createSignedUrl(storagePath, 60 * 60 * 24 * 365);
-          cvUrl = urlData ? urlData.signedUrl : null;
-          cvFilename = cvFile.name;
-          break;
-        } else if (bi === buckets.length - 1) {
-          // Last bucket also failed — warn but don't block submission
-          console.warn('CV upload failed:', uploadErr.message);
-          showErr('CV upload failed: ' + uploadErr.message + '. Your profile will still be submitted without the CV.');
-          await new Promise(r => setTimeout(r, 2000));
-          errEl.style.display = 'none';
-        }
-      } catch(e) {
-        if (bi === buckets.length - 1) console.warn('CV upload exception:', e.message);
+    try {
+      var ext = cvFile.name.split('.').pop();
+      var safeName = (first + '-' + last).toLowerCase().replace(/[^a-z0-9]/g, '-');
+      var storagePath = safeName + '-' + Date.now() + '.' + ext;
+      var { data: uploadData, error: uploadErr } = await sb.storage
+        .from('internal-cvs')
+        .upload(storagePath, cvFile, { upsert: true, contentType: cvFile.type || 'application/octet-stream' });
+      if (!uploadErr) {
+        cvUrl = 'istorage:' + storagePath; // stored as path ref, signed URL generated on view
+        cvFilename = cvFile.name;
+      } else {
+        showErr('CV upload failed: ' + uploadErr.message + '. Your profile will still be submitted without the CV — you can add it later.');
+        await new Promise(r => setTimeout(r, 2500));
+        errEl.style.display = 'none';
       }
+    } catch(e) {
+      console.warn('CV upload exception:', e.message);
     }
   }
 
