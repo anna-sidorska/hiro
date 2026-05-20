@@ -41,7 +41,7 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,sans-serif;background:
 /* ── LAYOUT ── */
 #app{display:none;height:100vh;overflow:hidden}
 #app.ready{display:flex}
-.sidebar{width:200px;flex-shrink:0;background:var(--sidebar);background-image:linear-gradient(180deg,rgba(0,196,238,.06) 0%,transparent 100%);display:flex;flex-direction:column;overflow-y:auto}
+.sidebar{width:200px;flex-shrink:0;background:var(--sidebar);background-image:linear-gradient(180deg,rgba(0,196,238,.06) 0%,transparent 100%);display:flex;flex-direction:column;overflow-y:hidden}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .topbar{height:60px;background:var(--surface);border-bottom:1px solid var(--border);box-shadow:0 1px 0 var(--border);display:flex;align-items:center;padding:0 28px;gap:16px;flex-shrink:0}
 .content{flex:1;overflow-y:auto;padding:28px}
@@ -55,7 +55,7 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,sans-serif;background:
 .sb-section-sep{border:none;border-top:1px solid rgba(255,255,255,.07);margin:8px 10px 0}
 .sb-item{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:2px 8px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.55);font-size:12px;font-weight:500;transition:all .15s ease;border:none;background:none;width:calc(100% - 16px);text-align:left;border-left:3px solid transparent}
 .sb-item:hover{background:var(--sidebar-hover);color:rgba(255,255,255,.9);transform:translateX(2px)}
-.sb-item.active{background:rgba(0,196,238,.15);color:var(--brand);border-left:3px solid var(--brand-mid);box-shadow:inset 0 0 20px rgba(0,196,238,.05)}
+.sb-item.active{background:linear-gradient(135deg,rgba(0,196,238,.28),rgba(99,102,241,.22));color:#fff;border-left:3px solid var(--brand);box-shadow:0 2px 12px rgba(0,196,238,.18);font-weight:600}
 .sb-item svg{flex-shrink:0;opacity:.7;width:18px;height:18px}
 .sb-item.active svg{opacity:1}
 .sb-badge{margin-left:auto;background:var(--brand);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;min-width:18px;text-align:center}
@@ -588,7 +588,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <div style="font-size:9px;color:rgba(255,255,255,.3);letter-spacing:.6px;text-transform:uppercase;margin-top:1px">TA Ops</div>
       </div>
     </div>
-    <div id="sidebar-nav" style="flex:1"></div>
+    <div id="sidebar-nav" style="flex:1;overflow-y:auto;overflow-x:hidden"></div>
     <div class="sb-user">
       <div class="sb-user-row">
         <div class="avatar" id="sb-avatar">?</div>
@@ -1692,6 +1692,8 @@ function renderSidebarNav() {
       navHtml += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
       navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
       navHtml += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
+      navHtml += '<button class="sb-item" id="nav-pipeline" onclick="nav(\'pipeline\',this)">' + icon.pipeline + ' Pipeline</button>';
+      navHtml += '<button class="sb-item" id="nav-interviews" onclick="nav(\'interviews\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</button>';
     } else {
       navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
     }
@@ -2144,9 +2146,10 @@ async function renderDashboard() {
     (attentionCount > 0 ? '⚠ ' : '✓ ') + attentionLabel +
     '</div>' +
     '</div>' +
-    internalBannerHtml + kpiRow + commissionHtml + alertsHtml +
-    '<div style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text);letter-spacing:-.3px">My Open Roles <span class="text-muted" style="font-size:12px;font-weight:400">(' + myRoles.length + ')</span></div>' +
-    rolesHtml;
+    internalBannerHtml + kpiRow +
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--brand);margin-bottom:12px">Active Roles <span style="color:var(--text-3);font-weight:500;font-size:11px;letter-spacing:0;text-transform:none">(' + myRoles.length + ')</span></div>' +
+    rolesHtml +
+    commissionHtml + alertsHtml;
 }
 
 // ── HTML ESCAPE HELPER ────────────────────────
@@ -3031,7 +3034,7 @@ function renderPipelineBoard(data) {
                 <div class="pc-role" style="font-size:12px">${app.roles?.title||'No role'}${app.roles?.region?' · '+app.roles.region:''}</div>
                 ${app.candidates?.location?`<div style="font-size:11px;color:var(--text-3);margin-top:2px">${app.candidates.location}</div>`:''}
                 <div class="pc-meta" style="margin-top:6px">
-                  ${_src?`<span class="tag tag-gray" style="font-size:10px">${_src}</span>`:''}
+                  ${_src?`<span class="tag ${_src.toLowerCase().includes('linkedin')?'tag-blue':_src.toLowerCase().includes('referral')?'tag-green':_src.toLowerCase().includes('direct')?'tag-purple':'tag-gray'}" style="font-size:10px">${_src}</span>`:''}
                   ${app.fit_score!=null?_fitScoreBadge(app.fit_score):''}
                   <span class="pc-days" style="margin-left:auto;font-size:10px">${daysSince(app.created_at)}d</span>
                 </div>
