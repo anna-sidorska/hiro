@@ -1263,7 +1263,10 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
       <div class="modal-title" id="drawer-name">Candidate</div>
       <div class="text-muted" id="drawer-role-name"></div>
     </div>
-    <button class="modal-close" onclick="closeDrawer()">✕</button>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button id="drawer-delete-btn" onclick="confirmDeleteCandidate()" title="Delete candidate" style="display:none;background:var(--red-bg);border:1px solid var(--red);color:var(--red-text);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s" onmouseover="this.style.background='var(--red)';this.style.color='#fff'" onmouseout="this.style.background='var(--red-bg)';this.style.color='var(--red-text)'">🗑 Delete</button>
+      <button class="modal-close" onclick="closeDrawer()">✕</button>
+    </div>
   </div>
   <div class="drawer-body" id="drawer-body"></div>
 </div>
@@ -1396,6 +1399,30 @@ function openDrawer() {
 function closeDrawer() {
   document.getElementById('drawer-overlay').classList.remove('open');
   document.getElementById('candidate-drawer').classList.remove('open');
+  const delBtn = document.getElementById('drawer-delete-btn');
+  if (delBtn) delBtn.style.display = 'none';
+}
+
+async function confirmDeleteCandidate() {
+  const id   = window._drawerCandidateId;
+  const name = window._drawerCandidateName || 'this candidate';
+  if (!id) return;
+  const confirmed = window.confirm('Delete ' + name + '?\n\nThis will permanently remove the candidate and all their applications, notes, and evaluations. This cannot be undone.');
+  if (!confirmed) return;
+  const btn = document.getElementById('drawer-delete-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
+  try {
+    // Delete applications first (FK), then candidate
+    await sb.from('applications').delete().eq('candidate_id', id);
+    const { error } = await sb.from('candidates').delete().eq('id', id);
+    if (error) { toast('Delete failed: ' + error.message, 'err'); if (btn) { btn.disabled=false; btn.textContent='🗑 Delete'; } return; }
+    await auditLog('delete', 'candidate', id, { name });
+    toast(name + ' deleted');
+    closeDrawer();
+    loadSidebarCounts();
+    if (currentPage === 'candidates') renderCandidates();
+    else if (currentPage === 'pipeline') renderPipeline();
+  } catch(e) { toast('Error: ' + e.message, 'err'); if (btn) { btn.disabled=false; btn.textContent='🗑 Delete'; } }
 }
 
 function stageTag(stage) {
@@ -6553,6 +6580,10 @@ async function openCandidateDrawerById(candidateId) {
     if(!c) return;
     document.getElementById('drawer-name').textContent=`${c.first_name} ${c.last_name}`;
     document.getElementById('drawer-role-name').textContent='No active applications';
+    window._drawerCandidateId = c.id;
+    window._drawerCandidateName = c.first_name + ' ' + c.last_name;
+    const delBtn2 = document.getElementById('drawer-delete-btn');
+    if (delBtn2) delBtn2.style.display = (_userRole==='admin'||_userRole==='manager') ? '' : 'none';
     document.getElementById('drawer-body').innerHTML=`
       <div class="drawer-section">
         <div class="drawer-section-title">Candidate Details</div>
@@ -14363,6 +14394,11 @@ async function openCandidateDrawerOriginal(appId) {
   var c = app.candidates;
   document.getElementById('drawer-name').textContent = c.first_name + ' ' + c.last_name;
   document.getElementById('drawer-role-name').textContent = app.roles?.title||'No role';
+  // Show delete button for admin/manager roles
+  window._drawerCandidateId = c.id;
+  window._drawerCandidateName = c.first_name + ' ' + c.last_name;
+  var delBtn = document.getElementById('drawer-delete-btn');
+  if (delBtn) delBtn.style.display = (_userRole==='admin'||_userRole==='manager') ? '' : 'none';
 
   var stageOptions = STAGES.map(function(s){ return '<option value="' + s.key + '"' + (app.stage===s.key?' selected':'') + '>' + s.label + '</option>'; }).join('');
 
