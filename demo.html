@@ -457,11 +457,30 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Se
             <!-- candidate mini-cards -->
             <div style="font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px">Active Candidates (9)</div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-              ${[['Anna Sidorska','Interview 1','linear-gradient(135deg,#6366f1,#a855f7)'],['Marcus Holt','Screening','linear-gradient(135deg,#0891b2,#06b6d4)'],['Tom Bradley','Shortlisted','linear-gradient(135deg,#059669,#10b981)']].map(([n,s,g])=>`
               <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
-                <div style="width:28px;height:28px;border-radius:50%;background:${g};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">${n.split(' ').map(w=>w[0]).join('')}</div>
-                <div><div style="font-size:11px;font-weight:600">${n}</div><div style="font-size:10px;color:var(--text-3)">${s}</div></div>
-              </div>`).join('')}
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">AS</div>
+                <div><div style="font-size:11px;font-weight:600">Anna Sidorska</div><div style="font-size:10px;color:var(--text-3)">Interview 1</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#0891b2,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">MH</div>
+                <div><div style="font-size:11px;font-weight:600">Marcus Holt</div><div style="font-size:10px;color:var(--text-3)">Screening</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#059669,#10b981);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">TB</div>
+                <div><div style="font-size:11px;font-weight:600">Tom Bradley</div><div style="font-size:10px;color:var(--text-3)">Shortlisted</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">SL</div>
+                <div><div style="font-size:11px;font-weight:600">Sofia López</div><div style="font-size:10px;color:var(--text-3)">Interview 2</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#a78bfa);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">JK</div>
+                <div><div style="font-size:11px;font-weight:600">James Kim</div><div style="font-size:10px;color:var(--text-3)">Applied</div></div>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#be185d,#f472b6);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0">NR</div>
+                <div><div style="font-size:11px;font-weight:600">Nina Reyes</div><div style="font-size:10px;color:var(--text-3)">Shortlisted</div></div>
+              </div>
             </div>
           </div>
         </div>
@@ -527,9 +546,21 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Se
                 <div class="lifecycle" style="margin-bottom:12px">
                   <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px">Lifecycle</div>
                   <div class="lifecycle-inner">
-                    ${['Applied','Screening','Shortlisted','Interview 1','Interview 2','Final Interview','Offer','Hired'].map((l,i)=>`
-                    <div class="lc-dot"><div class="lc-circle ${i<3?'past':i===3?'current':''}"></div><div class="lc-label ${i===3?'current':''}">${l}</div></div>
-                    ${i<7?`<div class="lc-line ${i<3?'past':''}"></div>`:''}`).join('')}
+                    <div class="lc-dot"><div class="lc-circle past"></div><div class="lc-label">Applied</div></div>
+                    <div class="lc-line past"></div>
+                    <div class="lc-dot"><div class="lc-circle past"></div><div class="lc-label">Screening</div></div>
+                    <div class="lc-line past"></div>
+                    <div class="lc-dot"><div class="lc-circle past"></div><div class="lc-label">Shortlisted</div></div>
+                    <div class="lc-line past"></div>
+                    <div class="lc-dot"><div class="lc-circle current"></div><div class="lc-label current">Interview 1</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Interview 2</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Final Interview</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Offer</div></div>
+                    <div class="lc-line"></div>
+                    <div class="lc-dot"><div class="lc-circle"></div><div class="lc-label">Hired</div></div>
                   </div>
                 </div>
                 <div class="cfp-tabs">
@@ -578,7 +609,7 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Se
             <div class="card">
               <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700">Past Interviews (1)</div>
               <table style="width:100%;border-collapse:collapse">
-                <thead><tr style="background:var(--surface-2)">${['Candidate','Role','Type','When','Duration','Interviewer','Status'].map(h=>`<th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">${h}</th>`).join('')}</tr></thead>
+                <thead><tr style="background:var(--surface-2)"><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Candidate</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Role</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Type</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">When</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Duration</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Interviewer</th><th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);text-align:left">Status</th></tr></thead>
                 <tbody>
                   <tr style="cursor:pointer;border-top:1px solid var(--border)">
                     <td style="padding:10px 12px;font-weight:600;font-size:12px">Test Test</td>
@@ -623,12 +654,41 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Se
               <button class="btn btn-outline" style="font-size:11px">Next →</button>
             </div>
             <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
-              ${[['Mon','18',false],['Tue','19',false],['Wed','20',true],['Thu','21',false],['Fri','22',false],['Sat','23',false],['Sun','24',false]].map(([d,n,today])=>`
-              <div style="min-height:160px;background:${today?'var(--brand-light)':'var(--surface-2)'};border-radius:var(--r);border:1px solid ${today?'rgba(0,196,238,.35)':'var(--border)'};padding:10px">
-                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:${today?'var(--brand)':'var(--text-3)'};text-align:center;margin-bottom:3px">${d}</div>
-                <div style="font-size:22px;font-weight:800;color:${today?'var(--brand)':'var(--text)'};text-align:center;margin-bottom:8px">${n}</div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Mon</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">18</div>
                 <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
-              </div>`).join('')}
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Tue</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">19</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--brand-light,rgba(0,196,238,.08));border-radius:var(--r);border:1px solid rgba(0,196,238,.35);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--brand);text-align:center;margin-bottom:3px">Wed</div>
+                <div style="font-size:22px;font-weight:800;color:var(--brand);text-align:center;margin-bottom:8px">20</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Thu</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">21</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Fri</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">22</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Sat</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">23</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
+              <div style="min-height:160px;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border);padding:10px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-3);text-align:center;margin-bottom:3px">Sun</div>
+                <div style="font-size:22px;font-weight:800;color:var(--text);text-align:center;margin-bottom:8px">24</div>
+                <div style="font-size:10px;color:var(--text-3);text-align:center">—</div>
+              </div>
             </div>
             <div style="margin-top:16px;padding:12px 16px;background:var(--surface-2);border-radius:var(--r);font-size:11px;color:var(--text-3);text-align:center">No interviews this week yet. <span style="color:var(--brand);cursor:pointer">+ Schedule one →</span></div>
           </div>
@@ -668,8 +728,8 @@ let voiceOn = true;
 let timer = null;
 let fillTimer = null;
 let progressInterval = null;
-const MIN_DURATION = 5000;   // minimum ms before advancing (even if voice is short)
-const PAUSE_AFTER_SPEECH = 2500; // ms to pause after voice finishes before next slide
+const MIN_DURATION = 3000;   // minimum ms before advancing
+const PAUSE_AFTER_SPEECH = 1500; // ms pause after voice finishes before next slide
 
 // ── AUDIO ──
 let audioCtx = null;
@@ -768,7 +828,7 @@ function resetProgress() {
   clearInterval(progressInterval);
   // progress bar crawls forward, pausing at 90% until speech finishes
   const startTime = Date.now();
-  const slowPhase = 12000; // 12s to reach 90%
+  const slowPhase = 9000; // 9s to reach 90% (matches ~10s narrations)
   progressInterval = setInterval(() => {
     const elapsed = Date.now() - startTime;
     const speechDone = speechEndTime > 0;
@@ -810,11 +870,13 @@ function togglePlay() {
   const btn = document.getElementById('playBtn');
   if (playing) {
     btn.textContent = '⏸ Pause'; btn.classList.add('play');
+    if (voiceOn && window.speechSynthesis.paused) speechSynthesis.resume();
     scheduleNext(); resetProgress();
   } else {
     btn.textContent = '▶ Play'; btn.classList.remove('play');
     clearTimeout(timer);
     clearInterval(progressInterval);
+    if (voiceOn && window.speechSynthesis.speaking) speechSynthesis.pause();
     document.getElementById('progressFill').style.transition = 'none';
   }
 }
