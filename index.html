@@ -3388,6 +3388,7 @@ async function renderInternalPool() {
         (skillsSnip ? '<div style="font-size:11px;color:var(--text-2);margin-bottom:10px;line-height:1.4"><strong>Skills:</strong> ' + _escHtml(skillsSnip) + '</div>' : '') +
         '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Joined pool: ' + fmtDate(c.created_at) + '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:10px;border-top:1px solid var(--border)">' +
+          '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openInternalProfile(\'' + c.id + '\')">&#128100; Open Profile</button>' +
           (!c.reviewed ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_intPoolMarkReviewed(\'' + c.id + '\')">&#10003; Mark Reviewed</button>' : '') +
           (c.status === 'active' ? '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_intPoolMarkHired(\'' + c.id + '\')">&#127881; Mark Hired</button>' : '') +
           (c.cv_url ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="viewCv(\'' + _escHtml(c.cv_url) + '\',this)">&#128196; View CV</button>' : '') +
@@ -3421,6 +3422,91 @@ async function renderInternalPool() {
       '<span style="font-size:12px;color:var(--text-3);margin-left:auto">' + total + ' total \xB7 ' + active + ' active \xB7 ' + unreviewed + ' unreviewed</span>' +
     '</div>' +
     cardsHtml;
+}
+
+async function openInternalProfile(id) {
+  var { data: c } = await sb.from('internal_candidates').select('*').eq('id', id).single();
+  if (!c) { toast('Could not load profile', 'err'); return; }
+  var { data: roles } = await sb.from('roles').select('id,title,department,region').eq('status','open').order('title');
+  var initials = ((c.first_name||'?')[0] + (c.last_name||'?')[0]).toUpperCase();
+
+  var html = '<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">' +
+    '<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700">' + initials + '</div>' +
+    '<div><div style="font-size:17px;font-weight:700">' + _escHtml(c.first_name) + ' ' + _escHtml(c.last_name) + '</div>' +
+    '<div style="font-size:12px;color:var(--text-3)">' + _escHtml(c.email) + '</div></div>' +
+    (c.status === 'active' ? '<span class="tag tag-green" style="margin-left:auto">Active</span>' : '<span class="tag tag-gray" style="margin-left:auto">' + (c.status||'') + '</span>') +
+  '</div>';
+
+  var fields = [
+    ['Department', c.department], ['Current Role', c.role_title], ['Manager', c.manager_name],
+    ['Skills & Interests', c.skills_interests], ['Referrer', c.referrer_name],
+    ['Joined Pool', fmtDate(c.created_at)], ['Reviewed', c.reviewed ? '✓ Yes' : '⚠ Not yet'],
+  ];
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;margin-bottom:20px;background:var(--surface-2);border-radius:var(--r);padding:14px">';
+  fields.forEach(function(f) {
+    if (!f[1]) return;
+    html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:2px">' + f[0] + '</div>' +
+      '<div style="font-size:12px;color:var(--text)">' + _escHtml(f[1]) + '</div></div>';
+  });
+  html += '</div>';
+
+  if (c.cv_url) {
+    html += '<div style="margin-bottom:20px"><button class="btn btn-outline btn-sm" onclick="viewCv(\'' + _escHtml(c.cv_url) + '\',this)">&#128196; View CV</button></div>';
+  }
+
+  html += '<div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">' +
+    '<div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text)">&#127919; Assign to a Role</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+    '<select id="ip-role-sel" style="flex:1;min-width:180px;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px;background:var(--surface)">' +
+    '<option value="">Select open role...</option>' +
+    (roles||[]).map(function(r){ return '<option value="' + r.id + '">' + _escHtml(r.title) + (r.region?' · '+r.region:'') + '</option>'; }).join('') +
+    '</select>' +
+    '<button class="btn btn-primary btn-sm" onclick="_intAssignToRole(\'' + c.id + '\',\'' + _escHtml(c.first_name+' '+c.last_name) + '\',\'' + _escHtml(c.email) + '\')">Assign &#8594;</button>' +
+    '</div>' +
+    '<div id="ip-assign-result" style="margin-top:8px;font-size:12px"></div>' +
+  '</div>';
+
+  // Show in modal
+  var existing = document.getElementById('modal-int-profile');
+  if (!existing) {
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'modal-int-profile';
+    overlay.innerHTML = '<div class="modal" style="max-width:560px"><div class="modal-header"><div class="modal-title">Internal Candidate Profile</div><button class="modal-close" onclick="closeModal(\'modal-int-profile\')">&#10005;</button></div><div class="modal-body" id="modal-int-profile-body"></div></div>';
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('modal-int-profile-body').innerHTML = html;
+  openModal('modal-int-profile');
+  if (c.reviewed === false) { sb.from('internal_candidates').update({reviewed:true}).eq('id',id).then(function(){ renderInternalPool(); }); }
+}
+
+async function _intAssignToRole(internalId, name, email) {
+  var roleId = (document.getElementById('ip-role-sel')||{}).value;
+  var res = document.getElementById('ip-assign-result');
+  if (!roleId) { if(res) res.innerHTML='<span style="color:var(--amber)">Please select a role first</span>'; return; }
+  // Find or create candidate record
+  var { data: existing } = await sb.from('candidates').select('id').eq('email', email.toLowerCase()).maybeSingle();
+  var candId = existing?.id;
+  if (!candId) {
+    var nameParts = name.split(' ');
+    var { data: newCand, error: ce } = await sb.from('candidates').insert({
+      first_name: nameParts[0]||name, last_name: nameParts.slice(1).join(' ')||'',
+      email: email.toLowerCase(), source: 'Internal Pool', consent_given: true, consent_timestamp: new Date().toISOString(),
+      retention_flag: new Date(Date.now()+2*365*86400000).toISOString().split('T')[0]
+    }).select().single();
+    if (ce) { if(res) res.innerHTML='<span style="color:var(--red)">Error: '+ce.message+'</span>'; return; }
+    candId = newCand.id;
+  }
+  // Check for existing application
+  var { data: dupApp } = await sb.from('applications').select('id').eq('candidate_id',candId).eq('role_id',roleId).maybeSingle();
+  if (dupApp) { if(res) res.innerHTML='<span style="color:var(--amber)">Already applied to this role</span>'; return; }
+  var { error: ae } = await sb.from('applications').insert({ candidate_id: candId, role_id: roleId, stage: 'applied' });
+  if (ae) { if(res) res.innerHTML='<span style="color:var(--red)">Error: '+ae.message+'</span>'; return; }
+  await sb.from('internal_candidates').update({ status: 'hired', reviewed: true, linked_candidate_id: candId }).eq('id', internalId);
+  if(res) res.innerHTML='<span style="color:var(--green)">&#10003; Assigned! Candidate added to pipeline.</span>';
+  toast(name + ' assigned to role');
+  loadSidebarCounts();
+  setTimeout(function(){ closeModal('modal-int-profile'); renderInternalPool(); }, 1500);
 }
 
 async function _intPoolMarkReviewed(id) {
@@ -6459,6 +6545,8 @@ async function openCandidateDrawerLegacy(appId) {
   const c=app.candidates;
   document.getElementById('drawer-name').textContent=`${c.first_name} ${c.last_name}`;
   document.getElementById('drawer-role-name').textContent=app.roles?.title||'No role';
+  window._drawerCandidateId = c.id; window._drawerCandidateName = c.first_name+' '+c.last_name;
+  const _db=document.getElementById('drawer-delete-btn'); if(_db) _db.style.display=(currentUser?.role==='admin'||currentUser?.role==='manager')?'':'none';
   const stageOptions=STAGES.map(s=>`<option value="${s.key}" ${app.stage===s.key?'selected':''}>${s.label}</option>`).join('');
   document.getElementById('drawer-body').innerHTML=`
     <div class="drawer-section">
@@ -14398,7 +14486,7 @@ async function openCandidateDrawerOriginal(appId) {
   window._drawerCandidateId = c.id;
   window._drawerCandidateName = c.first_name + ' ' + c.last_name;
   var delBtn = document.getElementById('drawer-delete-btn');
-  if (delBtn) delBtn.style.display = (_userRole==='admin'||_userRole==='manager') ? '' : 'none';
+  if (delBtn) delBtn.style.display = (currentUser?.role==='admin'||currentUser?.role==='manager') ? '' : 'none';
 
   var stageOptions = STAGES.map(function(s){ return '<option value="' + s.key + '"' + (app.stage===s.key?' selected':'') + '>' + s.label + '</option>'; }).join('');
 
