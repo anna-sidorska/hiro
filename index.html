@@ -3203,7 +3203,15 @@ async function renderInternalPool() {
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading internal pool...</div>';
 
   var { data: icData, error: icErr } = await sb.from('internal_candidates').select('*').order('created_at', {ascending: false});
-  if (icErr) { toast('Error loading internal pool', 'err'); return; }
+  if (icErr) {
+    document.getElementById('content').innerHTML = _candTabBar('internal') +
+      '<div class="card" style="margin:20px;border:1.5px solid var(--amber);background:var(--amber-bg)">' +
+      '<div class="card-body"><div style="font-size:14px;font-weight:700;color:var(--amber-text);margin-bottom:8px">⚠ Database setup needed</div>' +
+      '<div style="font-size:13px;color:var(--text-2);margin-bottom:12px">The internal candidates table hasn\'t been created yet. Run the SQL patch in Supabase → SQL Editor to enable this feature.</div>' +
+      '<div style="font-size:12px;color:var(--text-3);font-family:monospace;background:var(--surface-2);padding:10px;border-radius:var(--r);margin-bottom:12px">hiro_internal_candidates.sql (in your ATS folder)</div>' +
+      '<button class="btn btn-primary btn-sm" onclick="renderInternalPool()">↺ Retry after running SQL</button></div></div>';
+    return;
+  }
 
   var regLink = window.location.origin + window.location.pathname + '?internal=1';
   var statusFilter = window._intPoolStatus || '';
