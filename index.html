@@ -7281,7 +7281,7 @@ async function submitInterview() {
     interviewer_id:document.getElementById('i-interviewer').value||null,
     status:'scheduled',
   }).select().single();
-  if(error){toast('Error scheduling interview','err');return;}
+  if(error){console.error('Interview insert error:',error);toast('Error: '+error.message,'err');return;}
   await auditLog('create','interview',intv.id);
   toast('Interview scheduled'); closeModal('modal-add-interview');
   if(currentPage==='interviews') renderInterviews();
