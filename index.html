@@ -13523,8 +13523,8 @@ async function _irSubmit() {
   var cvFilename = null;
   var cvMimetype = null;
   if (cvFile) {
-    if (cvFile.size > 5 * 1024 * 1024) {
-      showErr('CV file must be under 5MB. Please compress or use a smaller file.');
+    if (cvFile.size > 2 * 1024 * 1024) {
+      showErr('CV file must be under 2MB. Please compress or use a smaller file.');
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Register My Profile'; }
       return;
     }
@@ -13553,7 +13553,7 @@ async function _irSubmit() {
     manager_name: mgr,
     skills_interests: skills,
     cv_url: cvBase64 ? 'base64:inline' : null,
-    ...(cvBase64 ? { cv_base64: cvBase64, cv_filename: cvFilename, cv_mimetype: cvMimetype } : {}),
+    ...(cvBase64 ? { cv_base64: cvBase64, cv_filename: cvFilename, cv_mimetype: cvMimetype, cv_uploaded_at: new Date().toISOString() } : {}),
     referrer_name: referrerName,
     referrer_email: referrerEmail,
     source: 'self-registered',
@@ -13562,7 +13562,8 @@ async function _irSubmit() {
   });
 
   if (insertErr) {
-    showErr('Registration failed: ' + (insertErr.message || 'unknown error. Please try again.'));
+    var errDetail = insertErr.details || insertErr.hint || insertErr.code || '';
+    showErr('Registration failed: ' + (insertErr.message || 'unknown error') + (errDetail ? ' (' + errDetail + ')' : ''));
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Register My Profile'; }
     return;
   }
