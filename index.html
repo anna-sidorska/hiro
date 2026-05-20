@@ -13499,7 +13499,7 @@ async function _irSubmit() {
     return;
   }
 
-  // Upload CV to internal-cvs (private bucket) — store path reference, not a URL
+  // Upload CV to internal-cvs (private bucket) — upsert:false only needs INSERT policy
   var cvUrl = null;
   var cvFilename = null;
   if (cvFile) {
@@ -13509,14 +13509,17 @@ async function _irSubmit() {
       var storagePath = safeName + '-' + Date.now() + '.' + ext;
       var { data: uploadData, error: uploadErr } = await sb.storage
         .from('internal-cvs')
-        .upload(storagePath, cvFile, { upsert: true, contentType: cvFile.type || 'application/octet-stream' });
+        .upload(storagePath, cvFile, { upsert: false, contentType: cvFile.type || 'application/octet-stream' });
       if (!uploadErr) {
-        cvUrl = 'istorage:' + storagePath; // stored as path ref, signed URL generated on view
+        cvUrl = 'istorage:' + storagePath;
         cvFilename = cvFile.name;
       } else {
-        showErr('CV upload failed: ' + uploadErr.message + '. Your profile will still be submitted without the CV — you can add it later.');
-        await new Promise(r => setTimeout(r, 2500));
+        // Show error permanently so user can read it — don't block profile submission
+        showErr('⚠ CV upload failed: ' + uploadErr.message + '. Your profile will be saved without the CV. You can ask the TA team to add it manually.');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Register My Profile (without CV)'; }
+        await new Promise(r => setTimeout(r, 4000));
         errEl.style.display = 'none';
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Registering...'; }
       }
     } catch(e) {
       console.warn('CV upload exception:', e.message);
