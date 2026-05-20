@@ -667,7 +667,9 @@ let playing = true;
 let voiceOn = true;
 let timer = null;
 let fillTimer = null;
-const DURATION = 7000;
+let progressInterval = null;
+const MIN_DURATION = 5000;   // minimum ms before advancing (even if voice is short)
+const PAUSE_AFTER_SPEECH = 2500; // ms to pause after voice finishes before next slide
 
 // ── AUDIO ──
 let audioCtx = null;
@@ -707,14 +709,18 @@ function playAmbient() {
 }
 
 // ── SPEECH ──
+let speechEndTime = 0;
+
 function speak(text) {
-  if (!voiceOn || !window.speechSynthesis) return;
   speechSynthesis.cancel();
+  speechEndTime = 0;
+  if (!voiceOn || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.92; u.pitch = 1.02; u.volume = 0.95;
+  u.rate = 0.88; u.pitch = 1.02; u.volume = 0.95;
   const voices = speechSynthesis.getVoices();
   const pref = voices.find(v => /samantha|karen|daniel|google uk|google us/i.test(v.name));
   if (pref) u.voice = pref;
+  u.onend = () => { speechEndTime = Date.now(); };
   speechSynthesis.speak(u);
 }
 
@@ -748,6 +754,7 @@ function goTo(n) {
     const c = document.getElementById('c' + current);
     if (c) c.classList.add('visible');
   }, 800);
+  window._slideStartTime = Date.now();
   speak(SLIDES[current].narration);
   resetProgress();
   if (playing) scheduleNext();
@@ -758,15 +765,41 @@ function resetProgress() {
   fill.style.transition = 'none';
   fill.style.width = '0%';
   clearTimeout(fillTimer);
-  fillTimer = setTimeout(() => {
-    fill.style.transition = 'width ' + (DURATION / 1000) + 's linear';
-    fill.style.width = '100%';
-  }, 50);
+  clearInterval(progressInterval);
+  // progress bar crawls forward, pausing at 90% until speech finishes
+  const startTime = Date.now();
+  const slowPhase = 12000; // 12s to reach 90%
+  progressInterval = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const speechDone = speechEndTime > 0;
+    let pct;
+    if (!speechDone) {
+      pct = Math.min(90, (elapsed / slowPhase) * 90);
+    } else {
+      const afterSpeech = Date.now() - speechEndTime;
+      pct = 90 + Math.min(10, (afterSpeech / PAUSE_AFTER_SPEECH) * 10);
+    }
+    fill.style.transition = 'none';
+    fill.style.width = pct + '%';
+  }, 100);
 }
 
 function scheduleNext() {
   clearTimeout(timer);
-  timer = setTimeout(() => { if (playing) goTo(current + 1); }, DURATION);
+  function checkReady() {
+    if (!playing) return;
+    const elapsed = Date.now() - (window._slideStartTime || Date.now());
+    const speechDone = !voiceOn || speechEndTime > 0;
+    const minMet = elapsed >= MIN_DURATION;
+    const pauseMet = !speechDone || (Date.now() - speechEndTime >= PAUSE_AFTER_SPEECH);
+    if (speechDone && minMet && pauseMet) {
+      clearInterval(progressInterval);
+      goTo(current + 1);
+    } else {
+      timer = setTimeout(checkReady, 300);
+    }
+  }
+  timer = setTimeout(checkReady, MIN_DURATION);
 }
 
 function nextSlide() { goTo(current + 1); }
@@ -781,6 +814,7 @@ function togglePlay() {
   } else {
     btn.textContent = '▶ Play'; btn.classList.remove('play');
     clearTimeout(timer);
+    clearInterval(progressInterval);
     document.getElementById('progressFill').style.transition = 'none';
   }
 }
