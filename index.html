@@ -1796,6 +1796,12 @@ function nav(page, el) {
   document.getElementById('page-title').textContent = titles[page]||page;
   document.getElementById('topbar-actions').innerHTML = '';
 
+  // Restore sidebar + topbar when navigating away from home
+  if (page !== 'home') {
+    document.getElementById('sidebar').style.display='';
+    const tb=document.querySelector('.topbar'); if(tb) tb.style.display='';
+  }
+
   const pages = {
     home: renderHome,
     dashboard: renderDashboard,
@@ -1830,6 +1836,8 @@ function renderHome() {
   document.getElementById('page-title').textContent='Home';
   document.getElementById('page-sub').textContent='';
   document.getElementById('topbar-actions').innerHTML='';
+  document.getElementById('sidebar').style.display='none';
+  document.querySelector('.topbar').style.display='none';
   const tiles=[
     {id:'dashboard',label:'Dashboard',sub:'My roles & commission',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',grad:'linear-gradient(135deg,#6366f1,#a855f7)'},
     {id:'roles',label:'Roles',sub:'Open positions & tracking',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',grad:'linear-gradient(135deg,#0891b2,#06b6d4)'},
