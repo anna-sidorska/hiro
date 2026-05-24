@@ -3394,7 +3394,7 @@ async function renderInternalPool() {
           '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openInternalProfile(\'' + c.id + '\')">&#128100; Open Profile</button>' +
           (!c.reviewed ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_intPoolMarkReviewed(\'' + c.id + '\')">&#10003; Mark Reviewed</button>' : '') +
           (c.status === 'active' ? '<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_intPoolMarkHired(\'' + c.id + '\')">&#127881; Mark Hired</button>' : '') +
-          (c.cv_url ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="viewCv(\'' + _escHtml(c.cv_url) + '\',this)">&#128196; View CV</button>' : '') +
+          (c.cv_url ? '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="_viewInternalCv(\'' + c.id + '\',\'' + _escHtml(c.cv_url) + '\',this)">&#128196; View CV</button>' : '') +
           (canReactivate ? '<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_intPoolReactivate(\'' + c.id + '\')">&#8634; Reactivate</button>' : '') +
         '</div>' +
       '</div>';
@@ -8745,6 +8745,12 @@ async function viewEpp(eppUrl, btn) {
     }
   } catch(e) { toast('Storage error: '+e.message, 'err'); }
   if (btn) { btn.disabled = false; btn.textContent = origText; }
+}
+
+/// Helper: set _intProfileId then view CV (used from internal pool cards)
+function _viewInternalCv(id, cvUrl, btn) {
+  window._intProfileId = id;
+  viewCv(cvUrl, btn);
 }
 
 // View a CV — handles base64 inline, storage: (candidate-cvs), istorage: (internal-cvs)
