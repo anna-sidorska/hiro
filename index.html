@@ -13415,6 +13415,15 @@ async function _initInternalRegistrationPage() {
 
   document.body.style.background = '#f8fafc';
   document.body.innerHTML = `
+    <style>
+      #int-reg-wrap input, #int-reg-wrap textarea, #int-reg-wrap select {
+        color: #0f172a !important;
+        background: #fff !important;
+      }
+      #int-reg-wrap input::placeholder, #int-reg-wrap textarea::placeholder {
+        color: #9ca3af !important;
+      }
+    </style>
     <div style="min-height:100vh;background:#f8fafc;font-family:inherit">
       <div style="background:var(--sidebar,#1e293b);padding:24px 32px;display:flex;align-items:center;gap:16px">
         <div style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:20px">🏢</div>
@@ -13553,7 +13562,7 @@ async function _irSubmit() {
     manager_name: mgr,
     skills_interests: skills,
     cv_url: cvBase64 ? 'base64:inline' : null,
-    ...(cvBase64 ? { cv_base64: cvBase64, cv_filename: cvFilename, cv_mimetype: cvMimetype, cv_uploaded_at: new Date().toISOString() } : {}),
+    ...(cvBase64 ? { cv_base64: cvBase64, cv_filename: cvFilename, cv_mimetype: cvMimetype } : {}),
     referrer_name: referrerName,
     referrer_email: referrerEmail,
     source: 'self-registered',
