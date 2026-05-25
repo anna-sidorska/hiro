@@ -3564,11 +3564,11 @@ async function _intAssignToRole(internalId, name, email) {
   if (dupApp) { if(res) res.innerHTML='<span style="color:var(--amber)">Already applied to this role</span>'; return; }
   var { error: ae } = await sb.from('applications').insert({ candidate_id: candId, role_id: roleId, stage: 'applied' });
   if (ae) { if(res) res.innerHTML='<span style="color:var(--red)">Error: '+ae.message+'</span>'; return; }
-  // Copy CV reference from internal candidate so it appears in the candidate profile
+  // Copy CV reference + mark as Internal Pool source
   var { data: intRec } = await sb.from('internal_candidates').select('cv_url,cv_filename').eq('id', internalId).single();
-  if (intRec?.cv_url) {
-    await sb.from('candidates').update({ cv_url: 'internal:' + internalId, cv_filename: intRec.cv_filename || null }).eq('id', candId);
-  }
+  var candUpdate = { source: 'Internal Pool' };
+  if (intRec?.cv_url) { candUpdate.cv_url = 'internal:' + internalId; if (intRec.cv_filename) candUpdate.cv_filename = intRec.cv_filename; }
+  await sb.from('candidates').update(candUpdate).eq('id', candId);
   await sb.from('internal_candidates').update({ status: 'hired', reviewed: true, linked_candidate_id: candId }).eq('id', internalId);
   if(res) res.innerHTML='<span style="color:var(--green)">&#10003; Assigned! Candidate added to pipeline.</span>';
   toast(name + ' assigned to role');
@@ -4852,12 +4852,6 @@ function _rdS3Html(d) {
           ${!done('comms_active')?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','comms_active')">✓ Comms Active</button>`:'<span class="tag tag-green" style="font-size:10px">Comms active</span>'}
         </div>
       </div>
-      <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
-        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">Source from Database</button>
-        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Find Past Candidates</button>
-        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">💼 LinkedIn Recruiter →</button>
-      </div>
       ${sorted.length?`<table style="width:100%;border-collapse:collapse" id="s3-cand-table">
         <thead><tr style="background:var(--surface-2)">
           ${['Candidate','Stage','Fit ✦','Location','Salary','Notice','HM',''].map(h=>`<th style="${thS}">${h}</th>`).join('')}
@@ -4868,8 +4862,10 @@ function _rdS3Html(d) {
           const rs=i<3?'24px':'20px';
           const rk=a.fit_score!=null?`<span class="${rc}" style="display:inline-flex;align-items:center;justify-content:center;width:${rs};height:${rs};border-radius:50%;${i>=3?'background:var(--surface-2);color:var(--text-3)':''};font-size:${i<3?'11':'10'}px;font-weight:700;flex-shrink:0">${i+1}</span>`:'<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);color:var(--text-3);font-size:10px">—</span>';
           const nb=daysSince(a.created_at)<=7?'<span class="new-badge">NEW</span>':'';
-          const intBadge=c?.source==='Internal Pool'?'<span style="display:inline-block;font-size:9px;font-weight:700;background:rgba(99,102,241,.15);color:#818cf8;border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:middle">🏢 Internal</span>':'';
-          return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+          const isInternal=c?.source==='Internal Pool';
+          const intBadge=isInternal?'<span style="display:inline-block;font-size:9px;font-weight:700;background:rgba(99,102,241,.15);color:#818cf8;border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:middle">🏢 Internal</span>':'';
+          const rowBg=isInternal?'background:rgba(99,102,241,.05);border-left:3px solid #818cf8':'border-left:3px solid transparent';
+          return `<tr style="cursor:pointer;border-bottom:1px solid var(--border);${rowBg}" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='${isInternal?'rgba(99,102,241,.05)':''}'">
             <td style="padding:10px 12px"><div style="display:flex;align-items:center;gap:8px">${rk}<div><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${nb}${intBadge}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></div></div></td>
             <td style="padding:10px 12px">${stageTag(a.stage)}</td>
             <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
@@ -4880,7 +4876,14 @@ function _rdS3Html(d) {
             <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td>
           </tr>`;
         }).join('')}</tbody>
-      </table>`:'<div class="card-body"><div class="text-muted">No active candidates yet. Use the sourcing tools or drop a CV below.</div></div>'}
+      </table>
+      <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <input id="s3-filter" placeholder="🔍 Filter candidates..." oninput="document.querySelectorAll('#s3-cand-table tbody tr').forEach(tr=>tr.style.display=tr.textContent.toLowerCase().includes(this.value.toLowerCase())?'':'none')" style="flex:1;min-width:160px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+        <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">🔍 Source from DB</button>
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Past Candidates</button>
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">💼 LinkedIn</button>
+      </div>`:'<div class="card-body"><div class="text-muted">No active candidates yet.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal(\'${roleId}\')">+ Add Candidate</button><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal(\'${roleId}\')">🔍 Source from DB</button></div></div>'}
     </div>
 
     <!-- CV Drop Zone (below candidates) -->
