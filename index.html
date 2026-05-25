@@ -8802,10 +8802,24 @@ async function viewCv(cvUrl, btn) {
       var icId2 = cvUrl.replace('internal:', '');
       var { data: ic2 } = await sb.from('internal_candidates').select('cv_base64,cv_filename,cv_mimetype').eq('id', icId2).single();
       if (ic2?.cv_base64) {
-        var a2 = document.createElement('a');
-        a2.href = ic2.cv_base64;
-        a2.download = ic2.cv_filename || 'cv.pdf';
-        a2.click();
+        try {
+          var mimeMatch2 = ic2.cv_base64.match(/^data:([^;]+);base64,/);
+          var mime2 = mimeMatch2 ? mimeMatch2[1] : (ic2.cv_mimetype || 'application/pdf');
+          var raw2 = ic2.cv_base64.replace(/^data:[^;]+;base64,/, '');
+          var byteStr2 = atob(raw2);
+          var ab2 = new ArrayBuffer(byteStr2.length);
+          var ia2 = new Uint8Array(ab2);
+          for (var bi2 = 0; bi2 < byteStr2.length; bi2++) ia2[bi2] = byteStr2.charCodeAt(bi2);
+          var blob2 = new Blob([ab2], {type: mime2});
+          var blobUrl2 = URL.createObjectURL(blob2);
+          window.open(blobUrl2, '_blank');
+          setTimeout(function(){ URL.revokeObjectURL(blobUrl2); }, 60000);
+        } catch(e2) {
+          var dlA2 = document.createElement('a');
+          dlA2.href = ic2.cv_base64;
+          dlA2.download = ic2.cv_filename || 'cv.pdf';
+          dlA2.click();
+        }
         if (btn) { btn.disabled = false; btn.textContent = origText; }
         return;
       }
@@ -8826,10 +8840,26 @@ async function viewCv(cvUrl, btn) {
         }
       }
       if (b64) {
-        var dlA = document.createElement('a');
-        dlA.href = b64;
-        dlA.download = window._intProfileCvFilename || 'cv.pdf';
-        dlA.click();
+        try {
+          // Convert base64 data URL to blob and open in new tab (same experience as regular CVs)
+          var mimeMatch = b64.match(/^data:([^;]+);base64,/);
+          var mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+          var raw = b64.replace(/^data:[^;]+;base64,/, '');
+          var byteStr = atob(raw);
+          var ab = new ArrayBuffer(byteStr.length);
+          var ia = new Uint8Array(ab);
+          for (var bi = 0; bi < byteStr.length; bi++) ia[bi] = byteStr.charCodeAt(bi);
+          var blob = new Blob([ab], {type: mime});
+          var blobUrl = URL.createObjectURL(blob);
+          window.open(blobUrl, '_blank');
+          setTimeout(function(){ URL.revokeObjectURL(blobUrl); }, 60000);
+        } catch(blobErr) {
+          // fallback to download if blob fails
+          var dlA = document.createElement('a');
+          dlA.href = b64;
+          dlA.download = window._intProfileCvFilename || 'cv.pdf';
+          dlA.click();
+        }
         if (btn) { btn.disabled = false; btn.textContent = origText; }
         return;
       }
