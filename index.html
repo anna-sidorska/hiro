@@ -1937,6 +1937,32 @@ function renderHome() {
     </div>`;
 }
 
+function _buildInternalPipelineHtml(apps) {
+  if (!apps || !apps.length) return '';
+  return '<div class="card" style="margin-bottom:20px;border:2px solid #818cf8;background:rgba(99,102,241,.05)">' +
+    '<div class="card-header" style="border-bottom:1px solid rgba(99,102,241,.2);background:rgba(99,102,241,.08)">' +
+      '<div style="display:flex;align-items:center;gap:8px;flex:1">' +
+        '<span style="background:#6366f1;color:#fff;font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px;letter-spacing:.5px">🏢 INTERNAL CANDIDATES IN PIPELINE</span>' +
+        '<span style="font-size:12px;color:#818cf8;font-weight:600">' + apps.length + ' active</span>' +
+      '</div>' +
+      '<button onclick="nav(\'candidates\',document.getElementById(\'nav-candidates\'));setTimeout(function(){renderInternalPool&&renderInternalPool();},300)" style="background:#6366f1;color:#fff;border:none;border-radius:var(--r);padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">View Pool →</button>' +
+    '</div>' +
+    '<div class="card-body" style="padding:0">' +
+    apps.map(function(a) {
+      var c = a.candidates || {};
+      return '<div onclick="openCandidateDrawer(\'' + a.id + '\')" style="padding:8px 14px;border-bottom:1px solid rgba(99,102,241,.12);cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background=\'rgba(99,102,241,.08)\'" onmouseout="this.style.background=\'\'">' +
+        '<span style="width:30px;height:30px;border-radius:50%;background:#6366f1;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">' + ((c.first_name||'?')[0] + (c.last_name||'?')[0]).toUpperCase() + '</span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:13px;font-weight:600;color:var(--brand)">' + (c.first_name||'') + ' ' + (c.last_name||'') + '</div>' +
+          '<div style="font-size:11px;color:var(--text-3)">' + (c.email||'') + ' · ' + ((a.roles||{}).title||'Unknown role') + '</div>' +
+        '</div>' +
+        '<div>' + stageTag(a.stage) + '</div>' +
+        '<span style="font-size:10px;color:#818cf8;font-weight:600;padding:2px 7px;background:rgba(99,102,241,.12);border-radius:99px">→ open</span>' +
+      '</div>';
+    }).join('') +
+    '</div></div>';
+}
+
 // ── DASHBOARD (Recruiter Personal Assistant View) ─────────────
 async function renderDashboard() {
   _pushHistory('dashboard', 'Dashboard', renderDashboard);
@@ -1974,11 +2000,12 @@ async function renderDashboard() {
 
   var results = await Promise.allSettled([
     rolesQuery,
-    sb.from('applications').select('*,candidates(first_name,last_name)').not('stage','in','(hired,rejected,withdrawn)'),
+    sb.from('applications').select('*,candidates(first_name,last_name,source)').not('stage','in','(hired,rejected,withdrawn)'),
     sb.from('roles').select('created_at,updated_at').eq('status','filled').gte('updated_at', qStart).lte('updated_at', qEnd),
     sb.from('candidate_communications').select('candidate_id,created_at').order('created_at', {ascending:false}),
-    sb.from('applications').select('*,candidates(first_name,last_name),roles(title)').not('stage','in','(hired,rejected,withdrawn)').gte('created_at', weekAgoISO),
+    sb.from('applications').select('*,candidates(first_name,last_name,source),roles(title)').not('stage','in','(hired,rejected,withdrawn)').gte('created_at', weekAgoISO),
     sb.from('profiles').select('id,full_name,email'),
+    sb.from('applications').select('id,stage,role_id,candidate_id,candidates(first_name,last_name,email,source),roles(title,id)').not('stage','in','(hired,rejected,withdrawn)').eq('candidates.source','Internal Pool'),
   ]);
 
   function safeVal(i) { return results[i].status === 'fulfilled' ? results[i].value : {}; }
@@ -1990,6 +2017,7 @@ async function renderDashboard() {
   var recentAppsWeek = safeVal(4).data || [];
   var _dashProfiles = {};
   (safeVal(5).data || []).forEach(function(p){ _dashProfiles[p.id] = p; });
+  var internalInPipeline = (safeVal(6).data || []).filter(function(a){ return a.candidates && a.candidates.source === 'Internal Pool'; });
 
   var myRoleIds = myRoles.map(function(r){ return r.id; });
 
@@ -2263,7 +2291,7 @@ async function renderDashboard() {
     '</div>' +
     '</div>' +
     internalBannerHtml + kpiRow +
-    commissionHtml + alertsHtml +
+    commissionHtml + _buildInternalPipelineHtml(internalInPipeline) + alertsHtml +
     '<div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--brand);margin-bottom:12px">Active Roles <span style="color:var(--text-3);font-weight:500;font-size:11px;letter-spacing:0;text-transform:none">(' + myRoles.length + ')</span></div>' +
     rolesHtml;
 }
@@ -3432,6 +3460,8 @@ async function openInternalProfile(id) {
   if (!c) { toast('Could not load profile', 'err'); return; }
   var { data: roles } = await sb.from('roles').select('id,title,department,region').eq('status','open').order('title');
   window._intProfileId = id;
+  window._intProfileCvBase64 = c.cv_base64 || null;
+  window._intProfileCvFilename = c.cv_filename || null;
 
   function _renderIntProfileView(c, roles) {
     var initials = ((c.first_name||'?')[0] + (c.last_name||'?')[0]).toUpperCase();
@@ -8776,20 +8806,25 @@ async function viewCv(cvUrl, btn) {
       if (btn) { btn.disabled = false; btn.textContent = origText; }
       return;
     }
-    // Base64 stored inline in DB — fetch from internal_candidates
+    // Base64 stored inline in DB — use cached data from when profile was opened
     if (cvUrl === 'base64:inline') {
-      // Find the candidate id from the page context
-      var icId = window._intProfileId;
-      if (icId) {
-        var { data: ic } = await sb.from('internal_candidates').select('cv_base64,cv_filename,cv_mimetype').eq('id', icId).single();
-        if (ic?.cv_base64) {
-          var a = document.createElement('a');
-          a.href = ic.cv_base64;
-          a.download = ic.cv_filename || 'cv.pdf';
-          a.click();
-          if (btn) { btn.disabled = false; btn.textContent = origText; }
-          return;
+      var b64 = window._intProfileCvBase64;
+      if (!b64) {
+        // fallback: try fetching from DB
+        var icId = window._intProfileId;
+        if (icId) {
+          var { data: ic } = await sb.from('internal_candidates').select('cv_base64,cv_filename').eq('id', icId).single();
+          b64 = ic?.cv_base64 || null;
+          if (b64) { window._intProfileCvBase64 = b64; window._intProfileCvFilename = ic.cv_filename; }
         }
+      }
+      if (b64) {
+        var dlA = document.createElement('a');
+        dlA.href = b64;
+        dlA.download = window._intProfileCvFilename || 'cv.pdf';
+        dlA.click();
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        return;
       }
       toast('CV data not found', 'err');
       if (btn) { btn.disabled = false; btn.textContent = origText; }
