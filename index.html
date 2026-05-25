@@ -3564,6 +3564,11 @@ async function _intAssignToRole(internalId, name, email) {
   if (dupApp) { if(res) res.innerHTML='<span style="color:var(--amber)">Already applied to this role</span>'; return; }
   var { error: ae } = await sb.from('applications').insert({ candidate_id: candId, role_id: roleId, stage: 'applied' });
   if (ae) { if(res) res.innerHTML='<span style="color:var(--red)">Error: '+ae.message+'</span>'; return; }
+  // Copy CV reference from internal candidate so it appears in the candidate profile
+  var { data: intRec } = await sb.from('internal_candidates').select('cv_url,cv_filename').eq('id', internalId).single();
+  if (intRec?.cv_url) {
+    await sb.from('candidates').update({ cv_url: 'internal:' + internalId, cv_filename: intRec.cv_filename || null }).eq('id', candId);
+  }
   await sb.from('internal_candidates').update({ status: 'hired', reviewed: true, linked_candidate_id: candId }).eq('id', internalId);
   if(res) res.innerHTML='<span style="color:var(--green)">&#10003; Assigned! Candidate added to pipeline.</span>';
   toast(name + ' assigned to role');
@@ -4838,27 +4843,6 @@ function _rdS3Html(d) {
       </div>
     </div>
 
-    <!-- Sourcing Tools -->
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-header">
-        <div class="card-title">🔍 Sourcing Tools</div>
-      </div>
-      <div class="card-body">
-        <div id="s2-query-box" style="display:none;margin-bottom:14px"></div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">💼 LinkedIn Recruiter →</button>
-          <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
-          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">Source from Database</button>
-          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Find Past Candidates</button>
-        </div>
-        ${v.target_companies?`<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Target Companies</div><div style="font-size:12px;color:var(--text-2);background:var(--surface-2);padding:7px 10px;border-radius:var(--r)">${v.target_companies.replace(/\n/g,'<br>')}</div></div>`:''}
-        ${v.target_titles?`<div><div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Target Titles</div><div style="font-size:12px;color:var(--text-2);background:var(--surface-2);padding:7px 10px;border-radius:var(--r)">${v.target_titles.replace(/\n/g,'<br>')}</div></div>`:''}
-      </div>
-    </div>
-
-    <!-- CV Drop Zone -->
-    ${renderCvBucket(roleId)}
-
     <!-- Active Pipeline -->
     <div class="card">
       <div class="card-header">
@@ -4868,7 +4852,13 @@ function _rdS3Html(d) {
           ${!done('comms_active')?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_wfCompleteStep('${roleId}','comms_active')">✓ Comms Active</button>`:'<span class="tag tag-green" style="font-size:10px">Comms active</span>'}
         </div>
       </div>
-      ${sorted.length?`<table style="width:100%;border-collapse:collapse">
+      <div style="padding:10px 14px 0;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add Candidate</button>
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">Source from Database</button>
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">Find Past Candidates</button>
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">💼 LinkedIn Recruiter →</button>
+      </div>
+      ${sorted.length?`<table style="width:100%;border-collapse:collapse" id="s3-cand-table">
         <thead><tr style="background:var(--surface-2)">
           ${['Candidate','Stage','Fit ✦','Location','Salary','Notice','HM',''].map(h=>`<th style="${thS}">${h}</th>`).join('')}
         </tr></thead>
@@ -4878,8 +4868,9 @@ function _rdS3Html(d) {
           const rs=i<3?'24px':'20px';
           const rk=a.fit_score!=null?`<span class="${rc}" style="display:inline-flex;align-items:center;justify-content:center;width:${rs};height:${rs};border-radius:50%;${i>=3?'background:var(--surface-2);color:var(--text-3)':''};font-size:${i<3?'11':'10'}px;font-weight:700;flex-shrink:0">${i+1}</span>`:'<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);color:var(--text-3);font-size:10px">—</span>';
           const nb=daysSince(a.created_at)<=7?'<span class="new-badge">NEW</span>':'';
+          const intBadge=c?.source==='Internal Pool'?'<span style="display:inline-block;font-size:9px;font-weight:700;background:rgba(99,102,241,.15);color:#818cf8;border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:middle">🏢 Internal</span>':'';
           return `<tr style="cursor:pointer;border-bottom:1px solid var(--border)" onclick="openCandidateDrawer('${a.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
-            <td style="padding:10px 12px"><div style="display:flex;align-items:center;gap:8px">${rk}<div><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${nb}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></div></div></td>
+            <td style="padding:10px 12px"><div style="display:flex;align-items:center;gap:8px">${rk}<div><div style="font-weight:600;font-size:13px;color:var(--brand)">${c?.first_name} ${c?.last_name}${nb}${intBadge}</div><div style="font-size:11px;color:var(--text-3)">${c?.email||''}</div></div></div></td>
             <td style="padding:10px 12px">${stageTag(a.stage)}</td>
             <td style="padding:10px 12px">${_fitScoreBadge(a.fit_score)}</td>
             <td style="padding:10px 12px;font-size:12px">${c?.location||'—'}</td>
@@ -4889,8 +4880,15 @@ function _rdS3Html(d) {
             <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open</button></td>
           </tr>`;
         }).join('')}</tbody>
-      </table>`:'<div class="card-body"><div class="text-muted">No active candidates yet — drop a CV above or use the sourcing tools</div></div>'}
-    </div>`;
+      </table>`:'<div class="card-body"><div class="text-muted">No active candidates yet. Use the sourcing tools or drop a CV below.</div></div>'}
+    </div>
+
+    <!-- CV Drop Zone (below candidates) -->
+    ${renderCvBucket(roleId)}
+
+    <!-- Sourcing query box (used by LinkedIn sourcer) -->
+    <div id="s2-query-box" style="display:none;margin-top:12px"></div>
+  `;
 }
 
 // ══════════════════════════════════════════════
@@ -8759,6 +8757,22 @@ async function viewCv(cvUrl, btn) {
   const origText = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   try {
+    // Internal candidate CV referenced from candidates table — fetch from internal_candidates by ID
+    if (cvUrl.startsWith('internal:')) {
+      var icId2 = cvUrl.replace('internal:', '');
+      var { data: ic2 } = await sb.from('internal_candidates').select('cv_base64,cv_filename,cv_mimetype').eq('id', icId2).single();
+      if (ic2?.cv_base64) {
+        var a2 = document.createElement('a');
+        a2.href = ic2.cv_base64;
+        a2.download = ic2.cv_filename || 'cv.pdf';
+        a2.click();
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        return;
+      }
+      toast('CV data not found', 'err');
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+      return;
+    }
     // Base64 stored inline in DB — fetch from internal_candidates
     if (cvUrl === 'base64:inline') {
       // Find the candidate id from the page context
