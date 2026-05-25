@@ -5774,27 +5774,23 @@ JSON:`;
     try { extracted = JSON.parse(jsonStr); }
     catch(e) { throw new Error('Could not parse response as JSON'); }
 
-    // Populate form fields
-    const set = (id, val) => {
-      const el = document.getElementById(id);
-      if (!el || val === null || val === undefined) return;
-      if (el.type === 'checkbox') el.checked = !!val;
-      else el.value = val;
-    };
-
-    Object.keys(extracted).forEach(key => {
-      set('ri-' + key, extracted[key]);
-    });
-
     // Count filled fields for feedback
     const filled = Object.values(extracted).filter(v => v !== null && v !== '' && v !== false).length;
 
     statusEl.innerHTML = `<div style="color:var(--green-text);background:var(--green-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">✓ ${filled} fields extracted — review and save the form</div>`;
 
-    // Close modal after short delay and switch to intake tab
+    // Close modal, switch tab (re-renders DOM), then populate fields
     setTimeout(() => {
       closeModal('modal-transcript-intake');
       _rdSwitchTab('intake');
+      // Fields now exist in DOM — populate after render
+      const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (!el || val === null || val === undefined) return;
+        if (el.type === 'checkbox') el.checked = !!val;
+        else el.value = val;
+      };
+      Object.keys(extracted).forEach(key => set('ri-' + key, extracted[key]));
       toast('Intake fields populated from transcript ✓');
     }, 1200);
 
@@ -5804,10 +5800,14 @@ JSON:`;
       const extracted = _ruleBasedExtract(transcript);
       const filled = Object.values(extracted).filter(v => v !== null && v !== '').length;
       if (filled > 0) {
-        const set = (id, val) => { const el=document.getElementById(id); if(!el||val===null||val===undefined)return; if(el.type==='checkbox')el.checked=!!val; else el.value=val; };
-        Object.keys(extracted).forEach(k => set('ri-'+k, extracted[k]));
         statusEl.innerHTML = `<div style="color:var(--amber-text);background:var(--amber-bg);padding:10px 12px;border-radius:var(--r);font-size:13px">⚡ ${filled} fields extracted via smart parser (AI quota exceeded — try AI again tomorrow)</div>`;
-        setTimeout(() => { closeModal('modal-transcript-intake'); _rdSwitchTab('intake'); toast('Intake fields populated ✓'); }, 1400);
+        setTimeout(() => {
+          closeModal('modal-transcript-intake');
+          _rdSwitchTab('intake');
+          const set = (id, val) => { const el=document.getElementById(id); if(!el||val===null||val===undefined)return; if(el.type==='checkbox')el.checked=!!val; else el.value=val; };
+          Object.keys(extracted).forEach(k => set('ri-'+k, extracted[k]));
+          toast('Intake fields populated ✓');
+        }, 1400);
         return;
       }
     } catch(e2) {}
