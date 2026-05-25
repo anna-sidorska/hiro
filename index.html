@@ -6148,9 +6148,9 @@ async function _markJdHmApproved(roleId,jdId) {
   const approvalUrl=window.location.origin+window.location.pathname+'?approval='+token;
   const role=_rdData.role||{};
   const jd=_rdData.roleJd||{};
-  const hmEmail=localStorage.getItem('hiro_hm_email_'+roleId)||'';
-  const hmName=localStorage.getItem('hiro_hm_name_'+roleId)||'';
-  const roleTitle=jd.title||role.title||'the role';
+  const hmEmail=localStorage.getItem('hiro_hm_email_'+roleId)||role.profiles?.email||'';
+  const hmName=localStorage.getItem('hiro_hm_name_'+roleId)||role.profiles?.full_name||'';
+  const roleTitle=(jd.title||role.title||'the role').replace(/\s*\(\d+\)\s*$/,'').trim();
   const greeting=hmName?'Hi '+hmName.split(' ')[0]+',':'Hi,';
 
   const emailBody=`${greeting}
