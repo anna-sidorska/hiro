@@ -11636,7 +11636,16 @@ async function _outlookSendMail(toEmail, subject, htmlBody) {
 // Option A (PA):   POSTs to hiro_pa_calendar_webhook if configured — used when
 //                  Graph API is unavailable (e.g. no admin consent yet) or from
 //                  the anonymous booking page.
+// Session-level guard: prevents firing the webhook twice for the same booking
+// within a single browser session (e.g. if the view re-renders before Supabase
+// has persisted calendar_invite_sent = true).
+if (!window._invitesSentThisSession) window._invitesSentThisSession = new Set();
+
 async function _createInterviewCalendarInvite(booking, { useGraph = true } = {}) {
+  // Guard: skip if already fired for this booking in this session
+  if (window._invitesSentThisSession.has(booking.id)) {
+    return { ok: true, method: 'already_sent' };
+  }
   var slot = booking.selected_slot || (booking.slots && booking.slots[0]);
   if (!slot) return { ok: false, error: 'No slot data' };
   var start = new Date(slot.iso);
@@ -11658,7 +11667,7 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
         location: 'Microsoft Teams'
       });
       if (ok) {
-        // Mark calendar_invite_sent in booking_links
+        window._invitesSentThisSession.add(booking.id);
         try { await sb.from('booking_links').update({ calendar_invite_sent: true }).eq('id', booking.id); } catch(e) {}
         return { ok: true, method: 'graph' };
       }
@@ -11687,6 +11696,7 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
         })
       });
       if (resp.ok) {
+        window._invitesSentThisSession.add(booking.id);
         try { await sb.from('booking_links').update({ calendar_invite_sent: true }).eq('id', booking.id); } catch(e) {}
         return { ok: true, method: 'pa' };
       }
