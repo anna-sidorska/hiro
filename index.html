@@ -11784,9 +11784,7 @@ async function _bookSlot(bookId, slotIndex) {
     const toIso = d => d.toISOString().replace(/\.\d{3}Z$/, '');
     const bookingWithSlot = { ...booking, id: bookId, selected_slot: slot };
 
-    // Send calendar invite via PA (Option A — works from anon page)
-    const inviteResult = await _createInterviewCalendarInvite(bookingWithSlot, { useGraph: false });
-
+    // Calendar invite is fired server-side via pg_net in book_interview_slot RPC
     // Send confirmation email to all parties via PA email webhook
     const paEmailWebhook = booking.pa_email_webhook;
     if (paEmailWebhook) {
