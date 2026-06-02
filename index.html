@@ -11510,28 +11510,37 @@ async function _outlookReadCalendar(startDate, endDate) {
 
 // ── GRAPH: find meeting times (free/busy across attendees) ───────────────────
 async function _graphFindMeetingTimes(attendeeEmailsCsv, durationMins, from, to) {
-  // Uses getSchedule API — more reliable than findMeetingTimes.
-  // Treats tentative (1) as BUSY — only '0' (free) counts as available.
+  // Uses getSchedule API. Only '0' (free) is treated as available.
+  // '1'=tentative, '2'=busy, '3'=OOF, '4'=working elsewhere — all blocked.
   const token = await _outlookGetToken();
   if (!token) throw new Error('Outlook not connected — sign in via Settings → Integrations');
 
-  // Resolve my own email
-  const meRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName', {
-    headers: { 'Authorization': 'Bearer ' + token }
-  });
-  const me = await meRes.json();
-  const myEmail = (me.mail || me.userPrincipalName || '').toLowerCase();
+  // Resolve my own email — fall back to stored Outlook account email if /me fetch fails
+  let myEmail = (_outlookAccount?.email || '').toLowerCase();
+  try {
+    const meRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (meRes.ok) {
+      const me = await meRes.json();
+      myEmail = (me.mail || me.userPrincipalName || myEmail).toLowerCase();
+    }
+  } catch(e) { /* use fallback */ }
+  if (!myEmail) throw new Error('Could not resolve your email — reconnect Outlook in Settings → Integrations');
 
   const attendeeEmails = attendeeEmailsCsv.split(/[,;]/).map(e => {
     e = e.trim();
     return (e.includes('<') ? e.match(/<([^>]+)>/)[1] : e).toLowerCase();
   }).filter(Boolean);
 
-  // Include organiser so we check Anna's calendar too
+  // Always include organiser (recruiter) so their tentative/busy blocks are respected
   const allEmails = [myEmail, ...attendeeEmails.filter(e => e !== myEmail)];
-  const intervalMins = 30; // 30-min granularity
+  const intervalMins = 30;
 
-  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Interviewer working hours — configurable in Settings, default 09:00–18:00
+  const iwStart = parseInt(localStorage.getItem('hiro_iv_hour_start') || '9');  // earliest slot start
+  const iwEnd   = parseInt(localStorage.getItem('hiro_iv_hour_end')   || '18'); // latest slot end
+
   const body = {
     schedules: allEmails,
     startTime: { dateTime: from + 'T00:00:00', timeZone: 'UTC' },
@@ -11541,39 +11550,40 @@ async function _graphFindMeetingTimes(attendeeEmailsCsv, durationMins, from, to)
 
   const res = await fetch('https://graph.microsoft.com/v1.0/me/calendar/getSchedule', {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
-  , body: JSON.stringify(body) });
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error('getSchedule error: ' + (err.error?.message || 'HTTP ' + res.status));
   }
   const data = await res.json();
-  const schedules = data.value || [];
+  // Only use schedules that returned a valid availabilityView — skip errored ones
+  const schedules = (data.value || []).filter(s => s.availabilityView && s.availabilityView.length > 0);
   if (!schedules.length) return [];
 
   const slotsNeeded = Math.max(1, Math.ceil(durationMins / intervalMins));
-  const viewLen = Math.min(...schedules.map(s => (s.availabilityView || '').length));
-  const startMs = Date.parse(from + 'T00:00:00Z'); // midnight UTC on start date
+  const viewLen = Math.min(...schedules.map(s => s.availabilityView.length));
+  const startMs = Date.parse(from + 'T00:00:00Z'); // midnight UTC
   const results = [];
 
   for (let i = 0; i <= viewLen - slotsNeeded; i++) {
-    // Check slotsNeeded consecutive intervals — ALL people must be '0' (free)
-    // '1' = tentative → treated as BUSY, '2'= busy, '3'=OOF, '4'=working elsewhere
+    // ALL attendees must be strictly '0' (free) for every interval in the slot.
+    // Anything else — tentative ('1'), busy ('2'), OOF ('3'), elsewhere ('4') — blocks it.
     let allFree = true;
     for (let j = i; j < i + slotsNeeded; j++) {
-      if (!schedules.every(s => (s.availabilityView || '')[j] === '0')) { allFree = false; break; }
+      if (!schedules.every(s => s.availabilityView[j] === '0')) { allFree = false; break; }
     }
     if (!allFree) continue;
 
     const slotStart = new Date(startMs + i * intervalMins * 60000);
-    const day = slotStart.getDay(); // local weekday
-    const hour = slotStart.getHours(); // local hour
-    const minOfDay = hour * 60 + slotStart.getMinutes();
+    const day = slotStart.getDay();
+    const minOfDay = slotStart.getHours() * 60 + slotStart.getMinutes();
 
-    // Only weekdays 08:00–17:00 local (so meeting ends by 18:00 at latest)
+    // Weekdays only, within interviewer's configured working hours
     if (day === 0 || day === 6) continue;
-    if (minOfDay < 8 * 60 || minOfDay + durationMins > 18 * 60) continue;
+    if (minOfDay < iwStart * 60 || minOfDay + durationMins > iwEnd * 60) continue;
 
     const slotEnd = new Date(slotStart.getTime() + durationMins * 60000);
     results.push({
@@ -11584,7 +11594,7 @@ async function _graphFindMeetingTimes(attendeeEmailsCsv, durationMins, from, to)
       confidence: 100
     });
     if (results.length >= 10) break;
-    i += slotsNeeded - 1; // skip past this slot to avoid overlapping suggestions
+    i += slotsNeeded - 1;
   }
   return results;
 }
@@ -11708,7 +11718,11 @@ async function _initBookingPage(bookId) {
         </div>`;
       return;
     }
-    const slots = booking.slots || [];
+    // Filter to slots that fall within 07:00–19:00 in the candidate's local timezone
+    const slots = (booking.slots || []).filter(s => {
+      const h = new Date(s.iso).getHours();
+      return h >= 7 && (h * 60 + new Date(s.iso).getMinutes() + (booking.duration_mins || 60)) <= 19 * 60;
+    });
     if (!slots.length) { card.innerHTML = '<div style="color:#d97706;font-size:14px">No time slots available. Please contact your recruiter.</div>'; return; }
     card.innerHTML = `
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.35);margin-bottom:16px">Available Slots</div>
@@ -12411,6 +12425,7 @@ function renderIntegrations() {
       {domain:'Jira Domain',email:'Email',api_token:'API Token',project_key:'Project Key'},'IT onboarding ticket creation') +
     intCard('adp','ADP','🏦','Add new hires to ADP when they are hired in Hiro.',
       {client_id:'Client ID',client_secret:'Client Secret',company_code:'Company Code'},'New hire provisioning') +
+    '<div class="card" style="margin-bottom:16px"><div class="card-header"><div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">🗓</span><div class="card-title">Interview Scheduling Hours</div></div><div style="font-size:11px;color:var(--text-3);margin-top:2px">Controls which time windows are offered when finding interview slots</div></div></div><div class="card-body"><div style="font-size:12px;color:var(--text-2);margin-bottom:14px">Interviewer slots are only generated within your configured working hours. Candidate booking page filters to 07:00–19:00 in the candidate\'s local timezone.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px"><div><label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Earliest slot start (your local time)</label><select id="int-iv-hour-start" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text)">' + [7,8,9,10].map(function(h){var v=localStorage.getItem('hiro_iv_hour_start')||'9';return '<option value="'+h+'"'+(v==h?' selected':'')+'>'+String(h).padStart(2,'0')+':00</option>';}).join('') + '</select></div><div><label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Latest slot end (your local time)</label><select id="int-iv-hour-end" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text)">' + [16,17,18,19].map(function(h){var v=localStorage.getItem('hiro_iv_hour_end')||'18';return '<option value="'+h+'"'+(v==h?' selected':'')+'>'+String(h).padStart(2,'0')+':00</option>';}).join('') + '</select></div></div><button class="btn btn-outline btn-sm" onclick="var s=document.getElementById(\'int-iv-hour-start\').value,e=document.getElementById(\'int-iv-hour-end\').value;localStorage.setItem(\'hiro_iv_hour_start\',s);localStorage.setItem(\'hiro_iv_hour_end\',e);toast(\'Scheduling hours saved ✓\')">Save Hours</button></div></div>' +
     '<div style="margin-top:24px;margin-bottom:12px"><div style="font-size:15px;font-weight:700;margin-bottom:4px">Job Boards</div>' +
     '<div style="font-size:12px;color:var(--text-3);margin-bottom:16px">Configure job board credentials to enable one-click posting from role details.</div>' +
     '<div class="card"><div class="card-body">' +
