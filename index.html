@@ -1830,6 +1830,7 @@ function refreshCurrentPage() {
     management_view: renderManagement, scheduling_hub: renderSchedulingHub,
     recruiter_stats: renderRecruiterStats, roles_tracker: renderRolesTracker,
     hiring_dashboard: renderHiringDashboard,
+    internal_pool: function(){ window._candTab='internal'; renderInternalPool(); },
   };
   if (pages[currentPage]) { pages[currentPage](); loadSidebarCounts(); }
 }
@@ -1890,6 +1891,7 @@ function nav(page, el) {
     recruiter_stats: renderRecruiterStats,
     roles_tracker: renderRolesTracker,
     hiring_dashboard: renderHiringDashboard,
+    internal_pool: function(){ window._candTab='internal'; renderInternalPool(); },
   };
   if(pages[page]) pages[page]();
 }
