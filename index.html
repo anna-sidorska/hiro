@@ -11810,9 +11810,7 @@ async function _bookSlot(bookId, slotIndex) {
       }).catch(() => {});
     }
 
-    const inviteNote = inviteResult.ok
-      ? '<div style="font-size:13px;color:#059669;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">📅 A calendar invite has been sent to all parties.</div>'
-      : '<div style="font-size:13px;color:#6b7280;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">Your recruiter has been notified and will send a calendar invite to <strong>' + booking.candidate_email + '</strong> shortly.</div>';
+    const inviteNote = '<div style="font-size:13px;color:#059669;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">📅 A calendar invite will be sent to all participants — candidate, interviewer(s), and recruiter.</div>';
     card.innerHTML = `
       <div style="text-align:center">
         <div style="font-size:48px;margin-bottom:16px">🎉</div>
