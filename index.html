@@ -11642,10 +11642,12 @@ async function _outlookSendMail(toEmail, subject, htmlBody) {
 if (!window._invitesSentThisSession) window._invitesSentThisSession = new Set();
 
 async function _createInterviewCalendarInvite(booking, { useGraph = true } = {}) {
-  // Guard: skip if already fired for this booking in this session
+  // Guard: mark synchronously BEFORE any await to prevent race condition
+  // when forEach fires multiple bookings simultaneously.
   if (window._invitesSentThisSession.has(booking.id)) {
     return { ok: true, method: 'already_sent' };
   }
+  window._invitesSentThisSession.add(booking.id); // claim the slot immediately
   var slot = booking.selected_slot || (booking.slots && booking.slots[0]);
   if (!slot) return { ok: false, error: 'No slot data' };
   var start = new Date(slot.iso);
@@ -11667,7 +11669,6 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
         location: 'Microsoft Teams'
       });
       if (ok) {
-        window._invitesSentThisSession.add(booking.id);
         try { await sb.from('booking_links').update({ calendar_invite_sent: true }).eq('id', booking.id); } catch(e) {}
         return { ok: true, method: 'graph' };
       }
@@ -11696,12 +11697,13 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
         })
       });
       if (resp.ok) {
-        window._invitesSentThisSession.add(booking.id);
         try { await sb.from('booking_links').update({ calendar_invite_sent: true }).eq('id', booking.id); } catch(e) {}
         return { ok: true, method: 'pa' };
       }
+      window._invitesSentThisSession.delete(booking.id); // allow retry on PA error
       return { ok: false, error: 'PA webhook returned ' + resp.status };
     } catch(e) {
+      window._invitesSentThisSession.delete(booking.id); // allow retry on network error
       return { ok: false, error: e.message };
     }
   }
