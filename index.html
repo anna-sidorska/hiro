@@ -5520,7 +5520,10 @@ async function _s4SendSelfSchedule(roleId) {
       slots: slots,
       duration_mins: duration,
       status: 'pending',
-      created_by: uid
+      created_by: uid,
+      pa_calendar_webhook: localStorage.getItem('hiro_pa_calendar_webhook') || null,
+      pa_email_webhook: localStorage.getItem('hiro_pa_webhook') || null,
+      recruiter_email: currentUser?.email || null
     }).select('id').maybeSingle();
     if (error) {
       // Table might not exist — show SQL
@@ -11656,7 +11659,9 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
   }
 
   // Option A — Power Automate webhook fallback
-  var paWebhook = typeof localStorage !== 'undefined' && localStorage.getItem('hiro_pa_calendar_webhook');
+  // Prefer webhook stored in the booking record (works from candidate's browser),
+  // fall back to localStorage for recruiter-side calls.
+  var paWebhook = booking.pa_calendar_webhook || (typeof localStorage !== 'undefined' && localStorage.getItem('hiro_pa_calendar_webhook'));
   if (paWebhook) {
     try {
       var resp = await fetch(paWebhook, {
@@ -11766,14 +11771,39 @@ async function _bookSlot(bookId, slotIndex) {
     if (error) throw new Error(error.message);
     if (rpcResult && rpcResult.error) throw new Error(rpcResult.error);
     const dt = new Date(slot.iso);
-    // Attempt to auto-send calendar invite via PA webhook (Option A — works from anon page)
-    const inviteResult = await _createInterviewCalendarInvite(
-      { ...booking, id: bookId, selected_slot: slot },
-      { useGraph: false }  // Graph API not available on anon booking page
-    );
+    const end = new Date(dt.getTime() + (booking.duration_mins || 60) * 60000);
+    const toIso = d => d.toISOString().replace(/\.\d{3}Z$/, '');
+    const bookingWithSlot = { ...booking, id: bookId, selected_slot: slot };
+
+    // Send calendar invite via PA (Option A — works from anon page)
+    const inviteResult = await _createInterviewCalendarInvite(bookingWithSlot, { useGraph: false });
+
+    // Send confirmation email to all parties via PA email webhook
+    const paEmailWebhook = booking.pa_email_webhook;
+    if (paEmailWebhook) {
+      const recipients = [booking.candidate_email, booking.interviewer_emails, booking.recruiter_email]
+        .filter(Boolean).join(',');
+      const dateStr = dt.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+      const timeStr = dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+      fetch(paEmailWebhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipients,
+          subject: 'Interview Confirmed – Sovos',
+          body: 'Hi,\n\nThis email confirms your interview has been scheduled.\n\nDate: ' + dateStr + '\nTime: ' + timeStr + '\nDuration: ' + (booking.duration_mins || 60) + ' min\n\nA calendar invite has been sent separately. If you have any questions, please contact your recruiter.\n\nBest regards,\nSovos Talent Acquisition',
+          start_datetime: toIso(dt),
+          end_datetime: toIso(end),
+          candidate_email: booking.candidate_email,
+          interviewer_email: booking.interviewer_emails || '',
+          recruiter_email: booking.recruiter_email || ''
+        })
+      }).catch(() => {});
+    }
+
     const inviteNote = inviteResult.ok
-      ? '<div style="font-size:13px;color:#059669;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">📅 A calendar invite has been sent to <strong>' + booking.candidate_email + '</strong>.</div>'
-      : '<div style="font-size:13px;color:#6b7280;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">The recruitment team has been notified and will send a calendar invite to <strong>' + booking.candidate_email + '</strong> shortly.</div>';
+      ? '<div style="font-size:13px;color:#059669;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">📅 A calendar invite has been sent to all parties.</div>'
+      : '<div style="font-size:13px;color:#6b7280;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:12px">Your recruiter has been notified and will send a calendar invite to <strong>' + booking.candidate_email + '</strong> shortly.</div>';
     card.innerHTML = `
       <div style="text-align:center">
         <div style="font-size:48px;margin-bottom:16px">🎉</div>
@@ -13431,7 +13461,10 @@ async function _cfpFindAndBookTab() {
       slots: slots,
       duration_mins: duration,
       status: 'pending',
-      created_by: uid
+      created_by: uid,
+      pa_calendar_webhook: localStorage.getItem('hiro_pa_calendar_webhook') || null,
+      pa_email_webhook: localStorage.getItem('hiro_pa_webhook') || null,
+      recruiter_email: currentUser?.email || null
     }).select('id').maybeSingle();
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
@@ -13494,7 +13527,10 @@ async function _cfpSendSelfSchedule() {
       slots: slots,
       duration_mins: duration,
       status: 'pending',
-      created_by: uid
+      created_by: uid,
+      pa_calendar_webhook: localStorage.getItem('hiro_pa_calendar_webhook') || null,
+      pa_email_webhook: localStorage.getItem('hiro_pa_webhook') || null,
+      recruiter_email: currentUser?.email || null
     }).select('id').maybeSingle();
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
