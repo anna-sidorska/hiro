@@ -14625,6 +14625,9 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
   var tpl = document.getElementById('cfp-template-sel') ? document.getElementById('cfp-template-sel').value : '';
   if (!email || !subject || !body) { toast('Subject and body required','err'); return; }
 
+  // Ensure MSAL account is restored before checking _outlookAccount
+  if (!_outlookAccount) { try { _msalInit(); } catch(e) {} }
+
   var paWebhook = localStorage.getItem('hiro_pa_webhook');
   var svcId = localStorage.getItem('hiro_ejs_service');
   var tplId = localStorage.getItem('hiro_ejs_template');
@@ -14638,7 +14641,7 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
       if (ok) { sent = true; toast('Email sent via Outlook ✓'); }
       else throw new Error('Graph sendMail returned false');
     } catch(e) {
-      toast('Outlook send failed — opening in Outlook compose', 'err');
+      toast('Opening in Outlook compose…');
       window.location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
       sent = true;
     }
@@ -14664,7 +14667,7 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
         throw new Error('Flow returned ' + paRes.status);
       }
     } catch(e) {
-      toast('PA email flow failed — opening in Outlook compose', 'err');
+      toast('Opening in Outlook compose…');
       window.location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
       sent = true;
     }
