@@ -11854,7 +11854,10 @@ async function _bookSlot(bookId, slotIndex) {
     const toIso = d => d.toISOString().replace(/\.\d{3}Z$/, '');
     const bookingWithSlot = { ...booking, id: bookId, selected_slot: slot };
 
-    // Calendar invite is fired server-side via pg_net in book_interview_slot RPC
+    // Fire calendar invite from candidate's browser — atomic DB claim ensures only one invite sent
+    // even if recruiter also clicks "Send Invite" button after this
+    _createInterviewCalendarInvite(bookingWithSlot, { useGraph: false }).catch(function(){});
+
     // Send confirmation email to all parties via PA email webhook
     const paEmailWebhook = booking.pa_email_webhook;
     if (paEmailWebhook) {
@@ -11914,12 +11917,8 @@ async function _bookSlot(bookId, slotIndex) {
           to: recipients,
           subject: 'Interview Confirmed – Sovos',
           body: htmlBody,
-          isHtml: true,
-          start_datetime: toIso(dt),
-          end_datetime: toIso(end),
-          candidate_email: booking.candidate_email,
-          interviewer_email: booking.interviewer_emails || '',
-          recruiter_email: booking.recruiter_email || ''
+          html_body: htmlBody,
+          isHtml: true
         })
       }).catch(() => {});
     }
