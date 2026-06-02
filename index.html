@@ -5546,22 +5546,37 @@ async function _s4SendSelfSchedule(roleId) {
     const bookingUrl = window.location.origin + window.location.pathname + '?book=' + bookId;
     // Send email via Outlook
     const roleTitleSafe = (role?.title || 'role at Sovos').replace(/</g,'&lt;');
-    const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px">
-<p>Hi,</p>
-<p>Thank you for your interest in the <strong>${roleTitleSafe}</strong> position at Sovos. We'd love to schedule an interview with you.</p>
-<p>Please click the button below to choose a time that works for you:</p>
-<p style="margin:24px 0"><a href="${bookingUrl}" style="background:#1a56db;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Choose Your Interview Time</a></p>
-<p style="font-size:13px;color:#6b7280">If the button doesn't work, copy and paste this link into your browser:<br><a href="${bookingUrl}" style="color:#1a56db">${bookingUrl}</a></p>
-<p style="margin-top:24px">Best regards,<br><strong>${_outlookAccount?.name || 'Sovos Talent Acquisition'}</strong></p>
-</div>`;
+    const senderName = _outlookAccount?.name || 'Sovos Talent Acquisition';
+    const emailHtml = `<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:32px 0;font-family:'Segoe UI',Arial,sans-serif">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden">
+  <tr><td style="background:#1a2b4a;padding:28px 40px;text-align:center">
+    <div style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px">Hiro <span style="color:#4f8ef7">·</span> Sovos</div>
+    <div style="color:#94a3b8;font-size:12px;margin-top:4px;letter-spacing:1px;text-transform:uppercase">Talent Acquisition</div>
+  </td></tr>
+  <tr><td style="padding:36px 40px">
+    <p style="margin:0 0 16px;font-size:15px;color:#374151">Hi,</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6">Thank you for your interest in the <strong>${roleTitleSafe}</strong> position at Sovos. We'd love to move forward and invite you to an interview.</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6">Please use the button below to select a time that works best for you:</p>
+    <p style="margin:28px 0;text-align:center"><a href="${bookingUrl}" style="background:#1a56db;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Choose Your Interview Time</a></p>
+    <p style="font-size:13px;color:#6b7280;line-height:1.6">If the button doesn't work, copy and paste this link into your browser:<br><a href="${bookingUrl}" style="color:#1a56db;word-break:break-all">${bookingUrl}</a></p>
+    <p style="margin-top:32px;font-size:15px;color:#374151">Best regards,<br><strong>${senderName}</strong></p>
+  </td></tr>
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center">
+    <div style="font-size:12px;color:#94a3b8">Automated message from <strong style="color:#374151">Sovos Talent Acquisition</strong></div>
+    <div style="font-size:11px;color:#cbd5e1;margin-top:6px">Powered by Hiro · TA Ops</div>
+  </td></tr>
+</table>
+</td></tr>
+</table>`;
     let emailSent = false;
     if (_outlookAccount) {
       emailSent = await _outlookSendMail(candidateEmail, `Interview Scheduling – ${roleTitleSafe} at Sovos`, emailHtml);
     }
     // Log activity
     try { await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'self_schedule_sent',p_description:'Self-schedule link sent to '+candidateEmail}); } catch(e) {}
-    var mailtoSubj = encodeURIComponent('Interview Scheduling – ' + (role?.title||'role at Sovos'));
-    var mailtoBody = encodeURIComponent('Hi,\n\nThank you for your interest in the ' + (role?.title||'role') + ' position at Sovos. We\'d love to schedule an interview with you.\n\nPlease use the link below to choose a time that works for you:\n\n' + bookingUrl + '\n\nBest regards,\n' + (_outlookAccount?.name||'Sovos Talent Acquisition'));
+    var mailtoSubj = encodeURIComponent('Interview Invitation – ' + (role?.title||'role') + ' at Sovos');
+    var mailtoBody = encodeURIComponent('Hi,\n\nThank you for your interest in the ' + (role?.title||'role') + ' position at Sovos. We\'d love to move forward and invite you to an interview.\n\nPlease use the link below to select a time that works best for you:\n\n' + bookingUrl + '\n\nIf you have any questions in the meantime, feel free to reply to this email.\n\nBest regards,\n' + (_outlookAccount?.name||'Sovos Talent Acquisition') + '\nSovos Talent Acquisition');
     result.innerHTML =
       '<div style="padding:10px 12px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);font-size:12px;color:var(--green-text)">' +
       (emailSent ? '✅ Email sent to ' + candidateEmail : '📋 Booking link created') +
@@ -11702,7 +11717,7 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           candidate_email:   booking.candidate_email,
-          interviewer_email: booking.interviewer_emails || '',
+          interviewer_email: '',
           start_datetime:    toIso(start),
           end_datetime:      toIso(end),
           duration_mins:     booking.duration_mins || 60,
@@ -13094,7 +13109,7 @@ async function _cfpFindAndBook(appId, roleId) {
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var sSubj = encodeURIComponent('Interview Scheduling – Sovos');
-    var sBody = encodeURIComponent('Hi,\n\nThank you for applying to Sovos. Please use the link below to choose your interview time:\n\n' + bookUrl + '\n\nBest regards,\nSovos Talent Acquisition');
+    var sBody = encodeURIComponent('Hi,\n\nThank you for your interest in Sovos. We\'d love to move forward and invite you to an interview.\n\nPlease use the link below to select a time that works best for you:\n\n' + bookUrl + '\n\nIf you have any questions, feel free to reply to this email.\n\nBest regards,\nSovos Talent Acquisition');
     result.innerHTML =
       '<div style="padding:8px 10px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);color:var(--green-text);font-size:12px">' +
       '✅ Link created! <a href="' + bookUrl + '" target="_blank" style="color:var(--brand);font-size:11px;display:block;margin-top:4px;word-break:break-all">' + bookUrl + '</a>' +
@@ -13542,7 +13557,7 @@ async function _cfpFindAndBookTab() {
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
-    var body = encodeURIComponent('Hi,\n\nThank you for your interest in Sovos. Please use the link below to choose your interview time:\n\n' + bookUrl + '\n\nBest regards,\nSovos Talent Acquisition');
+    var body = encodeURIComponent('Hi,\n\nThank you for your interest in Sovos. We\'d love to move forward and invite you to an interview.\n\nPlease use the link below to select a time that works best for you:\n\n' + bookUrl + '\n\nIf you have any questions, feel free to reply to this email.\n\nBest regards,\nSovos Talent Acquisition');
     if (result) result.innerHTML =
       '<div style="padding:8px 10px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);color:var(--green-text);font-size:12px">' +
       '✅ Link created with ' + slots.length + ' slots!' +
@@ -13601,7 +13616,7 @@ async function _cfpSendSelfSchedule() {
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
-    var body = encodeURIComponent('Hi,\n\nThank you for your interest. Please use the link below to choose a time that works for you:\n\n' + bookUrl + '\n\nBest regards,\nSovos Talent Acquisition');
+    var body = encodeURIComponent('Hi,\n\nThank you for your interest in Sovos. We\'d love to move forward and invite you to an interview.\n\nPlease use the link below to select a time that works best for you:\n\n' + bookUrl + '\n\nIf you have any questions, feel free to reply to this email.\n\nBest regards,\nSovos Talent Acquisition');
     window.open('mailto:' + candEmail + '?subject=' + subj + '&body=' + body);
     if (result) result.innerHTML =
       '<div style="color:var(--green);margin-bottom:6px">✓ Link created — Outlook opening</div>' +
