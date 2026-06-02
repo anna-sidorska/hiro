@@ -11821,13 +11821,59 @@ async function _bookSlot(bookId, slotIndex) {
         .filter(Boolean).join(',');
       const dateStr = dt.toLocaleDateString('en-GB', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
       const timeStr = dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+      const durStr = (booking.duration_mins || 60) + ' minutes';
+      const htmlBody = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:32px 0">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
+      <!-- Header -->
+      <tr><td style="background:#1a2b4a;padding:32px 40px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">Hiro <span style="color:#4f8ef7">·</span> Sovos</div>
+        <div style="color:#94a3b8;font-size:13px;margin-top:4px;letter-spacing:1px;text-transform:uppercase">Talent Acquisition</div>
+      </td></tr>
+      <!-- Status banner -->
+      <tr><td style="background:#1a56db;padding:20px 40px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#ffffff">✅ Interview Confirmed</div>
+      </td></tr>
+      <!-- Body -->
+      <tr><td style="padding:36px 40px">
+        <p style="margin:0 0 24px;font-size:15px;color:#374151">Hi,</p>
+        <p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.6">Your interview with <strong>Sovos</strong> has been successfully scheduled. Please find the details below.</p>
+        <!-- Details card -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px">
+          <tr><td style="padding:20px 24px;border-bottom:1px solid #e2e8f0">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:4px">Date</div>
+            <div style="font-size:16px;font-weight:600;color:#111827">${dateStr}</div>
+          </td></tr>
+          <tr><td style="padding:20px 24px;border-bottom:1px solid #e2e8f0">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:4px">Time</div>
+            <div style="font-size:16px;font-weight:600;color:#111827">${timeStr} · ${durStr}</div>
+          </td></tr>
+          <tr><td style="padding:20px 24px">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:4px">Format</div>
+            <div style="font-size:16px;font-weight:600;color:#111827">Microsoft Teams (video call)</div>
+          </td></tr>
+        </table>
+        <p style="margin:0 0 28px;font-size:14px;color:#6b7280;line-height:1.6">A <strong>Microsoft Teams meeting invite</strong> has been sent to your calendar with the join link. Please accept the invite to add it to your calendar.</p>
+        <p style="margin:0 0 8px;font-size:14px;color:#6b7280">If you need to reschedule or have any questions, please contact your recruiter directly.</p>
+      </td></tr>
+      <!-- Footer -->
+      <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 40px;text-align:center">
+        <div style="font-size:13px;color:#94a3b8">This is an automated message from <strong style="color:#374151">Sovos Talent Acquisition</strong></div>
+        <div style="font-size:12px;color:#cbd5e1;margin-top:8px">Powered by Hiro · TA Ops</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
       fetch(paEmailWebhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: recipients,
           subject: 'Interview Confirmed – Sovos',
-          body: 'Hi,\n\nThis email confirms your interview has been scheduled.\n\nDate: ' + dateStr + '\nTime: ' + timeStr + '\nDuration: ' + (booking.duration_mins || 60) + ' min\n\nA calendar invite has been sent separately. If you have any questions, please contact your recruiter.\n\nBest regards,\nSovos Talent Acquisition',
+          body: htmlBody,
+          isHtml: true,
           start_datetime: toIso(dt),
           end_datetime: toIso(end),
           candidate_email: booking.candidate_email,
