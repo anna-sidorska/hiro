@@ -13845,6 +13845,25 @@ async function _loadCfpCvTab() {
   if (!cvUrl) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV on file</div>'; return; }
   inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading CV...</div>';
   try {
+    // Internal candidate — fetch base64 from internal_candidates table
+    if (cvUrl.startsWith('internal:')) {
+      var icId = cvUrl.replace('internal:', '');
+      var { data: ic } = await sb.from('internal_candidates').select('cv_base64,cv_filename,cv_mimetype').eq('id', icId).single();
+      if (!ic?.cv_base64) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV on file for this internal candidate</div>'; return; }
+      var mimeMatch = ic.cv_base64.match(/^data:([^;]+);base64,/);
+      var mime = mimeMatch ? mimeMatch[1] : (ic.cv_mimetype || 'application/pdf');
+      var raw = ic.cv_base64.replace(/^data:[^;]+;base64,/, '');
+      var byteStr = atob(raw);
+      var ab = new ArrayBuffer(byteStr.length);
+      var ia = new Uint8Array(ab);
+      for (var bi = 0; bi < byteStr.length; bi++) ia[bi] = byteStr.charCodeAt(bi);
+      var blob = new Blob([ab], { type: mime });
+      var blobUrl = URL.createObjectURL(blob);
+      if (_isDocx(ic.cv_filename || '')) { await _renderDocxFrame(inner, blobUrl, 'CV'); }
+      else { _renderPdfFrame(inner, blobUrl, 'CV'); }
+      setTimeout(function(){ URL.revokeObjectURL(blobUrl); }, 120000);
+      return;
+    }
     var url = await _resolveFileUrl(cvUrl);
     if (!url) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load CV — check storage bucket</div>'; return; }
     if (_isDocx(cvUrl)) { await _renderDocxFrame(inner, url, 'CV'); } else { _renderPdfFrame(inner, url, 'CV'); }
