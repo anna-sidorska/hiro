@@ -14624,8 +14624,18 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
   var tpl = document.getElementById('cfp-template-sel') ? document.getElementById('cfp-template-sel').value : '';
   if (!email || !subject || !body) { toast('Subject and body required','err'); return; }
 
-  // Ensure MSAL account is restored before checking _outlookAccount
-  if (!_outlookAccount) { try { _msalInit(); } catch(e) {} }
+  // Ensure MSAL account is restored — try silent SSO if no cached account
+  if (!_outlookAccount) {
+    try {
+      var inst = _msalInit();
+      if (inst && currentUser && currentUser.email) {
+        try {
+          var ssoResp = await inst.ssoSilent({ scopes: _MSAL_SCOPES, loginHint: currentUser.email });
+          if (ssoResp && ssoResp.account) _outlookAccount = ssoResp.account;
+        } catch(e) { /* not logged in to MS in this browser — fall through */ }
+      }
+    } catch(e) {}
+  }
 
   var paWebhook = localStorage.getItem('hiro_pa_webhook');
   var svcId = localStorage.getItem('hiro_ejs_service');
