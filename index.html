@@ -5501,6 +5501,22 @@ async function _s4FindSlots(roleId) {
   }
 }
 
+// ── BOOKING LINK INSERT HELPER ─────────────────────────────────────────
+// Tries insert with webhook columns; falls back to core-only if SQL not yet run.
+async function _insertBookingLink(coreFields) {
+  const extra = {
+    pa_calendar_webhook: localStorage.getItem('hiro_pa_calendar_webhook') || null,
+    pa_email_webhook:    localStorage.getItem('hiro_pa_webhook')          || null,
+    recruiter_email:     currentUser?.email || null
+  };
+  let res = await sb.from('booking_links').insert({ ...coreFields, ...extra }).select('id').maybeSingle();
+  if (res.error && (res.error.message || '').toLowerCase().includes('column')) {
+    // Columns not added yet — insert without them (webhook fires will be skipped)
+    res = await sb.from('booking_links').insert(coreFields).select('id').maybeSingle();
+  }
+  return res;
+}
+
 async function _s4SendSelfSchedule(roleId) {
   const candidateEmail = document.getElementById('s4-candidate-email')?.value.trim();
   if (!candidateEmail) { toast('Enter candidate email first','err'); return; }
@@ -5513,18 +5529,11 @@ async function _s4SendSelfSchedule(roleId) {
   try {
     // Store booking link in Supabase
     const uid = (await sb.auth.getUser()).data.user?.id;
-    const { data: booking, error } = await sb.from('booking_links').insert({
-      role_id: roleId,
-      candidate_email: candidateEmail,
-      interviewer_emails: attendees,
-      slots: slots,
-      duration_mins: duration,
-      status: 'pending',
-      created_by: uid,
-      pa_calendar_webhook: localStorage.getItem('hiro_pa_calendar_webhook') || null,
-      pa_email_webhook: localStorage.getItem('hiro_pa_webhook') || null,
-      recruiter_email: currentUser?.email || null
-    }).select('id').maybeSingle();
+    const { data: booking, error } = await _insertBookingLink({
+      role_id: roleId, candidate_email: candidateEmail,
+      interviewer_emails: attendees, slots, duration_mins: duration,
+      status: 'pending', created_by: uid
+    });
     if (error) {
       // Table might not exist — show SQL
       if (error.code === '42P01') {
@@ -13454,18 +13463,11 @@ async function _cfpFindAndBookTab() {
       return { iso: start.toISOString(), label: start.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) };
     });
     var uid = (await sb.auth.getUser())?.data?.user?.id;
-    var ins = await sb.from('booking_links').insert({
-      role_id: roleId || null,
-      candidate_email: candEmail,
-      interviewer_emails: attendees,
-      slots: slots,
-      duration_mins: duration,
-      status: 'pending',
-      created_by: uid,
-      pa_calendar_webhook: localStorage.getItem('hiro_pa_calendar_webhook') || null,
-      pa_email_webhook: localStorage.getItem('hiro_pa_webhook') || null,
-      recruiter_email: currentUser?.email || null
-    }).select('id').maybeSingle();
+    var ins = await _insertBookingLink({
+      role_id: roleId || null, candidate_email: candEmail,
+      interviewer_emails: attendees, slots, duration_mins: duration,
+      status: 'pending', created_by: uid
+    });
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
@@ -13520,18 +13522,11 @@ async function _cfpSendSelfSchedule() {
   if (result) result.innerHTML = '<span style="color:var(--text-3)">Creating link…</span>';
   try {
     var uid = (await sb.auth.getUser())?.data?.user?.id;
-    var ins = await sb.from('booking_links').insert({
-      role_id: roleId || null,
-      candidate_email: candEmail,
-      interviewer_emails: ivwer,
-      slots: slots,
-      duration_mins: duration,
-      status: 'pending',
-      created_by: uid,
-      pa_calendar_webhook: localStorage.getItem('hiro_pa_calendar_webhook') || null,
-      pa_email_webhook: localStorage.getItem('hiro_pa_webhook') || null,
-      recruiter_email: currentUser?.email || null
-    }).select('id').maybeSingle();
+    var ins = await _insertBookingLink({
+      role_id: roleId || null, candidate_email: candEmail,
+      interviewer_emails: ivwer, slots, duration_mins: duration,
+      status: 'pending', created_by: uid
+    });
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
