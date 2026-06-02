@@ -11733,7 +11733,7 @@ async function _initBookingPage(bookId) {
       return;
     }
     // Filter to slots that fall within 07:00–19:00 in the candidate's local timezone
-    const slots = (booking.slots || []).filter(s => {
+    const slots = (booking.slots || []).map((s, origIdx) => ({...s, _origIdx: origIdx})).filter(s => {
       const h = new Date(s.iso).getHours();
       return h >= 7 && (h * 60 + new Date(s.iso).getMinutes() + (booking.duration_mins || 60)) <= 19 * 60;
     });
@@ -11741,20 +11741,20 @@ async function _initBookingPage(bookId) {
     card.innerHTML = `
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.35);margin-bottom:16px">Available Slots</div>
       <div id="book-slots" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        ${slots.map((s,i) => {
+        ${slots.map((s) => {
           const dt = new Date(s.iso);
           const dayStr = dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
           const timeStr = dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
           const endDt = new Date(dt.getTime()+(booking.duration_mins||60)*60000);
           const endStr = endDt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-          return `<button onclick="_bookSlot('${bookId}',${i})" style="width:100%;padding:16px;background:#132038;border:1.5px solid rgba(255,255,255,.1);border-radius:12px;cursor:pointer;text-align:left;transition:all .2s;font-family:'DM Sans',-apple-system,sans-serif" onmouseover="this.style.borderColor='#00c4ee';this.style.background='rgba(0,196,238,.08)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)';this.style.background='#132038';this.style.transform=''">
+          return `<button onclick="_bookSlot('${bookId}',${s._origIdx})" style="width:100%;padding:16px;background:#132038;border:1.5px solid rgba(255,255,255,.1);border-radius:12px;cursor:pointer;text-align:left;transition:all .2s;font-family:'DM Sans',-apple-system,sans-serif" onmouseover="this.style.borderColor='#00c4ee';this.style.background='rgba(0,196,238,.08)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)';this.style.background='#132038';this.style.transform=''">
             <div style="font-weight:600;color:#eef4ff;font-size:14px;margin-bottom:4px">${dayStr}</div>
             <div style="color:#00c4ee;font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px">${timeStr}</div>
             <div style="color:rgba(255,255,255,.4);font-size:11px">Until ${endStr}</div>
           </button>`;
         }).join('')}
       </div>
-      <button onclick="var s=document.getElementById('book-confirm-btn');if(window._selectedSlotIndex!==undefined){_bookSlot('${bookId}',window._selectedSlotIndex)}" id="book-confirm-btn" style="width:100%;margin-top:20px;padding:16px;background:linear-gradient(135deg,#00c4ee,#0099cc);border:none;border-radius:12px;font-size:15px;font-weight:700;color:#000;cursor:pointer;font-family:'DM Sans',-apple-system,sans-serif;transition:all .15s" onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">Confirm booking →</button>
+      <button onclick="if(window._selectedSlotIndex!==undefined){_bookSlot('${bookId}',window._selectedSlotIndex)}" id="book-confirm-btn" style="width:100%;margin-top:20px;padding:16px;background:linear-gradient(135deg,#00c4ee,#0099cc);border:none;border-radius:12px;font-size:15px;font-weight:700;color:#000;cursor:pointer;font-family:'DM Sans',-apple-system,sans-serif;transition:all .15s" onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">Confirm booking →</button>
       <p style="font-size:11px;color:rgba(255,255,255,.25);margin-top:14px;text-align:center">A calendar invite will be sent to your email automatically</p>`;
     // Expose booking data for _bookSlot
     window._bookingData = booking;
