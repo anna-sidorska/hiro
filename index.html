@@ -11682,9 +11682,20 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
   // fall back to localStorage for recruiter-side calls.
   var paWebhook = booking.pa_calendar_webhook || (typeof localStorage !== 'undefined' && localStorage.getItem('hiro_pa_calendar_webhook'));
   if (paWebhook) {
-    // Optimistic DB update BEFORE the fetch — prevents re-firing on page reload
-    // if the fetch succeeds but the subsequent DB write never completes.
-    try { await sb.from('booking_links').update({ calendar_invite_sent: true }).eq('id', booking.id); } catch(e) {}
+    // Atomic claim: only the first caller (candidate page vs recruiter view) wins.
+    // UPDATE WHERE calendar_invite_sent = false — returns 0 rows if already claimed.
+    var claimed;
+    try {
+      var claimRes = await sb.from('booking_links')
+        .update({ calendar_invite_sent: true })
+        .eq('id', booking.id)
+        .eq('calendar_invite_sent', false)
+        .select('id');
+      claimed = claimRes.data && claimRes.data.length > 0;
+    } catch(e) { claimed = false; }
+    if (!claimed) {
+      return { ok: true, method: 'already_sent' };
+    }
     try {
       var resp = await fetch(paWebhook, {
         method: 'POST',
@@ -11702,12 +11713,12 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
       if (resp.ok) {
         return { ok: true, method: 'pa' };
       }
-      // Rollback optimistic flag so a retry is possible
+      // Rollback so a retry is possible
       try { await sb.from('booking_links').update({ calendar_invite_sent: false }).eq('id', booking.id); } catch(e) {}
       window._invitesSentThisSession.delete(booking.id);
       return { ok: false, error: 'PA webhook returned ' + resp.status };
     } catch(e) {
-      // Rollback optimistic flag on network error
+      // Rollback on network error
       try { await sb.from('booking_links').update({ calendar_invite_sent: false }).eq('id', booking.id); } catch(e2) {}
       window._invitesSentThisSession.delete(booking.id);
       return { ok: false, error: e.message };
