@@ -5576,7 +5576,7 @@ async function _s4SendSelfSchedule(roleId) {
     // Log activity
     try { await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'self_schedule_sent',p_description:'Self-schedule link sent to '+candidateEmail}); } catch(e) {}
     var mailtoSubj = encodeURIComponent('Interview Invitation – ' + (role?.title||'role') + ' at Sovos');
-    var mailtoBody = encodeURIComponent('Hi,\n\nThank you for your interest in the ' + (role?.title||'role') + ' position at Sovos. We\'d love to move forward and invite you to an interview.\n\nPlease use the link below to select a time that works best for you:\n\n' + bookingUrl + '\n\nIf you have any questions in the meantime, feel free to reply to this email.\n\nBest regards,\n' + (_outlookAccount?.name||'Sovos Talent Acquisition') + '\nSovos Talent Acquisition');
+    var mailtoBody = encodeURIComponent('Hi,\n\nWe are delighted to invite you to an interview for the ' + (role?.title||'role') + ' position at Sovos.\n\nINTERVIEW DETAILS\n─────────────────────────────\nDate:          To be confirmed\nTime:          To be confirmed\nFormat:        To be confirmed\nInterviewer:   To be confirmed\n─────────────────────────────\n\nPlease use the link below to select a time that works for you:\n' + bookingUrl + '\n\nOnce you have selected a slot, you will receive a calendar invite with a Microsoft Teams meeting link.\n\nIf you need to reschedule or have any questions, please reply to this email.\n\nBest regards,\n' + (_outlookAccount?.name||'Anna Sidorska') + '\nTalent Acquisition Manager · Sovos');
     result.innerHTML =
       '<div style="padding:10px 12px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);font-size:12px;color:var(--green-text)">' +
       (emailSent ? '✅ Email sent to ' + candidateEmail : '📋 Booking link created') +
@@ -13557,7 +13557,7 @@ async function _cfpFindAndBookTab() {
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
-    var body = encodeURIComponent('Hi,\n\nThank you for your interest in Sovos. We\'d love to move forward and invite you to an interview.\n\nPlease use the link below to select a time that works best for you:\n\n' + bookUrl + '\n\nIf you have any questions, feel free to reply to this email.\n\nBest regards,\nSovos Talent Acquisition');
+    var body = encodeURIComponent('Hi,\n\nWe are delighted to invite you to an interview for the ' + type + ' position at Sovos.\n\nINTERVIEW DETAILS\n─────────────────────────────\nDate:          To be confirmed\nTime:          To be confirmed\nFormat:        To be confirmed\nInterviewer:   To be confirmed\n─────────────────────────────\n\nPlease use the link below to select a time that works for you:\n' + bookUrl + '\n\nOnce you have selected a slot, you will receive a calendar invite with a Microsoft Teams meeting link.\n\nIf you need to reschedule or have any questions, please reply to this email.\n\nBest regards,\nAnna Sidorska\nTalent Acquisition Manager · Sovos');
     if (result) result.innerHTML =
       '<div style="padding:8px 10px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);color:var(--green-text);font-size:12px">' +
       '✅ Link created with ' + slots.length + ' slots!' +
@@ -13616,8 +13616,8 @@ async function _cfpSendSelfSchedule() {
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
-    var body = encodeURIComponent('Hi,\n\nThank you for your interest in Sovos. We\'d love to move forward and invite you to an interview.\n\nPlease use the link below to select a time that works best for you:\n\n' + bookUrl + '\n\nIf you have any questions, feel free to reply to this email.\n\nBest regards,\nSovos Talent Acquisition');
-    window.open('mailto:' + candEmail + '?subject=' + subj + '&body=' + body);
+    var body = encodeURIComponent('Hi,\n\nWe are delighted to invite you to an interview for the ' + type + ' position at Sovos.\n\nINTERVIEW DETAILS\n─────────────────────────────\nDate:          To be confirmed\nTime:          To be confirmed\nFormat:        To be confirmed\nInterviewer:   To be confirmed\n─────────────────────────────\n\nPlease use the link below to select a time that works for you:\n' + bookUrl + '\n\nOnce you have selected a slot, you will receive a calendar invite with a Microsoft Teams meeting link.\n\nIf you need to reschedule or have any questions, please reply to this email.\n\nBest regards,\nAnna Sidorska\nTalent Acquisition Manager · Sovos');
+    window.location.href = 'mailto:' + candEmail + '?subject=' + subj + '&body=' + body;
     if (result) result.innerHTML =
       '<div style="color:var(--green);margin-bottom:6px">✓ Link created — Outlook opening</div>' +
       '<div style="display:flex;gap:6px">' +
@@ -13855,15 +13855,7 @@ async function _cfpLoadConfirmedInterviews() {
       }).join('');
     }
 
-    // Auto-fire calendar invites for booked slots that haven't had one sent yet
-    // Runs silently in background — recruiter doesn't need to click anything
-    bookedBls.forEach(function(bl) {
-      if (!bl.calendar_invite_sent && bl.selected_slot && new Date(bl.selected_slot.iso) > now) {
-        _createInterviewCalendarInvite(bl, { useGraph: true }).then(function(r) {
-          if (r.ok) console.log('Auto-invite sent for booking', bl.id, 'via', r.method);
-        }).catch(function(){});
-      }
-    });
+    // Auto-fire removed — invites only sent via manual "Send Invite" button to prevent duplicates
 
     // Confirmed: merge interviews + booked booking_links, sort by date
     var confirmed = [];
