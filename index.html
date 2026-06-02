@@ -14585,8 +14585,8 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
       if (ok) { sent = true; toast('Email sent via Outlook ✓'); }
       else throw new Error('Graph sendMail returned false');
     } catch(e) {
-      toast('Outlook send failed (' + (e.message||'error') + ') — downloading EML instead', 'err');
-      _cfpDownloadEml(email, subject, bodyHtml);
+      toast('Outlook send failed — opening in Outlook compose', 'err');
+      window.location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
       sent = true;
     }
   } else if (paWebhook) {
@@ -14611,8 +14611,8 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
         throw new Error('Flow returned ' + paRes.status);
       }
     } catch(e) {
-      toast('Power Automate failed (' + (e.message||'error') + ') — downloading EML instead', 'err');
-      _cfpDownloadEml(email, subject, bodyHtml);
+      toast('PA email flow failed — opening in Outlook compose', 'err');
+      window.location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
       sent = true;
     }
   } else if (svcId && tplId && pubKey) {
@@ -14622,11 +14622,11 @@ async function sendCfpEmail(candidateId, email, candidateName, appId) {
       sent = true;
       toast('Email sent ✓');
     } catch(e) {
-      _cfpDownloadEml(email, subject, bodyHtml);
+      window.location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
       sent = true;
     }
   } else {
-    _cfpDownloadEml(email, subject, bodyHtml);
+    window.location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
     sent = true;
   }
 
