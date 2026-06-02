@@ -5576,7 +5576,19 @@ async function _s4SendSelfSchedule(roleId) {
     // Log activity
     try { await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'self_schedule_sent',p_description:'Self-schedule link sent to '+candidateEmail}); } catch(e) {}
     var mailtoSubj = encodeURIComponent('Interview Invitation – ' + (role?.title||'role') + ' at Sovos');
-    var mailtoBody = encodeURIComponent('Hi,\n\nWe are delighted to invite you to an interview for the ' + (role?.title||'role') + ' position at Sovos.\n\nINTERVIEW DETAILS\n─────────────────────────────\nDate:          To be confirmed\nTime:          To be confirmed\nFormat:        To be confirmed\nInterviewer:   To be confirmed\n─────────────────────────────\n\nPlease use the link below to select a time that works for you:\n' + bookingUrl + '\n\nOnce you have selected a slot, you will receive a calendar invite with a Microsoft Teams meeting link.\n\nIf you need to reschedule or have any questions, please reply to this email.\n\nBest regards,\n' + (_outlookAccount?.name||'Anna Sidorska') + '\nTalent Acquisition Manager · Sovos');
+    var mailtoBody = encodeURIComponent(
+      'Hi,\n\n' +
+      'We would like to invite you to an interview for the ' + (role?.title||'role') + ' role at Sovos.\n\n' +
+      'To confirm your interview, please select a time that works for you using the self-scheduling link below:\n\n' +
+      '   ' + bookingUrl + '\n\n' +
+      'Once you have selected a slot, you will automatically receive a calendar invite with a Microsoft Teams meeting link.\n\n' +
+      'The whole process takes less than a minute — just pick your preferred time and you\'re confirmed.\n\n' +
+      'If none of the available slots work for you, or if you have any questions, please reply to this email and we will find an alternative.\n\n' +
+      'We look forward to speaking with you.\n\n' +
+      'Best regards,\n' +
+      (_outlookAccount?.name||'Anna Sidorska') + '\n' +
+      'Talent Acquisition Manager · Sovos'
+    );
     result.innerHTML =
       '<div style="padding:10px 12px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);font-size:12px;color:var(--green-text)">' +
       (emailSent ? '✅ Email sent to ' + candidateEmail : '📋 Booking link created') +
@@ -13306,6 +13318,7 @@ async function openCandidateFullPage(appId) {
   window._cfpCurrentCandidateId = c.id;
   window._cfpCurrentCandEmail = c.email || '';
   window._cfpCurrentRoleId = app.role_id || (app.roles ? app.roles.id : '') || '';
+  window._cfpCurrentRoleTitle = (app.roles ? app.roles.title : '') || '';
   window._cfpInterviewsLoaded = false;
   window._cfpSelfSchedSlots = [];
   _cfpCvTabLoaded = false;
@@ -13570,8 +13583,21 @@ async function _cfpFindAndBookTab() {
     });
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
-    var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
-    var body = encodeURIComponent('Hi,\n\nWe are delighted to invite you to an interview for the ' + type + ' position at Sovos.\n\nINTERVIEW DETAILS\n─────────────────────────────\nDate:          To be confirmed\nTime:          To be confirmed\nFormat:        To be confirmed\nInterviewer:   To be confirmed\n─────────────────────────────\n\nPlease use the link below to select a time that works for you:\n' + bookUrl + '\n\nOnce you have selected a slot, you will receive a calendar invite with a Microsoft Teams meeting link.\n\nIf you need to reschedule or have any questions, please reply to this email.\n\nBest regards,\nAnna Sidorska\nTalent Acquisition Manager · Sovos');
+    var roleTitle2 = window._cfpCurrentRoleTitle || type;
+    var subj = encodeURIComponent('Interview Invitation – ' + roleTitle2 + ' at Sovos');
+    var body = encodeURIComponent(
+      'Hi,\n\n' +
+      'We would like to invite you to a ' + type + ' interview for the ' + roleTitle2 + ' role at Sovos.\n\n' +
+      'To confirm your interview, please select a time that works for you using the self-scheduling link below:\n\n' +
+      '   ' + bookUrl + '\n\n' +
+      'Once you have selected a slot, you will automatically receive a calendar invite with a Microsoft Teams meeting link.\n\n' +
+      'The whole process takes less than a minute — just pick your preferred time and you\'re confirmed.\n\n' +
+      'If none of the available slots work for you, or if you have any questions, please reply to this email and we will find an alternative.\n\n' +
+      'We look forward to speaking with you.\n\n' +
+      'Best regards,\n' +
+      'Anna Sidorska\n' +
+      'Talent Acquisition Manager · Sovos'
+    );
     if (result) result.innerHTML =
       '<div style="padding:8px 10px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);color:var(--green-text);font-size:12px">' +
       '✅ Link created with ' + slots.length + ' slots!' +
@@ -13629,8 +13655,21 @@ async function _cfpSendSelfSchedule() {
     });
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
-    var subj = encodeURIComponent('Interview Invitation – ' + type + ' at Sovos');
-    var body = encodeURIComponent('Hi,\n\nWe are delighted to invite you to an interview for the ' + type + ' position at Sovos.\n\nINTERVIEW DETAILS\n─────────────────────────────\nDate:          To be confirmed\nTime:          To be confirmed\nFormat:        To be confirmed\nInterviewer:   To be confirmed\n─────────────────────────────\n\nPlease use the link below to select a time that works for you:\n' + bookUrl + '\n\nOnce you have selected a slot, you will receive a calendar invite with a Microsoft Teams meeting link.\n\nIf you need to reschedule or have any questions, please reply to this email.\n\nBest regards,\nAnna Sidorska\nTalent Acquisition Manager · Sovos');
+    var roleTitle = window._cfpCurrentRoleTitle || type;
+    var subj = encodeURIComponent('Interview Invitation – ' + roleTitle + ' at Sovos');
+    var body = encodeURIComponent(
+      'Hi,\n\n' +
+      'We would like to invite you to a ' + type + ' interview for the ' + roleTitle + ' role at Sovos.\n\n' +
+      'To confirm your interview, please select a time that works for you using the self-scheduling link below:\n\n' +
+      '   ' + bookUrl + '\n\n' +
+      'Once you have selected a slot, you will automatically receive a calendar invite with a Microsoft Teams meeting link.\n\n' +
+      'The whole process takes less than a minute — just pick your preferred time and you\'re confirmed.\n\n' +
+      'If none of the available slots work for you, or if you have any questions, please reply to this email and we will find an alternative.\n\n' +
+      'We look forward to speaking with you.\n\n' +
+      'Best regards,\n' +
+      'Anna Sidorska\n' +
+      'Talent Acquisition Manager · Sovos'
+    );
     window.location.href = 'mailto:' + candEmail + '?subject=' + subj + '&body=' + body;
     if (result) result.innerHTML =
       '<div style="color:var(--green);margin-bottom:6px">✓ Link created — Outlook opening</div>' +
