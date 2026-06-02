@@ -8003,8 +8003,8 @@ function _renderEvalForm() {
     var bar = document.querySelector('.eval-progress-fill');
     if (bar) bar.style.width = pct + '%';
   });
-  // Initialise transcription panel
-  _evalAiKey = (_evalLinkData?.ai_key) || null;
+  // Initialise transcription panel — key from link data or recruiter's localStorage
+  _evalAiKey = (_evalLinkData?.ai_key) || localStorage.getItem('hiro_groq_key') || null;
   _initTranscriptPanel();
 }
 
@@ -8060,8 +8060,8 @@ function _initTranscriptPanel() {
     '</div>',
   ].join('');
   document.body.appendChild(panel);
-  // Show extract button only if AI key available
-  if (_evalAiKey) document.getElementById('extract-btn').style.display = 'block';
+  // Always show extract button — AI path if key available, plain-text fallback if not
+  document.getElementById('extract-btn').style.display = 'block';
 }
 
 function _toggleTranscriptPanel() {
@@ -8139,6 +8139,20 @@ async function _extractFromTranscript() {
   }
   var btn = document.getElementById('extract-btn');
   var es  = document.getElementById('extract-status');
+
+  // No AI key — plain-text fallback: fill notes fields with transcript summary
+  if (!_evalAiKey) {
+    var allNotes = document.querySelectorAll('textarea[id^="eaifnotes_"]');
+    var snippet = _evalTranscript.trim().slice(0, 300);
+    allNotes.forEach(function(ta) { if (!ta.value) ta.value = snippet; });
+    var str = document.getElementById('estrengths');
+    var deb = document.getElementById('edebrief');
+    if (str && !str.value) str.value = _evalTranscript.trim().slice(0, 600);
+    if (deb && !deb.value) deb.value = _evalTranscript.trim();
+    if (es) { es.textContent = '✓ Transcript copied to notes fields. Add a Groq API key in Settings for AI-powered extraction.'; es.style.display='block'; es.style.color='#f59e0b'; }
+    return;
+  }
+
   if (btn) { btn.disabled=true; btn.textContent='⧐ Analysing...'; }
   if (es)  { es.textContent='Extracting signals from transcript...'; es.style.display='block'; }
 
