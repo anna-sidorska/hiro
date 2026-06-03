@@ -7817,7 +7817,7 @@ function _renderEvalForm() {
       function splitF(arr,qi){ if(!arr||!arr.length) return []; const p=Math.ceil(arr.length/totalQ); return arr.slice(qi*p,(qi+1)*p); }
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div style="font-size:14px;font-weight:700">${ci+1}. ${comp}</div>
+          <div style="font-size:14px;font-weight:700;color:#111827">${ci+1}. ${comp}</div>
           <div style="display:flex;align-items:center;gap:3px">
             <span style="font-size:11px;color:#64748b;margin-right:4px">Score:</span>
             ${[1,2,3,4,5].map(n=>`<label style="cursor:pointer" title="Score ${n}"><input type="radio" name="ecomp_${ci}" value="${n}" style="display:none" onchange="_updateScoreButtons(this)"><span class="score-btn" data-val="${n}" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:#f1f5f9;color:#64748b;font-size:12px;font-weight:700;transition:all .15s">${n}</span></label>`).join('')}
@@ -7826,14 +7826,14 @@ function _renderEvalForm() {
         ${cd.q.map((q,qi)=>{
           const g=splitF(cd.green,qi), r=splitF(cd.red,qi);
           return `<div style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;overflow:hidden">
-            <div style="padding:10px 14px;font-size:13px;display:flex;gap:8px"><span style="font-weight:700;color:#2563eb;flex-shrink:0">Q${qi+1}</span>${q}</div>
+            <div style="padding:10px 14px;font-size:13px;color:#1e293b;display:flex;gap:8px"><span style="font-weight:700;color:#2563eb;flex-shrink:0">Q${qi+1}</span>${q}</div>
             ${(g.length||r.length)?`<div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #e2e8f0">
               <div style="padding:8px 10px;background:#f0fdf4">${g.map(x=>`<div style="font-size:11px;color:#166534;margin-bottom:2px;padding-left:6px;border-left:2px solid #4ade80">${x}</div>`).join('')}</div>
               <div style="padding:8px 10px;background:#fef2f2">${r.map(x=>`<div style="font-size:11px;color:#991b1b;margin-bottom:2px;padding-left:6px;border-left:2px solid #f87171">${x}</div>`).join('')}</div>
             </div>`:''}
           </div>`;
         }).join('')}
-        <textarea rows="2" id="enotes_${ci}" placeholder="Notes for ${comp}..." style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;margin-top:4px"></textarea>
+        <textarea rows="2" id="enotes_${ci}" placeholder="Notes for ${comp}..." style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;margin-top:4px;background:#fff;color:#1e293b"></textarea>
       </div>`;
     }).join('')}
   </div>` : '';
@@ -7860,12 +7860,12 @@ function _renderEvalForm() {
               ${[1,2,3,4,5].map(n=>`<label style="cursor:pointer" title="Score ${n}"><input type="radio" name="eaif_${pi}" value="${n}" style="display:none" onchange="_updateScoreButtons(this)"><span class="score-btn" data-val="${n}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:700;transition:all .15s">${n}</span></label>`).join('')}
             </div>
           </div>
-          <div style="padding:8px 12px;background:#fff;border:1px solid ${pillar.border};border-radius:6px;font-size:13px;margin-bottom:8px">${roleQ}</div>
+          <div style="padding:8px 12px;background:#fff;border:1px solid ${pillar.border};border-radius:6px;font-size:13px;color:#1e293b;margin-bottom:8px">${roleQ}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
             <div style="padding:7px;background:#f0fdf4;border-radius:6px">${q.green.slice(0,3).map(g=>`<div style="font-size:10px;color:#166534;margin-bottom:2px;padding-left:5px;border-left:2px solid #4ade80">${g}</div>`).join('')}</div>
             <div style="padding:7px;background:#fef2f2;border-radius:6px">${q.red.slice(0,3).map(r=>`<div style="font-size:10px;color:#991b1b;margin-bottom:2px;padding-left:5px;border-left:2px solid #f87171">${r}</div>`).join('')}</div>
           </div>
-          <textarea rows="2" id="eaifnotes_${pi}" placeholder="Notes for ${pillar.label}..." style="width:100%;padding:7px 10px;border:1.5px solid ${pillar.border};border-radius:6px;font-size:12px;font-family:inherit;resize:vertical"></textarea>
+          <textarea rows="2" id="eaifnotes_${pi}" placeholder="Notes for ${pillar.label}..." style="width:100%;padding:7px 10px;border:1.5px solid ${pillar.border};border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;background:#fff;color:#1e293b"></textarea>
         </div>`;
       }).join('')}
     </div>
@@ -7905,14 +7905,14 @@ function _renderEvalForm() {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
       <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Key Strengths</label>
-        <textarea id="estrengths" rows="3" placeholder="What evidence stood out positively?" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical"></textarea>
+        <textarea id="estrengths" rows="3" placeholder="What evidence stood out positively?" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;background:#fff;color:#1e293b"></textarea>
       </div>
       <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Concerns / Gaps</label>
-        <textarea id="econcerns" rows="3" placeholder="Red flags, development needs, open questions?" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical"></textarea>
+        <textarea id="econcerns" rows="3" placeholder="Red flags, development needs, open questions?" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;background:#fff;color:#1e293b"></textarea>
       </div>
     </div>
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Debrief Notes</label>
-      <textarea id="edebrief" rows="2" placeholder="Notes for the panel debrief — bias checks, standout moments, open questions..." style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical"></textarea>
+      <textarea id="edebrief" rows="2" placeholder="Notes for the panel debrief — bias checks, standout moments, open questions..." style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;background:#fff;color:#1e293b"></textarea>
     </div>
   </div>`;
 
@@ -10110,7 +10110,7 @@ function generateInterviewPackHtml(jd) {
       const totalQ=cd.q.length;
       return `<div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:16px">
         <div style="background:var(--surface-2);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)">
-          <div style="font-size:14px;font-weight:700">${ci+1}. ${comp}</div>
+          <div style="font-size:14px;font-weight:700;color:#111827">${ci+1}. ${comp}</div>
           <div style="display:flex;align-items:center;gap:4px">
             <span style="font-size:11px;color:var(--text-3);margin-right:4px">Score:</span>
             ${[1,2,3,4,5].map(n=>`<label style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer"><input type="radio" name="comp_${ci}" value="${n}" style="cursor:pointer"><span style="font-size:10px;color:var(--text-3)">${n}</span></label>`).join('')}
