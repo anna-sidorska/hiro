@@ -7796,7 +7796,7 @@ function _renderEvalForm() {
     <div style="display:flex;align-items:flex-start;gap:14px">
       <div style="width:40px;height:40px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0">${cand?(cand.first_name[0]+(cand.last_name[0]||'')):'?'}</div>
       <div>
-        <div style="font-size:16px;font-weight:700">${cand?cand.first_name+' '+cand.last_name:'Candidate'}</div>
+        <div style="font-size:16px;font-weight:700;color:#111827">${cand?cand.first_name+' '+cand.last_name:'Candidate'}</div>
         <div style="font-size:12px;color:#64748b">${cand?.location||''}</div>
         ${jd?`<div style="margin-top:4px"><span style="background:#eff6ff;color:#1e40af;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px">${jd.title}</span></div>`:''}
       </div>
@@ -8269,6 +8269,13 @@ async function submitEvalForm() {
   const concerns    = document.getElementById('econcerns')?.value||'';
   const debriefNotes= document.getElementById('edebrief')?.value||'';
 
+  // Collect competency notes (enotes_0, enotes_1, …)
+  const compNotes = {};
+  evalComps.forEach((comp, ci) => {
+    const ta = document.getElementById('enotes_' + ci);
+    if (ta && ta.value.trim()) compNotes[comp] = ta.value.trim();
+  });
+
   // Pack ALL data into `responses` JSONB as well (backup for older schema versions)
   const transcript = _evalTranscript || null;
   const responses = {
@@ -8276,6 +8283,7 @@ async function submitEvalForm() {
     interviewer_email: link._submitter_email,
     stage:             link.stage || q3.stage,
     comp_scores:       compScores,
+    comp_notes:        compNotes,
     ai_forward_scores: aifScores,
     overall_rating:    parseInt(overall),
     recommendation:    rec,
@@ -8296,6 +8304,7 @@ async function submitEvalForm() {
     interviewer_email: link._submitter_email || link.interviewer_email || link.questions?.interviewer_email || '',
     stage:             link.stage || q3.stage || null,
     comp_scores:       Object.keys(compScores).length ? compScores : null,
+    comp_notes:        Object.keys(compNotes).length ? compNotes : null,
     ai_forward_scores: Object.keys(aifScores).length ? aifScores : null,
     overall_rating:    parseInt(overall),
     recommendation:    rec,
