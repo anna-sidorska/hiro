@@ -7916,7 +7916,27 @@ function _renderEvalForm() {
     </div>
   </div>`;
 
-  const submitBtn = `<div id="eval-submit-error" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;font-size:12px;color:#991b1b;margin-bottom:12px"></div>
+  // Summary for Hiring Manager section
+  const hmSummaryHtml = `<div style="background:#fff;border:2px solid #2563eb;border-radius:12px;padding:20px;margin-bottom:20px">
+    <div style="font-size:14px;font-weight:700;color:#1e40af;margin-bottom:4px">📋 Your Summary for the Hiring Manager</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:14px">This is what the hiring manager will see. Be objective and evidence-based. Your full scoring is saved separately.</div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:8px;color:#1e293b">Recommendation *</label>
+      <div style="display:flex;gap:10px">
+        <button type="button" id="hrec-btn-pass" onclick="_setHRec('pass')" style="flex:1;padding:12px 8px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:700;color:#64748b;transition:all .15s;text-align:center">❌<br><span style="font-size:12px">Do Not Progress</span></button>
+        <button type="button" id="hrec-btn-move_forward" onclick="_setHRec('move_forward')" style="flex:1;padding:12px 8px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:700;color:#64748b;transition:all .15s;text-align:center">➡️<br><span style="font-size:12px">Move Forward</span></button>
+        <button type="button" id="hrec-btn-offer" onclick="_setHRec('offer')" style="flex:1;padding:12px 8px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:700;color:#64748b;transition:all .15s;text-align:center">✅<br><span style="font-size:12px">Ready for Offer</span></button>
+      </div>
+      <input type="hidden" id="ehrec" value="">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;color:#1e293b">Interviewer Summary <span style="font-weight:400;color:#64748b">(visible to HM)</span></label>
+      <textarea id="einterviewer-summary" rows="4" placeholder="Summarise the candidate's performance against the key criteria. What evidence supports your recommendation? Keep it factual." style="width:100%;padding:8px 10px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;background:#eff6ff;color:#1e293b"></textarea>
+    </div>
+  </div>`;
+
+  const submitBtn = `<div id="eval-unsaved-banner" style="display:none;background:#fef9c3;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:12px;font-weight:600">⚠ Unsaved — please submit before leaving this page.</div>
+  <div id="eval-submit-error" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;font-size:12px;color:#991b1b;margin-bottom:12px"></div>
   <button class="btn btn-primary" id="eval-submit-btn" style="width:100%;justify-content:center;padding:16px;font-size:16px;font-weight:700;border-radius:var(--r-lg);letter-spacing:-.2px" onclick="submitEvalForm()">Submit Evaluation</button>
   <div style="margin-top:12px;font-size:11px;color:#94a3b8;text-align:center;line-height:1.5">Once submitted, this form cannot be edited. Your evaluation will be visible to the recruiting team.</div>`;
 
@@ -7985,7 +8005,7 @@ function _renderEvalForm() {
   var sectionCount = (comps.length > 0 ? 1 : 0) + 1 + 1; // comps + aif + overall
   var progressHtml = '<div class="eval-progress-bar"><div class="eval-progress-fill" style="width:0%"></div></div>';
 
-  document.getElementById('eval-body').innerHTML = progressHtml + candCard + eppHtml + compHtml + aifHtml + overallHtml + submitBtn;
+  document.getElementById('eval-body').innerHTML = progressHtml + candCard + eppHtml + compHtml + aifHtml + overallHtml + hmSummaryHtml + submitBtn;
 
   // Animate progress bar as form is filled
   (function trackEvalProgress() {
@@ -8015,9 +8035,110 @@ function _renderEvalForm() {
     var bar = document.querySelector('.eval-progress-fill');
     if (bar) bar.style.width = pct + '%';
   });
+  // Mark form dirty on any input change
+  document.getElementById('eval-body').addEventListener('input', _markEvalDirty);
+  document.getElementById('eval-body').addEventListener('change', _markEvalDirty);
+
   // Initialise transcription panel — key from link data or recruiter's localStorage
   _evalAiKey = (_evalLinkData?.ai_key) || localStorage.getItem('hiro_groq_key') || null;
   _initTranscriptPanel();
+  // Restore any saved draft (48h window)
+  setTimeout(_restoreEvalDraft, 300);
+}
+
+// ── EVAL HM RECOMMENDATION BUTTONS ───────────────────────────────────────────
+function _setHRec(val) {
+  document.getElementById('ehrec').value = val;
+  ['pass','move_forward','offer'].forEach(function(v) {
+    var btn = document.getElementById('hrec-btn-'+v);
+    if (!btn) return;
+    var colors = {pass:'#dc2626', move_forward:'#d97706', offer:'#16a34a'};
+    var bgs = {pass:'#fef2f2', move_forward:'#fffbeb', offer:'#f0fdf4'};
+    if (v === val) { btn.style.borderColor=colors[v]; btn.style.background=bgs[v]; btn.style.color=colors[v]; }
+    else { btn.style.borderColor='#e2e8f0'; btn.style.background='#fff'; btn.style.color='#64748b'; }
+  });
+  _markEvalDirty();
+}
+
+// ── EVAL DIRTY FLAG + DRAFT AUTO-SAVE ────────────────────────────────────────
+function _markEvalDirty() {
+  if (!_evalDirty) {
+    _evalDirty = true;
+    var banner = document.getElementById('eval-unsaved-banner');
+    if (banner) banner.style.display = 'block';
+    window.onbeforeunload = function() { return 'Your evaluation has not been submitted yet. Are you sure you want to leave?'; };
+  }
+  _saveEvalDraft();
+}
+
+function _saveEvalDraft() {
+  if (!_evalLinkData?.id) return;
+  try {
+    var draft = {
+      ts: Date.now(),
+      compScores: {}, compNotes: {}, aifScores: {}, aifNotes: {},
+      overall: document.querySelector('input[name="eoverall"]:checked')?.value || '',
+      rec: document.getElementById('erec')?.value || '',
+      nextSteps: document.getElementById('erec-next-steps')?.value || '',
+      strengths: document.getElementById('estrengths')?.value || '',
+      concerns: document.getElementById('econcerns')?.value || '',
+      debrief: document.getElementById('edebrief')?.value || '',
+      hrec: document.getElementById('ehrec')?.value || '',
+      summary: document.getElementById('einterviewer-summary')?.value || '',
+    };
+    // Competency scores + notes
+    var ci = 0;
+    while (document.querySelector('input[name="ecomp_'+ci+'"]')) {
+      draft.compScores[ci] = document.querySelector('input[name="ecomp_'+ci+'"]:checked')?.value || '';
+      draft.compNotes[ci] = document.getElementById('enotes_'+ci)?.value || '';
+      ci++;
+    }
+    // AI-Forward scores + notes
+    var pi = 0;
+    while (document.querySelector('input[name="eaif_'+pi+'"]')) {
+      draft.aifScores[pi] = document.querySelector('input[name="eaif_'+pi+'"]:checked')?.value || '';
+      draft.aifNotes[pi] = document.getElementById('eaifnotes_'+pi)?.value || '';
+      pi++;
+    }
+    localStorage.setItem('hiro_eval_draft_'+_evalLinkData.id, JSON.stringify(draft));
+  } catch(e) {}
+}
+
+function _restoreEvalDraft() {
+  if (!_evalLinkData?.id) return;
+  try {
+    var raw = localStorage.getItem('hiro_eval_draft_'+_evalLinkData.id);
+    if (!raw) return;
+    var d = JSON.parse(raw);
+    // Only restore if draft is less than 48h old
+    if (Date.now() - d.ts > 48 * 3600 * 1000) { localStorage.removeItem('hiro_eval_draft_'+_evalLinkData.id); return; }
+    // Restore scores
+    Object.keys(d.compScores||{}).forEach(function(ci) {
+      var r = document.querySelector('input[name="ecomp_'+ci+'"][value="'+d.compScores[ci]+'"]');
+      if (r) { r.checked = true; _updateScoreButtons(r); }
+      var n = document.getElementById('enotes_'+ci);
+      if (n && d.compNotes[ci]) n.value = d.compNotes[ci];
+    });
+    Object.keys(d.aifScores||{}).forEach(function(pi) {
+      var r = document.querySelector('input[name="eaif_'+pi+'"][value="'+d.aifScores[pi]+'"]');
+      if (r) { r.checked = true; _updateScoreButtons(r); }
+      var n = document.getElementById('eaifnotes_'+pi);
+      if (n && d.aifNotes[pi]) n.value = d.aifNotes[pi];
+    });
+    if (d.overall) { var r = document.querySelector('input[name="eoverall"][value="'+d.overall+'"]'); if(r){r.checked=true;_updateScoreButtons(r);} }
+    if (d.rec) _setRec(d.rec);
+    if (d.nextSteps) { var ns = document.getElementById('erec-next-steps'); if(ns) ns.value = d.nextSteps; }
+    if (d.strengths) { var s=document.getElementById('estrengths'); if(s) s.value=d.strengths; }
+    if (d.concerns) { var c=document.getElementById('econcerns'); if(c) c.value=d.concerns; }
+    if (d.debrief) { var db=document.getElementById('edebrief'); if(db) db.value=d.debrief; }
+    if (d.hrec) _setHRec(d.hrec);
+    if (d.summary) { var sm=document.getElementById('einterviewer-summary'); if(sm) sm.value=d.summary; }
+    // Show restored banner
+    var banner = document.getElementById('eval-unsaved-banner');
+    if (banner) { banner.style.display='block'; banner.textContent='📂 Draft restored — please review and submit.'; }
+    _evalDirty = true;
+    window.onbeforeunload = function() { return 'Your evaluation has not been submitted yet. Are you sure you want to leave?'; };
+  } catch(e) {}
 }
 
 // ── EVAL RECOMMENDATION BUTTONS ──────────────────────────────────────────────
@@ -8046,6 +8167,9 @@ var _evalTranscript   = '';
 var _speechRec        = null;
 var _micActive        = false;
 var _evalAiKey        = null; // set from link data when form loads
+var _currentSpeaker   = 'I'; // 'I' = Interviewer, 'C' = Candidate
+var _candidateConsented = null; // true/false/null(skipped)
+var _evalDirty        = false; // tracks whether form has been touched
 
 function _initTranscriptPanel() {
   // Don't add twice
@@ -8065,6 +8189,12 @@ function _initTranscriptPanel() {
       '<div style="display:flex;gap:8px">',
         '<button id="mic-btn" type="button" onclick="_toggleMic()" style="flex:1;padding:8px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:12px;font-weight:600;cursor:pointer">▶ Start</button>',
         '<button type="button" onclick="_clearTranscript()" style="padding:8px 10px;border:none;border-radius:8px;background:#334155;color:#94a3b8;font-size:12px;cursor:pointer" title="Clear transcript">🗑</button>',
+        '<button type="button" onclick="_downloadTranscript()" style="padding:8px 10px;border:none;border-radius:8px;background:#334155;color:#94a3b8;font-size:12px;cursor:pointer" title="Download transcript">⬇</button>',
+      '</div>',
+      '<div style="display:flex;gap:6px;align-items:center">',
+        '<span style="font-size:10px;color:#64748b;flex-shrink:0">Speaker:</span>',
+        '<button id="speaker-i-btn" type="button" onclick="_setSpeaker(\'I\')" style="flex:1;padding:5px 6px;border:none;border-radius:6px;background:#2563eb;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Interviewer</button>',
+        '<button id="speaker-c-btn" type="button" onclick="_setSpeaker(\'C\')" style="flex:1;padding:5px 6px;border:none;border-radius:6px;background:#334155;color:#94a3b8;font-size:11px;font-weight:600;cursor:pointer">Candidate</button>',
       '</div>',
       '<div id="transcript-text" style="min-height:80px;max-height:180px;overflow-y:auto;background:#0f172a;border-radius:8px;padding:10px;font-size:11px;color:#94a3b8;line-height:1.6;white-space:pre-wrap">Tap Start to begin transcription...</div>',
       '<button type="button" id="extract-btn" onclick="_extractFromTranscript()" style="padding:9px;border:none;border-radius:8px;background:#7c3aed;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:none">✨ Auto-fill from transcript</button>',
@@ -8087,7 +8217,43 @@ function _toggleTranscriptPanel() {
 
 function _toggleMic() {
   if (_micActive) { _stopMic(); return; }
-  _startMic();
+  // Show consent reminder before starting — only once per session
+  if (_candidateConsented === null) {
+    _showConsentModal();
+  } else {
+    _startMic();
+  }
+}
+
+function _showConsentModal() {
+  var overlay = document.createElement('div');
+  overlay.id = 'consent-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-size:20px;margin-bottom:8px">🎙 Candidate Consent Required</div>
+      <div style="font-size:14px;color:#374151;line-height:1.6;margin-bottom:20px">Before starting the transcription, please inform the candidate:<br><br>
+        <span style="background:#f0fdf4;border-left:3px solid #16a34a;display:block;padding:10px 12px;border-radius:0 8px 8px 0;font-style:italic;color:#166534">"This interview will be transcribed for internal note-taking purposes only. The transcript is visible to recruiting and coordination teams only. Do you consent to this recording?"</span>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button type="button" onclick="_consentGiven(true)" style="flex:1;padding:11px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">✅ Candidate Consented</button>
+        <button type="button" onclick="_consentGiven(false)" style="flex:1;padding:11px;background:#f1f5f9;color:#64748b;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">Skip / No Consent</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function _consentGiven(consented) {
+  var overlay = document.getElementById('consent-overlay');
+  if (overlay) overlay.remove();
+  _candidateConsented = consented;
+  if (consented) {
+    _startMic();
+  } else {
+    // No consent — switch to manual notes mode, show message
+    var tt = document.getElementById('transcript-text');
+    if (tt) { tt.style.color = '#f59e0b'; tt.textContent = 'Transcription skipped — manual notes mode. Complete the form manually within 48 hours.'; }
+  }
 }
 
 function _startMic() {
@@ -8105,13 +8271,16 @@ function _startMic() {
     var interim = '';
     for (var i = e.resultIndex; i < e.results.length; i++) {
       var t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) { finalText += (finalText ? ' ' : '') + t; _evalTranscript = finalText; }
-      else interim += t;
+      if (e.results[i].isFinal) {
+        var label = _currentSpeaker === 'I' ? '[Interviewer] ' : '[Candidate] ';
+        finalText += (finalText ? '\n' : '') + label + t.trim();
+        _evalTranscript = finalText;
+      } else { interim += t; }
     }
-    _updateTranscriptText(finalText + (interim ? ' [' + interim + ']' : ''));
+    _updateTranscriptText(finalText + (interim ? '\n[...] ' + interim : ''));
   };
   _speechRec.onerror = function(e) { _updateTranscriptText('⚠ Error: ' + e.error + '. ' + (_evalTranscript||'')); _setMicState(false); };
-  _speechRec.onend = function() { if (_micActive) _speechRec.start(); }; // auto-restart on pause
+  _speechRec.onend = function() { if (_micActive) _speechRec.start(); };
   _speechRec.start();
   _setMicState(true);
 }
@@ -8141,6 +8310,32 @@ function _clearTranscript() {
   _evalTranscript = '';
   _stopMic();
   _updateTranscriptText('Transcript cleared. Tap Start to begin again.');
+}
+
+function _setSpeaker(s) {
+  _currentSpeaker = s;
+  var ib = document.getElementById('speaker-i-btn');
+  var cb = document.getElementById('speaker-c-btn');
+  if (ib) { ib.style.background = s==='I'?'#2563eb':'#334155'; ib.style.color = s==='I'?'#fff':'#94a3b8'; }
+  if (cb) { cb.style.background = s==='C'?'#059669':'#334155'; cb.style.color = s==='C'?'#fff':'#94a3b8'; }
+}
+
+function _downloadTranscript() {
+  if (!_evalTranscript || !_evalTranscript.trim()) {
+    alert('No transcript to download yet.');
+    return;
+  }
+  var cand = _evalCandData;
+  var name = cand ? (cand.first_name + '_' + cand.last_name) : 'candidate';
+  var date = new Date().toISOString().slice(0,10);
+  var filename = 'transcript_' + name + '_' + date + '.txt';
+  var header = 'Interview Transcript\nCandidate: ' + (cand ? cand.first_name + ' ' + cand.last_name : 'Unknown') + '\nDate: ' + date + '\nConsent: ' + (_candidateConsented === true ? 'Given' : _candidateConsented === false ? 'Not given' : 'Not recorded') + '\n\n---\n\n';
+  var blob = new Blob([header + _evalTranscript], { type: 'text/plain' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 async function _extractFromTranscript() {
@@ -8235,9 +8430,12 @@ async function submitEvalForm() {
   const overall = document.querySelector('input[name="eoverall"]:checked')?.value;
   const rec = document.getElementById('erec')?.value;
   const nextSteps = document.getElementById('erec-next-steps')?.value || null;
+  const hrec = document.getElementById('ehrec')?.value || null;
+  const interviewerSummary = document.getElementById('einterviewer-summary')?.value || null;
   if (!overall) { errEl.textContent = 'Please select an overall rating.'; errEl.style.display='block'; return; }
   if (!rec)     { errEl.textContent = 'Please select a recommendation (Yes, Maybe, or No).'; errEl.style.display='block'; return; }
   if (rec === 'maybe' && !nextSteps) { errEl.textContent = 'Please select next steps — required when recommendation is Maybe.'; errEl.style.display='block'; document.getElementById('maybe-next-steps')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  if (!hrec) { errEl.textContent = 'Please select a recommendation for the Hiring Manager (Do Not Progress / Move Forward / Ready for Offer).'; errEl.style.display='block'; document.getElementById('ehrec')?.closest('div')?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
 
   btn.disabled = true; btn.textContent = 'Submitting...';
 
@@ -8279,48 +8477,58 @@ async function submitEvalForm() {
   // Pack ALL data into `responses` JSONB as well (backup for older schema versions)
   const transcript = _evalTranscript || null;
   const responses = {
-    interviewer_name:  link._submitter_name,
-    interviewer_email: link._submitter_email,
-    stage:             link.stage || q3.stage,
-    comp_scores:       compScores,
-    comp_notes:        compNotes,
-    ai_forward_scores: aifScores,
-    overall_rating:    parseInt(overall),
-    recommendation:    rec,
-    next_steps:        nextSteps || null,
-    transcript:        transcript,
+    interviewer_name:          link._submitter_name,
+    interviewer_email:         link._submitter_email,
+    stage:                     link.stage || q3.stage,
+    comp_scores:               compScores,
+    comp_notes:                compNotes,
+    ai_forward_scores:         aifScores,
+    overall_rating:            parseInt(overall),
+    recommendation:            rec,
+    next_steps:                nextSteps || null,
+    interviewer_recommendation: hrec,
+    interviewer_summary:       interviewerSummary,
+    transcript:                transcript,
     strengths,
     concerns,
-    debrief_notes:     debriefNotes,
+    debrief_notes:             debriefNotes,
+    candidate_consented:       _candidateConsented,
+    used_transcript:           !!(transcript && transcript.length > 20),
   };
 
   // Full payload — uses all columns from eval-migration + patches
   const payload = {
-    link_id:           link.id,
-    candidate_id:      link.candidate_id || null,
-    application_id:    link.application_id || null,
-    jd_id:             link.jd_id || null,
-    interviewer_name:  link._submitter_name || null,
-    interviewer_email: link._submitter_email || link.interviewer_email || link.questions?.interviewer_email || '',
-    stage:             link.stage || q3.stage || null,
-    comp_scores:       Object.keys(compScores).length ? compScores : null,
-    comp_notes:        Object.keys(compNotes).length ? compNotes : null,
-    ai_forward_scores: Object.keys(aifScores).length ? aifScores : null,
-    overall_rating:    parseInt(overall),
-    recommendation:    rec,
-    next_steps:        nextSteps || null,
-    transcript:        transcript || null,
-    strengths:         strengths || null,
-    concerns:          concerns || null,
-    debrief_notes:     debriefNotes || null,
+    link_id:                   link.id,
+    candidate_id:              link.candidate_id || null,
+    application_id:            link.application_id || null,
+    jd_id:                     link.jd_id || null,
+    interviewer_name:          link._submitter_name || null,
+    interviewer_email:         link._submitter_email || link.interviewer_email || link.questions?.interviewer_email || '',
+    stage:                     link.stage || q3.stage || null,
+    comp_scores:               Object.keys(compScores).length ? compScores : null,
+    comp_notes:                Object.keys(compNotes).length ? compNotes : null,
+    ai_forward_scores:         Object.keys(aifScores).length ? aifScores : null,
+    overall_rating:            parseInt(overall),
+    recommendation:            rec,
+    next_steps:                nextSteps || null,
+    interviewer_recommendation: hrec || null,
+    interviewer_summary:       interviewerSummary || null,
+    transcript_text:           transcript || null,
+    transcript_admin_only:     true,
+    used_transcript:           !!(transcript && transcript.length > 20),
+    candidate_consented:       _candidateConsented,
+    strengths:                 strengths || null,
+    concerns:                  concerns || null,
+    debrief_notes:             debriefNotes || null,
+    locked_at:                 new Date().toISOString(),
     responses,
-    submitted_at:      new Date().toISOString(),
+    submitted_at:              new Date().toISOString(),
   };
 
   let {error} = await sb.from('interview_evaluations').insert(payload);
 
-  // If columns added by patches don't exist yet, retry with core columns only
-  if (error && (error.message?.includes('responses') || error.message?.includes('comp_scores') || error.message?.includes('ai_forward_scores') || error.message?.includes('debrief_notes'))) {
+  // If new columns not yet in schema, retry with core columns only
+  if (error && (error.message?.includes('responses') || error.message?.includes('comp_scores') || error.message?.includes('ai_forward_scores') || error.message?.includes('interviewer_recommendation') || error.message?.includes('transcript_text'))) {
     const corePayload = {
       link_id:           payload.link_id,
       candidate_id:      payload.candidate_id,
@@ -8335,7 +8543,7 @@ async function submitEvalForm() {
     };
     const retry = await sb.from('interview_evaluations').insert(corePayload);
     error = retry.error;
-    if (!error) toast('Saved with basic fields — run supabase-patch-v5.sql for full scoring data');
+    if (!error) toast('Saved with basic fields — run supabase-patch-eval-v2.sql for full data');
   }
 
   if (error) {
@@ -8343,9 +8551,17 @@ async function submitEvalForm() {
     errEl.textContent = 'Submission failed: '+error.message; errEl.style.display='block'; return;
   }
 
-  // Mark link as used — update questions JSONB to flag submitted (works without submitted_at column)
+  // Lock the eval link + cancel pending reminders via RPC
+  try { await sb.rpc('lock_eval_submission', { p_link_id: link.id }); } catch(e) {}
+
+  // Mark link as used in questions JSONB (backwards compat)
   const updatedQ = { ...q3, submitted_at: new Date().toISOString() };
   await sb.from('interview_links').update({ questions: updatedQ }).eq('id', link.id);
+
+  // Clear draft + beforeunload guard
+  try { localStorage.removeItem('hiro_eval_draft_'+link.id); } catch(e) {}
+  window.onbeforeunload = null;
+  _evalDirty = false;
 
   // Success screen
   document.getElementById('eval-body').innerHTML = `
@@ -8506,6 +8722,9 @@ async function generateEvalLink() {
 
   const {data, error} = await sb.from('interview_links').insert(payload).select().maybeSingle();
   if (error) { toast('Error creating link: '+error.message,'err'); return; }
+
+  // Set 48h deadline + pre-populate 3 reminder stubs
+  try { await sb.rpc('initialise_eval_deadline', { p_link_id: data.id }); } catch(e) { console.warn('Deadline init skipped:', e.message); }
 
   // Sync to eval_rounds for Replit/external app compatibility
   try {
