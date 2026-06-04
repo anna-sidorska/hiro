@@ -8191,11 +8191,6 @@ function _initTranscriptPanel() {
         '<button type="button" onclick="_clearTranscript()" style="padding:8px 10px;border:none;border-radius:8px;background:#334155;color:#94a3b8;font-size:12px;cursor:pointer" title="Clear transcript">🗑</button>',
         '<button type="button" onclick="_downloadTranscript()" style="padding:8px 10px;border:none;border-radius:8px;background:#334155;color:#94a3b8;font-size:12px;cursor:pointer" title="Download transcript">⬇</button>',
       '</div>',
-      '<div style="display:flex;gap:6px;align-items:center">',
-        '<span style="font-size:10px;color:#64748b;flex-shrink:0">Speaker:</span>',
-        '<button id="speaker-i-btn" type="button" onclick="_setSpeaker(\'I\')" style="flex:1;padding:5px 6px;border:none;border-radius:6px;background:#2563eb;color:#fff;font-size:11px;font-weight:700;cursor:pointer">Interviewer</button>',
-        '<button id="speaker-c-btn" type="button" onclick="_setSpeaker(\'C\')" style="flex:1;padding:5px 6px;border:none;border-radius:6px;background:#334155;color:#94a3b8;font-size:11px;font-weight:600;cursor:pointer">Candidate</button>',
-      '</div>',
       '<div id="transcript-text" style="min-height:80px;max-height:180px;overflow-y:auto;background:#0f172a;border-radius:8px;padding:10px;font-size:11px;color:#94a3b8;line-height:1.6;white-space:pre-wrap">Tap Start to begin transcription...</div>',
       '<button type="button" id="extract-btn" onclick="_extractFromTranscript()" style="padding:9px;border:none;border-radius:8px;background:#7c3aed;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:none">✨ Auto-fill from transcript</button>',
       '<div id="extract-status" style="display:none;font-size:11px;color:#94a3b8;text-align:center"></div>',
@@ -8272,8 +8267,7 @@ function _startMic() {
     for (var i = e.resultIndex; i < e.results.length; i++) {
       var t = e.results[i][0].transcript;
       if (e.results[i].isFinal) {
-        var label = _currentSpeaker === 'I' ? '[Interviewer] ' : '[Candidate] ';
-        finalText += (finalText ? '\n' : '') + label + t.trim();
+        finalText += (finalText ? ' ' : '') + t.trim();
         _evalTranscript = finalText;
       } else { interim += t; }
     }
