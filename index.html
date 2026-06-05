@@ -785,6 +785,201 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
   </div>
 </div>
 
+<!-- ── HR REQUISITION MODAL ─────────────────────────────────── -->
+<div class="modal-overlay" id="modal-hr-req" style="align-items:flex-start;padding:20px 0;overflow-y:auto">
+  <div class="modal" style="max-width:720px;width:100%;margin:auto;max-height:none">
+    <div class="modal-header" style="position:sticky;top:0;z-index:10;background:var(--surface)">
+      <div>
+        <div class="modal-title">Open Requisition</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px">HR Generalist · Requires approval before recruiter is assigned</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-hr-req')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Section: General Information -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">General Information</div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Tracking / Req # <span style="color:var(--red)">*</span></label>
+          <input id="req-tracking" placeholder="e.g. REQ-2026-001" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Justification <span style="color:var(--red)">*</span></label>
+          <select id="req-justification" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option value="new_headcount">New Headcount</option>
+            <option value="replacement">Replacement</option>
+            <option value="backfill">Backfill</option>
+            <option value="restructure">Restructure</option>
+            <option value="one_time_project">One Time Project</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Replacing (if applicable)</label>
+          <input id="req-replacing" placeholder="Name of person leaving" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Exiting Employee Last Day</label>
+          <input id="req-last-day" type="date" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Associate ID</label>
+          <input id="req-associate-id" placeholder="ADP Associate ID (if backfill)" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Is Position Budgeted? <span style="color:var(--red)">*</span></label>
+          <select id="req-budgeted" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Is One Time Project? <span style="color:var(--red)">*</span></label>
+          <select id="req-one-time" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Job Function <span style="color:var(--red)">*</span></label>
+          <select id="req-function" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option>Sales</option><option>Marketing</option><option>Engineering</option><option>Product</option>
+            <option>Finance</option><option>HR</option><option>Legal</option><option>Operations</option>
+            <option>Customer Success</option><option>Professional Services</option><option>IT</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Section: Role Details -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Role Details</div>
+
+      <div class="form-group"><label>Job Title <span style="color:var(--red)">*</span></label>
+        <input id="req-title" placeholder="e.g. Business Development Representative" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Department <span style="color:var(--red)">*</span></label>
+          <input id="req-dept" placeholder="e.g. Sales" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Careers Page Region <span style="color:var(--red)">*</span></label>
+          <select id="req-region" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option>EMEA</option><option>US</option><option>LATAM</option><option>APAC</option><option>Global</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group"><label>Hiring Manager <span style="color:var(--red)">*</span></label>
+        <input id="req-hm-name" placeholder="Full name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+      </div>
+
+      <div class="form-group"><label>Department Leader <span style="color:var(--red)">*</span></label>
+        <input id="req-dept-leader" placeholder="e.g. VP Sales" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+      </div>
+
+      <!-- Section: Locations & Salary Targets -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+        Locations & Salary Targets
+        <span style="font-size:10px;font-weight:400;text-transform:none;color:var(--text-3);margin-left:6px">One headcount — list all locations this role could be filled in</span>
+      </div>
+
+      <div id="req-locations-list" style="margin-bottom:8px"></div>
+      <button type="button" onclick="_reqAddLocation()" style="font-size:12px;color:var(--brand);background:none;border:1px dashed var(--brand);border-radius:var(--r);padding:6px 14px;cursor:pointer;width:100%">+ Add Location</button>
+
+      <!-- ADP Equity Stub -->
+      <div style="margin-top:10px;padding:10px 12px;background:#f8fafc;border-radius:var(--r);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-2)">Internal Equity Data (ADP)</div>
+          <div id="req-adp-result" style="font-size:11px;color:var(--text-3);margin-top:2px">Connect ADP to fetch internal salary benchmarks for this role</div>
+        </div>
+        <button type="button" onclick="_fetchAdpEquity()" id="req-adp-btn" style="font-size:11px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:not-allowed;color:var(--text-3)" disabled title="ADP integration not yet connected">Fetch from ADP</button>
+      </div>
+
+      <!-- Section: Stakeholders -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Stakeholders</div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>FP&A Business Partner <span style="color:var(--red)">*</span></label>
+          <input id="req-fpa" placeholder="Name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Head of Talent Acquisition <span style="color:var(--red)">*</span></label>
+          <input id="req-head-ta" placeholder="Name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Head of HR <span style="color:var(--red)">*</span></label>
+          <input id="req-head-hr" placeholder="Name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>HR Manager / Generalist <span style="color:var(--red)">*</span></label>
+          <input id="req-hr-mgr" placeholder="Name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+
+      <div class="form-group"><label>Recruiting Coordinator <span style="color:var(--red)">*</span></label>
+        <select id="req-coordinator" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <option value="">Select coordinator...</option>
+        </select>
+      </div>
+
+      <!-- Section: JD -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Job Description <span style="color:var(--red)">*</span></div>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button type="button" onclick="_reqShowJdPicker()" style="flex:1;padding:8px;border:1.5px solid var(--brand);border-radius:var(--r);background:var(--brand-light);color:var(--brand);font-size:12px;font-weight:600;cursor:pointer">📚 Select from JD Library</button>
+        <button type="button" onclick="_reqShowJdDrop()" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer">📎 Upload New JD</button>
+      </div>
+
+      <!-- JD Library picker -->
+      <div id="req-jd-picker" style="display:none;margin-bottom:10px">
+        <input id="req-jd-search" placeholder="Search JD library..." oninput="_reqSearchJd(this.value)"
+          style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);margin-bottom:6px">
+        <div id="req-jd-results" style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">
+          <div style="padding:10px;font-size:12px;color:var(--text-3)">Type to search...</div>
+        </div>
+      </div>
+
+      <!-- JD drag-and-drop -->
+      <div id="req-jd-drop" style="display:none;margin-bottom:10px">
+        <div id="req-jd-dropzone" ondragover="event.preventDefault();this.style.background='var(--brand-light)'" ondragleave="this.style.background=''" ondrop="_reqOnJdDrop(event)"
+          style="border:2px dashed var(--border);border-radius:var(--r);padding:20px;text-align:center;cursor:pointer;transition:background .15s">
+          <input type="file" accept=".pdf,.doc,.docx" id="req-jd-file-input" style="display:none" onchange="_reqOnJdFile(this)">
+          <div style="font-size:24px;margin-bottom:6px">📄</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-2)">Drop JD here or <span style="color:var(--brand);cursor:pointer" onclick="document.getElementById('req-jd-file-input').click()">browse</span></div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">PDF, DOC, or DOCX</div>
+        </div>
+      </div>
+
+      <!-- Selected JD display -->
+      <div id="req-jd-selected" style="display:none;padding:10px 12px;background:var(--green-bg);border:1px solid var(--green-text);border-radius:var(--r);font-size:12px;color:var(--green-text);font-weight:600;margin-bottom:10px"></div>
+      <input type="hidden" id="req-jd-id">
+      <input type="hidden" id="req-jd-name">
+
+      <!-- Section: Approval Chain -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+        Approval Chain
+        <span style="font-size:10px;font-weight:400;text-transform:none;color:var(--text-3);margin-left:6px">Add approvers in order — each must approve before it moves to the next</span>
+      </div>
+
+      <div id="req-approvers-list" style="margin-bottom:8px"></div>
+      <button type="button" onclick="_reqAddApprover()" style="font-size:12px;color:var(--brand);background:none;border:1px dashed var(--brand);border-radius:var(--r);padding:6px 14px;cursor:pointer;width:100%">+ Add Approver</button>
+
+      <div id="req-error" style="display:none;margin-top:12px;padding:10px 12px;background:var(--red-bg);border-radius:var(--r);font-size:12px;color:var(--red-text)"></div>
+
+      <div class="form-actions" style="margin-top:20px">
+        <button class="btn btn-outline" onclick="closeModal('modal-hr-req')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitRequisition()">Submit for Approval</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-add-interview">
   <div class="modal">
     <div class="modal-header">
@@ -3703,7 +3898,12 @@ function clearCandidateFilters() {
 // ── ROLES ─────────────────────────────────────
 async function renderRoles() {
   _pushHistory('roles', 'Roles', renderRoles);
-  document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-primary btn-sm" onclick="openAddRoleModal()">+ Add Role</button>`;
+  var _isHr = currentUser && ['hr','hr_leadership','c_level'].includes(currentUser.role);
+  var _isRecruiter = currentUser && ['admin','recruiter'].includes(currentUser.role);
+  var _roleButtons = '';
+  if (_isRecruiter) _roleButtons += `<button class="btn btn-outline btn-sm" onclick="openAddRoleModal()">+ Pipeline Role</button>`;
+  if (_isHr || _isRecruiter) _roleButtons += `<button class="btn btn-primary btn-sm" onclick="openHrReqModal()" style="margin-left:6px">+ Open Requisition</button>`;
+  document.getElementById('topbar-actions').innerHTML = _roleButtons;
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading roles...</div>';
   const {data:rawData,error}=await sb.from('roles')
     .select('*, applications(count), profiles!hiring_manager_id(full_name)')
@@ -3742,6 +3942,10 @@ async function renderRoles() {
         <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
           ${r.work_type?`<span class="tag" style="background:var(--purple-bg);color:var(--purple);font-size:11px">${r.work_type}</span>`:''}
           ${sal!=='—'?`<span class="tag tag-gray" style="font-size:11px">${sal}</span>`:''}
+          ${r.requisition_type==='requisition'?`<span class="tag" style="font-size:11px;background:#eff6ff;color:#1d4ed8">REQ${r.tracking_number?' · '+r.tracking_number:''}</span>`:''}
+          ${r.req_status==='pending_approval'?`<span class="tag" style="font-size:11px;background:#fef9c3;color:#b45309">⏳ Pending Approval</span>`:''}
+          ${r.req_status==='approved'?`<span class="tag" style="font-size:11px;background:#f0fdf4;color:#16a34a">✅ Approved</span>`:''}
+          ${r.req_status==='rejected'?`<span class="tag" style="font-size:11px;background:#fef2f2;color:#dc2626">❌ Rejected</span>`:''}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
           <div style="font-size:12px"><span style="font-weight:700">${appCount}</span> <span style="color:var(--text-3)">candidates</span></div>
@@ -7487,6 +7691,264 @@ async function submitRole() {
   toast(`Role "${title}" added`); closeModal('modal-add-role');
   ['r-title','r-dept','r-loc','r-sal-min','r-sal-max','r-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   if(currentPage==='roles') renderRoles();
+}
+
+// ── HR REQUISITION ────────────────────────────────────────────
+var _reqJdData = null; // selected JD from library
+var _reqJdFile = null; // uploaded JD file
+
+async function openHrReqModal() {
+  _reqJdData = null; _reqJdFile = null;
+  // Reset form
+  ['req-tracking','req-justification','req-replacing','req-last-day','req-associate-id',
+   'req-budgeted','req-one-time','req-function','req-title','req-dept','req-region',
+   'req-hm-name','req-dept-leader','req-fpa','req-head-ta','req-head-hr','req-hr-mgr'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('req-locations-list').innerHTML = '';
+  document.getElementById('req-approvers-list').innerHTML = '';
+  document.getElementById('req-jd-picker').style.display = 'none';
+  document.getElementById('req-jd-drop').style.display = 'none';
+  document.getElementById('req-jd-selected').style.display = 'none';
+  document.getElementById('req-jd-id').value = '';
+  document.getElementById('req-jd-name').value = '';
+  document.getElementById('req-error').style.display = 'none';
+
+  // Auto-suggest tracking number
+  const year = new Date().getFullYear();
+  const {data:latest} = await sb.from('roles').select('tracking_number').not('tracking_number','is',null).order('created_at',{ascending:false}).limit(1).maybeSingle();
+  let nextNum = 1;
+  if (latest?.tracking_number) {
+    const match = latest.tracking_number.match(/(\d+)$/);
+    if (match) nextNum = parseInt(match[1]) + 1;
+  }
+  document.getElementById('req-tracking').value = 'REQ-' + year + '-' + String(nextNum).padStart(3,'0');
+
+  // Load coordinators
+  const {data:coords} = await sb.from('profiles').select('id,full_name').in('role',['coordinator','admin']).order('full_name');
+  const coordSel = document.getElementById('req-coordinator');
+  if (coordSel) coordSel.innerHTML = '<option value="">Select coordinator...</option>' + (coords||[]).map(c=>`<option value="${c.id}">${c.full_name}</option>`).join('');
+
+  // Add first location row by default
+  _reqAddLocation();
+
+  openModal('modal-hr-req');
+}
+
+function _reqAddLocation() {
+  const list = document.getElementById('req-locations-list');
+  const idx = list.children.length;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 100px 1fr 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `
+    <input placeholder="Location / Country *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <select style="padding:7px 6px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+      <option>USD</option><option>EUR</option><option>GBP</option><option>BRL</option><option>MXN</option><option>ARS</option><option>TRY</option><option>INR</option>
+    </select>
+    <input type="number" placeholder="Salary Min" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <input type="number" placeholder="Salary Max" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <button type="button" onclick="this.closest('div').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer;font-size:14px" title="Remove">✕</button>`;
+  list.appendChild(row);
+}
+
+function _reqGetLocations() {
+  const rows = document.getElementById('req-locations-list').children;
+  return Array.from(rows).map(row => {
+    const inputs = row.querySelectorAll('input,select');
+    return { location: inputs[0].value.trim(), currency: inputs[1].value, salary_min: inputs[2].value ? parseInt(inputs[2].value) : null, salary_max: inputs[3].value ? parseInt(inputs[3].value) : null };
+  }).filter(r => r.location);
+}
+
+function _reqAddApprover() {
+  const list = document.getElementById('req-approvers-list');
+  const idx = list.children.length + 1;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:24px 1fr 1fr 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--brand);text-align:center">${idx}</div>
+    <input placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <input placeholder="Email *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <input placeholder="Title (optional)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <button type="button" onclick="this.closest('div').remove();_reqRenumberApprovers()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer;font-size:14px" title="Remove">✕</button>`;
+  list.appendChild(row);
+}
+
+function _reqRenumberApprovers() {
+  const rows = document.getElementById('req-approvers-list').children;
+  Array.from(rows).forEach((row, i) => { const num = row.querySelector('div'); if (num) num.textContent = i + 1; });
+}
+
+function _reqGetApprovers() {
+  const rows = document.getElementById('req-approvers-list').children;
+  return Array.from(rows).map((row, i) => {
+    const inputs = row.querySelectorAll('input');
+    return { index: i, approver_name: inputs[0].value.trim(), approver_email: inputs[1].value.trim().toLowerCase(), approver_title: inputs[2].value.trim(), status: 'pending', decided_at: null, notes: null };
+  }).filter(r => r.approver_name && r.approver_email);
+}
+
+function _reqShowJdPicker() {
+  document.getElementById('req-jd-picker').style.display = 'block';
+  document.getElementById('req-jd-drop').style.display = 'none';
+  _reqSearchJd('');
+}
+
+function _reqShowJdDrop() {
+  document.getElementById('req-jd-drop').style.display = 'block';
+  document.getElementById('req-jd-picker').style.display = 'none';
+}
+
+async function _reqSearchJd(q) {
+  const res = document.getElementById('req-jd-results');
+  if (!res) return;
+  let query = sb.from('job_descriptions').select('id,title,department').order('title');
+  if (q && q.trim()) query = query.ilike('title', '%'+q.trim()+'%');
+  const {data} = await query.limit(20);
+  if (!data || !data.length) { res.innerHTML = '<div style="padding:10px;font-size:12px;color:var(--text-3)">No JDs found</div>'; return; }
+  res.innerHTML = data.map(jd => `<div onclick="_reqSelectJd('${jd.id}','${(jd.title||'').replace(/'/g,"\'")}')"
+    style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
+    onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+    <div style="font-weight:600">${jd.title}</div>
+    <div style="font-size:11px;color:var(--text-3)">${jd.department||''}</div>
+  </div>`).join('');
+}
+
+function _reqSelectJd(id, title) {
+  document.getElementById('req-jd-id').value = id;
+  document.getElementById('req-jd-name').value = title;
+  const sel = document.getElementById('req-jd-selected');
+  sel.style.display = 'block';
+  sel.textContent = '✅ JD selected: ' + title;
+  document.getElementById('req-jd-picker').style.display = 'none';
+  _reqJdData = { id, title };
+}
+
+function _reqOnJdDrop(event) {
+  event.preventDefault();
+  document.getElementById('req-jd-dropzone').style.background = '';
+  const file = event.dataTransfer?.files[0];
+  if (file) _reqSetJdFile(file);
+}
+
+function _reqOnJdFile(input) {
+  const file = input.files?.[0];
+  if (file) _reqSetJdFile(file);
+}
+
+function _reqSetJdFile(file) {
+  _reqJdFile = file;
+  document.getElementById('req-jd-name').value = file.name;
+  const sel = document.getElementById('req-jd-selected');
+  sel.style.display = 'block';
+  sel.textContent = '✅ JD uploaded: ' + file.name;
+}
+
+function _fetchAdpEquity() {
+  // Stub — will be wired when ADP integration is connected
+  toast('ADP integration not yet connected — configure in Settings → Integrations', 'info');
+}
+
+async function submitRequisition() {
+  const errEl = document.getElementById('req-error');
+  errEl.style.display = 'none';
+
+  // Validate required fields
+  const required = {
+    'req-tracking': 'Tracking / Req #',
+    'req-justification': 'Justification',
+    'req-budgeted': 'Is Position Budgeted',
+    'req-one-time': 'Is One Time Project',
+    'req-function': 'Job Function',
+    'req-title': 'Job Title',
+    'req-dept': 'Department',
+    'req-region': 'Careers Page Region',
+    'req-hm-name': 'Hiring Manager',
+    'req-dept-leader': 'Department Leader',
+    'req-fpa': 'FP&A Business Partner',
+    'req-head-ta': 'Head of Talent Acquisition',
+    'req-head-hr': 'Head of HR',
+    'req-hr-mgr': 'HR Manager / Generalist',
+    'req-coordinator': 'Recruiting Coordinator',
+  };
+  for (const [id, label] of Object.entries(required)) {
+    const el = document.getElementById(id);
+    if (!el || !el.value.trim()) { errEl.textContent = label + ' is required.'; errEl.style.display = 'block'; el?.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  }
+
+  // Validate locations
+  const locations = _reqGetLocations();
+  if (!locations.length) { errEl.textContent = 'At least one location is required.'; errEl.style.display = 'block'; return; }
+
+  // Validate JD
+  const jdId = document.getElementById('req-jd-id').value;
+  const jdName = document.getElementById('req-jd-name').value;
+  if (!jdId && !_reqJdFile) { errEl.textContent = 'Please select a JD from the library or upload a new one.'; errEl.style.display = 'block'; return; }
+
+  // Validate at least one approver
+  const approvers = _reqGetApprovers();
+  if (!approvers.length) { errEl.textContent = 'Add at least one approver to the approval chain.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.querySelector('#modal-hr-req .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+
+  try {
+    // Use first location as primary role location
+    const primaryLoc = locations[0];
+
+    const payload = {
+      title:                  document.getElementById('req-title').value.trim(),
+      department:             document.getElementById('req-dept').value.trim(),
+      location:               primaryLoc.location,
+      region:                 document.getElementById('req-region').value,
+      salary_currency:        primaryLoc.currency || 'USD',
+      salary_min:             primaryLoc.salary_min,
+      salary_max:             primaryLoc.salary_max,
+      status:                 'open',
+      requisition_type:       'requisition',
+      req_status:             'pending_approval',
+      tracking_number:        document.getElementById('req-tracking').value.trim(),
+      justification:          document.getElementById('req-justification').value,
+      replacing_name:         document.getElementById('req-replacing').value.trim() || null,
+      replacing_last_day:     document.getElementById('req-last-day').value || null,
+      associate_id:           document.getElementById('req-associate-id').value.trim() || null,
+      is_budgeted:            document.getElementById('req-budgeted').value === 'true',
+      is_one_time_project:    document.getElementById('req-one-time').value === 'true',
+      job_function:           document.getElementById('req-function').value,
+      careers_region:         document.getElementById('req-region').value,
+      department_leader:      document.getElementById('req-dept-leader').value.trim(),
+      fp_and_a_partner:       document.getElementById('req-fpa').value.trim(),
+      head_of_ta:             document.getElementById('req-head-ta').value.trim(),
+      head_of_hr:             document.getElementById('req-head-hr').value.trim(),
+      hr_manager:             document.getElementById('req-hr-mgr').value.trim(),
+      recruiting_coordinator: document.getElementById('req-coordinator').value || null,
+      location_salary_targets: locations,
+      approval_chain:         approvers,
+      current_approver_index: 0,
+      jd_id:                  jdId || null,
+      jd_attachment_name:     !jdId ? jdName : null,
+      opened_by_id:           currentUser?.id || null,
+      opened_by_name:         currentUser?.full_name || null,
+      opened_by_email:        currentUser?.email || null,
+    };
+
+    const {data:role, error} = await sb.from('roles').insert(payload).select().single();
+    if (error) throw error;
+
+    // If JD file uploaded (not from library), store the name reference
+    if (_reqJdFile && !jdId) {
+      toast('Note: JD file saved as reference. Upload to JD Library for full integration.', 'info');
+    }
+
+    await auditLog('create', 'role', role.id, { title: payload.title, type: 'requisition', tracking: payload.tracking_number });
+
+    closeModal('modal-hr-req');
+    toast('Requisition submitted for approval ✓');
+    if (currentPage === 'roles') renderRoles();
+  } catch(e) {
+    errEl.textContent = 'Error: ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit for Approval'; }
+  }
 }
 
 // ── SCHEDULE INTERVIEW ────────────────────────
