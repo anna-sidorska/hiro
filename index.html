@@ -8502,11 +8502,14 @@ async function submitEvalForm() {
     if (val) compScores[comp] = parseInt(val);
   });
 
-  // Collect AI-forward scores
+  // Collect AI-forward scores + notes
   const aifScores = {};
+  const aifNotes = {};
   Object.keys(AI_FORWARD_QB).forEach((key,pi) => {
     const val = document.querySelector(`input[name="eaif_${pi}"]:checked`)?.value;
     if (val) aifScores[key] = parseInt(val);
+    const note = document.getElementById('eaifnotes_'+pi)?.value?.trim();
+    if (note) aifNotes[key] = note;
   });
 
   // Collect notes
@@ -8532,6 +8535,7 @@ async function submitEvalForm() {
     comp_scores:               compScores,
     comp_notes:                compNotes,
     ai_forward_scores:         aifScores,
+    ai_forward_notes:          aifNotes,
     overall_rating:            parseInt(overall),
     recommendation:            rec,
     next_steps:                nextSteps || null,
@@ -8557,6 +8561,7 @@ async function submitEvalForm() {
     comp_scores:               Object.keys(compScores).length ? compScores : null,
     comp_notes:                Object.keys(compNotes).length ? compNotes : null,
     ai_forward_scores:         Object.keys(aifScores).length ? aifScores : null,
+    ai_forward_notes:          Object.keys(aifNotes).length ? aifNotes : null,
     overall_rating:            parseInt(overall),
     recommendation:            rec,
     next_steps:                nextSteps || null,
@@ -8577,7 +8582,7 @@ async function submitEvalForm() {
   let {error} = await sb.from('interview_evaluations').insert(payload);
 
   // If new columns not yet in schema, retry with core columns only
-  if (error && (error.message?.includes('responses') || error.message?.includes('comp_scores') || error.message?.includes('comp_notes') || error.message?.includes('ai_forward_scores') || error.message?.includes('interviewer_recommendation') || error.message?.includes('transcript_text') || error.message?.includes('locked_at') || error.message?.includes('candidate_consented'))) {
+  if (error && (error.message?.includes('responses') || error.message?.includes('comp_scores') || error.message?.includes('comp_notes') || error.message?.includes('ai_forward_scores') || error.message?.includes('ai_forward_notes') || error.message?.includes('interviewer_recommendation') || error.message?.includes('transcript_text') || error.message?.includes('locked_at') || error.message?.includes('candidate_consented'))) {
     const corePayload = {
       link_id:           payload.link_id,
       candidate_id:      payload.candidate_id,
@@ -9305,6 +9310,7 @@ async function loadDrawerEvaluations(candidateId) {
     const hasTranscript   = !!(ev.transcript_text      || r.transcript);
     const usedTranscript  = ev.used_transcript         || r.used_transcript         || false;
 
+    const aifNotesD   = ev.ai_forward_notes || r.ai_forward_notes || {};
     const aifKeys   = Object.keys(AI_FORWARD_QB);
     const aifPillars= Object.values(AI_FORWARD_QB);
     const aifRated  = aifKeys.filter(k => aifScoresD[k]).length;
@@ -9335,9 +9341,15 @@ async function loadDrawerEvaluations(candidateId) {
       const sc = aifScoresD[k];
       if (!sc) return '';
       const p = aifPillars[i];
-      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
-        <div style="font-size:11px;color:#7c3aed;font-weight:600;width:24px;flex-shrink:0">${p.code}</div>
-        <div style="flex:1;font-size:11px;color:#374151">${p.label}</div>
+      const note = aifNotesD[k] || '';
+      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid rgba(124,58,237,.1)">
+        <div style="flex-shrink:0;width:24px;padding-top:1px">
+          <span style="font-size:11px;color:#7c3aed;font-weight:700">${p.code}</span>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:600;color:#374151">${p.label}</div>
+          ${note ? `<div style="font-size:11px;color:#64748b;margin-top:2px;line-height:1.5">${note}</div>` : ''}
+        </div>
         <div style="flex-shrink:0;width:26px;height:26px;border-radius:6px;background:${scoreBg(sc)};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${scoreColor(sc)}">${sc}</div>
       </div>`;
     }).filter(Boolean).join('');
