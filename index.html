@@ -8341,44 +8341,82 @@ async function _extractFromTranscript() {
   var btn = document.getElementById('extract-btn');
   var es  = document.getElementById('extract-status');
 
-  // No AI key — plain-text fallback: fill notes fields with transcript summary
+  // Gather competencies shown on form
+  var _q3comps = _evalLinkData?.questions?.competencies || [];
+  var _jdC = _evalJdData?.competencies;
+  var _jdFlatC = Array.isArray(_jdC) ? _jdC
+    : (_jdC && typeof _jdC === 'object') ? _stageCompsForValue(_evalLinkData?.stage || _evalLinkData?.questions?.stage || 'screening', _jdC)
+    : [];
+  var activeComps = (_q3comps.length) ? _q3comps : _jdFlatC;
+
+  // No AI key — plain-text fallback: paste transcript into all notes fields
   if (!_evalAiKey) {
-    var allNotes = document.querySelectorAll('textarea[id^="eaifnotes_"]');
-    var snippet = _evalTranscript.trim().slice(0, 300);
-    allNotes.forEach(function(ta) { if (!ta.value) ta.value = snippet; });
+    var snippet = _evalTranscript.trim().slice(0, 400);
+    activeComps.forEach(function(_,ci) {
+      var ta = document.getElementById('enotes_'+ci);
+      if (ta && !ta.value) ta.value = snippet;
+    });
+    document.querySelectorAll('textarea[id^="eaifnotes_"]').forEach(function(ta) { if (!ta.value) ta.value = snippet; });
     var str = document.getElementById('estrengths');
     var deb = document.getElementById('edebrief');
     if (str && !str.value) str.value = _evalTranscript.trim().slice(0, 600);
     if (deb && !deb.value) deb.value = _evalTranscript.trim();
-    if (es) { es.textContent = '✓ Transcript copied to notes fields. Add a Groq API key in Settings for AI-powered extraction.'; es.style.display='block'; es.style.color='#f59e0b'; }
+    if (es) { es.textContent = '✓ Transcript copied to notes fields. Add a Groq API key in Settings for AI-powered scoring.'; es.style.display='block'; es.style.color='#f59e0b'; }
     return;
   }
 
   if (btn) { btn.disabled=true; btn.textContent='⧐ Analysing...'; }
   if (es)  { es.textContent='Extracting signals from transcript...'; es.style.display='block'; }
 
-  // Build question context for AI
-  var pillars = Object.values(AI_FORWARD_QB);
-  var questionCtx = pillars.map(function(p,pi) {
-    var qs = p.questions.map(function(q,qi){ return '  Q'+(qi+1)+': '+q.q; }).join('\n');
-    return 'Pillar '+(pi+1)+' - '+p.label+':\n'+qs;
+  // Build competency context
+  var compCtx = activeComps.map(function(comp, ci) {
+    var cd = COMPETENCY_QUESTIONS[comp] || { q: ['Describe your experience with ' + comp], green: [], red: [] };
+    var qs = cd.q.map(function(q, qi) { return '  Q' + (qi+1) + ': ' + q; }).join('\n');
+    var greens = (cd.green||[]).slice(0,3).join('; ');
+    var reds = (cd.red||[]).slice(0,3).join('; ');
+    return 'Competency ' + (ci+1) + ' - ' + comp + ':\n' + qs + '\n  Green flags: ' + greens + '\n  Red flags: ' + reds;
   }).join('\n\n');
 
+  // Build AI-Forward pillar context
+  var _aifCount = {'screening':5,'first_interview':5,'second_interview':3,'panel':2,'cultural_fit':2,'final':2}[_evalLinkData?.stage || _evalLinkData?.questions?.stage] || 4;
+  var pillars = Object.values(AI_FORWARD_QB).slice(0, _aifCount);
+  var pillarCtx = pillars.map(function(p, pi) {
+    return 'Pillar ' + (pi+1) + ' - ' + p.label + ':\n  ' + p.questions[0].q;
+  }).join('\n\n');
+
+  var compCount = activeComps.length;
+  var pillarCount = pillars.length;
+
   var promptLines = [
-    'You are a structured interview evaluator. Read the interview transcript below and extract evidence for each AI-Forward pillar question.',
+    'You are a structured interview evaluator. Read the transcript and extract evidence for BOTH role competencies AND AI-Forward pillars.',
     '',
-    'For each question, provide:',
-    '1. A star rating 1-5 (1=no evidence, 3=some evidence, 5=strong evidence)',
-    '2. Brief notes (1-2 sentences) of what the candidate said that supports the rating',
+    'Return ONLY valid JSON in this exact format (no markdown, no extra text):',
+    '{',
+    '  "competencies": [',
+    '    {"rating": 4, "notes": "1-2 sentence factual summary of what the candidate said mapped to green/red flags"}',
+    '    ... one entry per competency in order',
+    '  ],',
+    '  "pillars": [',
+    '    {"rating": 3, "notes": "1-2 sentence factual summary"}',
+    '    ... one entry per pillar in order',
+    '  ],',
+    '  "strengths": "2-3 sentence summary of standout positives",',
+    '  "concerns": "2-3 sentence summary of gaps or red flags",',
+    '  "overall": 4',
+    '}',
     '',
-    'Return ONLY valid JSON in this exact format:',
-    '{"pillars":[{"rating":3,"notes":"candidate said X..."},{"rating":4,"notes":"..."},{"rating":2,"notes":"..."},{"rating":5,"notes":"..."}],"strengths":"key positives from transcript","concerns":"any red flags or gaps","overall":4}',
+    'Rating scale: 1=No evidence, 2=Weak, 3=Adequate, 4=Strong, 5=Exceptional.',
+    'Base ratings strictly on what the candidate said — reference green/red flags where relevant.',
+    'Do not invent evidence. If something was not covered, note it.',
     '',
-    'Pillars in order:',
-    questionCtx,
+    'COMPETENCIES (' + compCount + ' total):',
+    compCtx,
+    '',
+    'AI-FORWARD PILLARS (' + pillarCount + ' total):',
+    pillarCtx,
     '',
     'TRANSCRIPT:',
-    _evalTranscript.slice(0, 8000)
+    _evalTranscript.slice(0, 7000)
   ];
   var prompt = promptLines.join('\n');
 
@@ -8386,31 +8424,48 @@ async function _extractFromTranscript() {
     var res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {'Authorization':'Bearer '+_evalAiKey,'content-type':'application/json'},
-      body: JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:1000,temperature:0.2})
+      body: JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:1800,temperature:0.2})
     });
     var data = await res.json();
     var raw = data?.choices?.[0]?.message?.content || '';
     raw = raw.replace(/^```json?\s*/,'').replace(/```\s*$/,'').trim();
     var parsed = JSON.parse(raw);
     var applied = 0;
+
+    // Apply competency scores + notes
+    if (parsed.competencies && Array.isArray(parsed.competencies)) {
+      parsed.competencies.forEach(function(c, ci) {
+        if (c.rating) {
+          var radio = document.querySelector('input[name="ecomp_'+ci+'"][value="'+Math.round(c.rating)+'"]');
+          if (radio) { radio.checked=true; _updateScoreButtons(radio); }
+        }
+        var notes = document.getElementById('enotes_'+ci);
+        if (notes && c.notes) { notes.value = c.notes; applied++; }
+      });
+    }
+
+    // Apply AI-Forward pillar scores + notes
     if (parsed.pillars && Array.isArray(parsed.pillars)) {
-      parsed.pillars.forEach(function(p,pi) {
-        var radio = document.querySelector('input[name="eaif_'+pi+'"][value="'+Math.round(p.rating)+'"]');
-        if (radio) { radio.checked=true; _updateScoreButtons(radio); }
+      parsed.pillars.forEach(function(p, pi) {
+        if (p.rating) {
+          var radio = document.querySelector('input[name="eaif_'+pi+'"][value="'+Math.round(p.rating)+'"]');
+          if (radio) { radio.checked=true; _updateScoreButtons(radio); }
+        }
         var notes = document.getElementById('eaifnotes_'+pi);
         if (notes && p.notes) { notes.value = p.notes; applied++; }
       });
     }
+
     if (parsed.strengths) { var s=document.getElementById('estrengths'); if(s) s.value=parsed.strengths; }
     if (parsed.concerns)  { var c=document.getElementById('econcerns');  if(c) c.value=parsed.concerns; }
     if (parsed.overall) {
-      var or=document.querySelector('input[name="eoverall"][value="'+Math.round(parsed.overall)+'"]');
-      if(or){ or.checked=true; _updateScoreButtons(or); }
+      var ovr = document.querySelector('input[name="eoverall"][value="'+Math.round(parsed.overall)+'"]');
+      if (ovr) { ovr.checked=true; _updateScoreButtons(ovr); }
     }
-    if (es) { es.textContent='✓ Filled '+applied+' question notes from transcript. Review before submitting.'; es.style.color='#22c55e'; }
+    if (es) { es.textContent='✓ Filled '+applied+' fields from transcript. Review scores before submitting.'; es.style.display='block'; es.style.color='#22c55e'; }
     if (btn){ btn.disabled=false; btn.textContent='✨ Re-extract from transcript'; }
   } catch(e) {
-    if (es) { es.textContent='Extraction failed: '+(e.message||'unknown error'); es.style.color='#f87171'; }
+    if (es) { es.textContent='Extraction failed: '+(e.message||'unknown error'); es.style.display='block'; es.style.color='#f87171'; }
     if (btn){ btn.disabled=false; btn.textContent='✨ Auto-fill from transcript'; }
   }
 }
@@ -8522,7 +8577,7 @@ async function submitEvalForm() {
   let {error} = await sb.from('interview_evaluations').insert(payload);
 
   // If new columns not yet in schema, retry with core columns only
-  if (error && (error.message?.includes('responses') || error.message?.includes('comp_scores') || error.message?.includes('ai_forward_scores') || error.message?.includes('interviewer_recommendation') || error.message?.includes('transcript_text'))) {
+  if (error && (error.message?.includes('responses') || error.message?.includes('comp_scores') || error.message?.includes('comp_notes') || error.message?.includes('ai_forward_scores') || error.message?.includes('interviewer_recommendation') || error.message?.includes('transcript_text') || error.message?.includes('locked_at') || error.message?.includes('candidate_consented'))) {
     const corePayload = {
       link_id:           payload.link_id,
       candidate_id:      payload.candidate_id,
