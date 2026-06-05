@@ -9342,54 +9342,69 @@ async function loadDrawerEvaluations(candidateId) {
       </div>`;
     }).filter(Boolean).join('');
 
-    return `<div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:14px;background:#fff">
+    const hrecSummary = hrec ? `<span style="font-size:11px;font-weight:700;color:${hrec.color}">${hrec.icon} ${hrec.label}</span>` : '';
+    const compChips = Object.entries(compScoresD).map(([k,v])=>`<span style="background:${scoreBg(parseInt(v))};color:${scoreColor(parseInt(v))};font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px">${k.split(' ')[0]} ${v}</span>`).join(' ');
 
-      <!-- Header -->
-      <div style="background:#f8fafc;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0">
-        <div>
-          <div style="font-size:13px;font-weight:600;color:#111827">${intName} <span style="font-weight:400;color:#94a3b8;font-size:11px">${intEmail}</span></div>
-          <div style="font-size:11px;color:#94a3b8;margin-top:2px">${stageLabel(evStage)} · ${new Date(ev.submitted_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}${usedTranscript?' · 🎙 Transcribed':''}</div>
+    return `<div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:10px;background:#fff">
+
+      <!-- Collapsed header — always visible, click to expand -->
+      <div onclick="var b=this.nextElementSibling;var open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.eval-chevron').textContent=open?'▸':'▾'"
+        style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none"
+        onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+          <span class="eval-chevron" style="font-size:13px;color:#94a3b8;flex-shrink:0">▸</span>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:600;color:#111827">${intName}
+              <span style="font-weight:400;color:#94a3b8;font-size:11px">&nbsp;${stageLabel(evStage)} · ${new Date(ev.submitted_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+              ${hrecSummary}
+              ${compChips ? `<span style="color:#e2e8f0">·</span>${compChips}` : ''}
+              ${fitLabel ? `<span style="color:#e2e8f0">·</span><span style="font-size:10px">🤖 ${fitLabel}</span>` : ''}
+            </div>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          ${hasTranscript && isAdmin ? `<span style="font-size:10px;background:#f1f5f9;color:#64748b;padding:2px 7px;border-radius:99px;font-weight:600" title="Transcript available — admin/coordinator only">📄 Transcript</span>` : ''}
-          ${overallR ? `<div style="width:38px;height:38px;border-radius:10px;background:${ratingBg(overallR)};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:${ratingColor(overallR)}">${overallR}<span style="font-size:9px;font-weight:500">/5</span></div>` : ''}
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:10px">
+          ${hasTranscript && isAdmin ? `<span style="font-size:10px;background:#f1f5f9;color:#64748b;padding:2px 6px;border-radius:99px;font-weight:600">📄</span>` : ''}
+          ${overallR ? `<div style="width:34px;height:34px;border-radius:8px;background:${ratingBg(overallR)};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:${ratingColor(overallR)}">${overallR}/5</div>` : ''}
         </div>
       </div>
 
-      <!-- HM Recommendation + Interviewer Summary -->
-      ${hrec ? `<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;background:${hrec.bg}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:${intSummary?'8px':'0'}">
-          <span style="font-size:14px">${hrec.icon}</span>
-          <span style="font-size:13px;font-weight:700;color:${hrec.color}">${hrec.label}</span>
-          <span style="font-size:11px;color:#94a3b8;margin-left:4px">· HM Recommendation</span>
-        </div>
-        ${intSummary ? `<div style="font-size:12px;color:#374151;line-height:1.6;padding:8px 10px;background:rgba(255,255,255,.7);border-radius:8px;border-left:3px solid ${hrec.color}">${intSummary}</div>` : ''}
-      </div>` : ''}
+      <!-- Expanded detail — hidden by default -->
+      <div style="display:none;border-top:1px solid #e2e8f0">
 
-      <div style="padding:12px 16px">
-
-        <!-- Strengths / Concerns collapsible -->
-        ${(strengthsD||concernsD) ? `<div style="margin-bottom:10px">
-          <button type="button" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.textContent.includes('▶')?'▼ Strengths & Concerns':'▶ Strengths & Concerns'" style="font-size:11px;font-weight:700;color:#64748b;background:none;border:none;cursor:pointer;padding:0;text-transform:uppercase;letter-spacing:.4px">▶ Strengths & Concerns</button>
-          <div style="display:none;margin-top:6px">
-            ${strengthsD?`<div style="margin-bottom:6px;font-size:12px;color:#374151"><span style="font-weight:700;color:#16a34a">Strengths: </span>${strengthsD}</div>`:''}
-            ${concernsD?`<div style="font-size:12px;color:#374151"><span style="font-weight:700;color:#dc2626">Concerns: </span>${concernsD}</div>`:''}
-            ${debriefD?`<div style="margin-top:6px;font-size:12px;color:#374151"><span style="font-weight:700;color:#64748b">Debrief: </span>${debriefD}</div>`:''}
+        <!-- HM Recommendation + Interviewer Summary -->
+        ${hrec ? `<div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;background:${hrec.bg}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:${intSummary?'8px':'0'}">
+            <span style="font-size:13px">${hrec.icon}</span>
+            <span style="font-size:13px;font-weight:700;color:${hrec.color}">${hrec.label}</span>
+            <span style="font-size:11px;color:#94a3b8">· Interviewer Recommendation</span>
           </div>
+          ${intSummary ? `<div style="font-size:12px;color:#374151;line-height:1.6;padding:8px 10px;background:rgba(255,255,255,.7);border-radius:8px;border-left:3px solid ${hrec.color}">${intSummary}</div>` : ''}
         </div>` : ''}
 
-        <!-- Competency scores -->
-        ${compRows ? `<div style="margin-bottom:10px">
-          <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Role Competencies</div>
-          ${compRows}
-        </div>` : ''}
+        <div style="padding:12px 16px">
 
-        <!-- AI-Forward -->
-        ${aifRows ? `<div style="background:#f5f3ff;border-radius:8px;padding:10px 12px">
-          <div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">🤖 AI-Forward ${fitLabel ? '· '+fitLabel : ''}</div>
-          ${aifRows}
-        </div>` : ''}
+          <!-- Strengths / Concerns -->
+          ${(strengthsD||concernsD||debriefD) ? `<div style="margin-bottom:12px;padding:10px 12px;background:#f8fafc;border-radius:8px">
+            ${strengthsD?`<div style="margin-bottom:5px;font-size:12px;color:#374151"><span style="font-weight:700;color:#16a34a">Strengths: </span>${strengthsD}</div>`:''}
+            ${concernsD?`<div style="margin-bottom:5px;font-size:12px;color:#374151"><span style="font-weight:700;color:#dc2626">Concerns: </span>${concernsD}</div>`:''}
+            ${debriefD?`<div style="font-size:12px;color:#374151"><span style="font-weight:700;color:#64748b">Debrief: </span>${debriefD}</div>`:''}
+          </div>` : ''}
 
+          <!-- Competency scores with evidence -->
+          ${compRows ? `<div style="margin-bottom:12px">
+            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Role Competencies</div>
+            ${compRows}
+          </div>` : ''}
+
+          <!-- AI-Forward -->
+          ${aifRows ? `<div style="background:#f5f3ff;border-radius:8px;padding:10px 12px">
+            <div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">🤖 AI-Forward ${fitLabel ? '· '+fitLabel : ''}</div>
+            ${aifRows}
+          </div>` : ''}
+
+        </div>
       </div>
     </div>`;
   }).join('');
