@@ -7936,15 +7936,42 @@ async function submitRequisition() {
       location_salary_targets: locations,
       approval_chain:         approvers,
       current_approver_index: 0,
-      jd_id:                  jdId || null,
-      jd_attachment_name:     !jdId ? jdName : null,
+      jd_attachment_name:     jdName || null,
       opened_by_id:           currentUser?.id || null,
       opened_by_name:         currentUser?.full_name || null,
       opened_by_email:        currentUser?.email || null,
     };
 
-    const {data:role, error} = await sb.from('roles').insert(payload).select().single();
-    if (error) throw error;
+    let {data:role, error} = await sb.from('roles').insert(payload).select().single();
+
+    // If new columns not in schema cache yet, retry with core columns only
+    if (error && error.message?.includes('schema cache')) {
+      const corePayload = {
+        title:           payload.title,
+        department:      payload.department,
+        location:        payload.location,
+        region:          payload.region,
+        salary_currency: payload.salary_currency,
+        salary_min:      payload.salary_min,
+        salary_max:      payload.salary_max,
+        status:          payload.status,
+        description:     JSON.stringify({
+          requisition: true,
+          tracking_number: payload.tracking_number,
+          justification: payload.justification,
+          req_status: 'pending_approval',
+          approval_chain: payload.approval_chain,
+          location_salary_targets: payload.location_salary_targets,
+          stakeholders: { fpa: payload.fp_and_a_partner, head_ta: payload.head_of_ta, head_hr: payload.head_of_hr, hr_mgr: payload.hr_manager, dept_leader: payload.department_leader },
+          jd_name: payload.jd_attachment_name,
+          opened_by: payload.opened_by_name,
+        }),
+      };
+      const retry = await sb.from('roles').insert(corePayload).select().single();
+      if (retry.error) throw retry.error;
+      role = retry.data;
+      toast('Saved with core fields — reload Supabase schema for full data', 'info');
+    } else if (error) throw error;
 
     // If JD file uploaded (not from library), store the name reference
     if (_reqJdFile && !jdId) {
