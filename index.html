@@ -7760,6 +7760,7 @@ function _reqGetLocations() {
   const rows = document.getElementById('req-locations-list').children;
   return Array.from(rows).map(row => {
     const inputs = row.querySelectorAll('input,select');
+    if (inputs.length < 6) return null; // skip header row
     return {
       location:       inputs[0].value.trim(),
       currency:       inputs[1].value,
@@ -7768,7 +7769,7 @@ function _reqGetLocations() {
       bonus_pct:      inputs[4].value ? parseFloat(inputs[4].value) : null,
       commission_pct: inputs[5].value ? parseFloat(inputs[5].value) : null,
     };
-  }).filter(r => r.location);
+  }).filter(r => r && r.location);
 }
 
 function _reqAddApprover() {
