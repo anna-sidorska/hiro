@@ -7733,15 +7733,24 @@ async function openHrReqModal() {
 function _reqAddLocation() {
   const list = document.getElementById('req-locations-list');
   const idx = list.children.length;
+  // Show column headers on first row
+  if (idx === 0) {
+    const headers = document.createElement('div');
+    headers.style.cssText = 'display:grid;grid-template-columns:2fr 90px 1fr 1fr 80px 80px 32px;gap:6px;margin-bottom:3px';
+    headers.innerHTML = ['Location','Currency','Base Min','Base Max','Bonus %','Comm %',''].map(h=>`<div style="font-size:10px;font-weight:600;color:var(--text-3);padding:0 2px">${h}</div>`).join('');
+    list.appendChild(headers);
+  }
   const row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 100px 1fr 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 90px 1fr 1fr 80px 80px 32px;gap:6px;align-items:center;margin-bottom:6px';
   row.innerHTML = `
     <input placeholder="Location / Country *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
     <select style="padding:7px 6px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
       <option>USD</option><option>EUR</option><option>GBP</option><option>BRL</option><option>MXN</option><option>ARS</option><option>TRY</option><option>INR</option>
     </select>
-    <input type="number" placeholder="Salary Min" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
-    <input type="number" placeholder="Salary Max" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <input type="number" placeholder="Base Min" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Base salary minimum">
+    <input type="number" placeholder="Base Max" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Base salary maximum">
+    <input type="number" placeholder="Bonus %" min="0" max="100" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Target bonus % of base">
+    <input type="number" placeholder="Comm %" min="0" max="100" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Target commission % of base">
     <button type="button" onclick="this.closest('div').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer;font-size:14px" title="Remove">✕</button>`;
   list.appendChild(row);
 }
@@ -7750,7 +7759,14 @@ function _reqGetLocations() {
   const rows = document.getElementById('req-locations-list').children;
   return Array.from(rows).map(row => {
     const inputs = row.querySelectorAll('input,select');
-    return { location: inputs[0].value.trim(), currency: inputs[1].value, salary_min: inputs[2].value ? parseInt(inputs[2].value) : null, salary_max: inputs[3].value ? parseInt(inputs[3].value) : null };
+    return {
+      location:       inputs[0].value.trim(),
+      currency:       inputs[1].value,
+      salary_min:     inputs[2].value ? parseInt(inputs[2].value) : null,
+      salary_max:     inputs[3].value ? parseInt(inputs[3].value) : null,
+      bonus_pct:      inputs[4].value ? parseFloat(inputs[4].value) : null,
+      commission_pct: inputs[5].value ? parseFloat(inputs[5].value) : null,
+    };
   }).filter(r => r.location);
 }
 
