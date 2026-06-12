@@ -980,6 +980,78 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
   </div>
 </div>
 
+<!-- ── LOG OFFER OUTCOME MODAL ───────────────────────────────── -->
+<div class="modal-overlay" id="modal-log-outcome">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="log-outcome-title">Log Offer Outcome</div>
+      <button class="modal-close" onclick="closeModal('modal-log-outcome')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Outcome Type <span style="color:var(--red)">*</span></label>
+          <select id="lo-type" onchange="_loToggleReasons()" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option value="declined">Offer Declined (before signing)</option>
+            <option value="withdrawn">Post-Signing Dropout (after contract signed)</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Candidate Name</label>
+          <input id="lo-candidate" placeholder="Full name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Role / Position</label>
+          <input id="lo-role" placeholder="Job title" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Location / Country <span style="color:var(--red)">*</span></label>
+          <input id="lo-location" placeholder="e.g. India, UK, Spain" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Role Function</label>
+          <select id="lo-function" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option>Tech / Product</option><option>Tax / Compliance</option><option>Finance / G&A</option>
+            <option>Sales</option><option>HR</option><option>Legal</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Seniority Level</label>
+          <select id="lo-level" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option value="entry">Entry / Graduate</option><option value="mid">Mid-level</option>
+            <option value="senior">Senior</option><option value="leadership">Leadership / Director+</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Primary Reason <span style="color:var(--red)">*</span></label>
+        <select id="lo-reason" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <option value="">Select outcome type first...</option>
+        </select>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Offer Date</label>
+          <input id="lo-offer-date" type="date" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Outcome Date</label>
+          <input id="lo-outcome-date" type="date" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+      <div class="form-group" id="lo-notice-wrap" style="display:none"><label>Notice Period (days)</label>
+        <input id="lo-notice" type="number" placeholder="e.g. 60" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+      </div>
+      <div class="form-group"><label>Additional Notes</label>
+        <textarea id="lo-notes" rows="3" placeholder="Any context that helps understand this outcome..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;resize:vertical;background:var(--surface);color:var(--text)"></textarea>
+      </div>
+      <div id="lo-error" style="display:none;background:var(--red-bg);border-radius:var(--r);padding:10px;font-size:12px;color:var(--red-text);margin-bottom:8px"></div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="closeModal('modal-log-outcome')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitOfferOutcome()">Save Outcome</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-add-interview">
   <div class="modal">
     <div class="modal-header">
@@ -1956,6 +2028,7 @@ function renderSidebarNav() {
     // HR Portal: only for admin or hr roles
     if (_r === 'admin' || _r === 'hr') {
       navHtml += '<button class="sb-item" id="nav-hr_portal" onclick="nav(\'hr_portal\',this)">' + icon.hr_portal + ' HR Portal</button>';
+      navHtml += '<button class="sb-item" id="nav-offer_outcomes" onclick="nav(\'offer_outcomes\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Offer Outcomes</button>';
     }
     // Scheduling Hub for coordinator
     if (_r === 'coordinator') {
@@ -2022,6 +2095,7 @@ function refreshCurrentPage() {
     jd_library: renderJdLibrary, hm_roles: renderHmRoles, hm_interviews: renderHmInterviews,
     team: renderTeam, communications: renderCommunications, integrations: renderIntegrations,
     gdpr: renderGdpr, hr_portal: renderHrPortal, team_users: renderTeamUsers,
+    offer_outcomes: renderOfferOutcomes,
     management_view: renderManagement, scheduling_hub: renderSchedulingHub,
     recruiter_stats: renderRecruiterStats, roles_tracker: renderRolesTracker,
     hiring_dashboard: renderHiringDashboard,
@@ -7762,6 +7836,234 @@ async function submitRole() {
   toast(`Role "${title}" added`); closeModal('modal-add-role');
   ['r-title','r-dept','r-loc','r-sal-min','r-sal-max','r-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   if(currentPage==='roles') renderRoles();
+}
+
+// ── OFFER OUTCOMES — DROPOUT & DECLINE TRACKER ───────────────
+
+const _DECLINE_REASONS = [
+  { value:'competing_offer',    label:'Competing / Better Offer' },
+  { value:'compensation',       label:'Compensation Not Competitive' },
+  { value:'location',           label:'Location / Relocation Concerns' },
+  { value:'role_mismatch',      label:'Role Didn\'t Match Expectations' },
+  { value:'timing',             label:'Timing / Personal Circumstances' },
+  { value:'counteroffer',       label:'Accepted Counteroffer from Current Employer' },
+  { value:'company_brand',      label:'Company Brand / Trust Concerns' },
+  { value:'family_influence',   label:'Family / Social Influence' },
+  { value:'personal',           label:'Personal Reasons' },
+  { value:'other',              label:'Other' },
+];
+
+const _WITHDRAWAL_REASONS = [
+  { value:'counteroffer_accepted', label:'Counteroffer Accepted from Current Employer' },
+  { value:'alternative_offer',     label:'Alternative Offer Accepted' },
+  { value:'compensation_mismatch', label:'Compensation / CTC Structure Mismatch' },
+  { value:'role_clarity',          label:'Role Clarity / Expectation Gap' },
+  { value:'relocation',            label:'Relocation / Personal Logistics' },
+  { value:'company_brand',         label:'Company Brand / Stability Concerns' },
+  { value:'family_influence',      label:'Family / Social Influence' },
+  { value:'personal_family',       label:'Personal / Family Circumstances' },
+  { value:'other',                 label:'Other' },
+];
+
+function _loToggleReasons() {
+  var type = document.getElementById('lo-type')?.value;
+  var sel = document.getElementById('lo-reason');
+  var noticeWrap = document.getElementById('lo-notice-wrap');
+  if (!sel) return;
+  var reasons = type === 'withdrawn' ? _WITHDRAWAL_REASONS : _DECLINE_REASONS;
+  sel.innerHTML = '<option value="">Select reason...</option>' + reasons.map(r=>`<option value="${r.value}">${r.label}</option>`).join('');
+  if (noticeWrap) noticeWrap.style.display = type === 'withdrawn' ? 'block' : 'none';
+  var title = document.getElementById('log-outcome-title');
+  if (title) title.textContent = type === 'withdrawn' ? 'Log Post-Signing Dropout' : 'Log Offer Decline';
+}
+
+function openLogOutcomeModal(prefillType) {
+  ['lo-type','lo-candidate','lo-role','lo-location','lo-function','lo-level','lo-reason','lo-offer-date','lo-outcome-date','lo-notice','lo-notes'].forEach(id => {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('lo-error').style.display = 'none';
+  document.getElementById('lo-notice-wrap').style.display = 'none';
+  if (prefillType) {
+    document.getElementById('lo-type').value = prefillType;
+    _loToggleReasons();
+  }
+  document.getElementById('lo-outcome-date').value = new Date().toISOString().slice(0,10);
+  openModal('modal-log-outcome');
+}
+
+async function submitOfferOutcome() {
+  var errEl = document.getElementById('lo-error');
+  errEl.style.display = 'none';
+  var type = document.getElementById('lo-type').value;
+  var location = document.getElementById('lo-location').value.trim();
+  var reason = document.getElementById('lo-reason').value;
+  if (!type) { errEl.textContent='Select outcome type'; errEl.style.display='block'; return; }
+  if (!location) { errEl.textContent='Location is required'; errEl.style.display='block'; return; }
+  if (!reason) { errEl.textContent='Select a reason'; errEl.style.display='block'; return; }
+
+  var payload = {
+    outcome_type:     type,
+    location:         location,
+    reason:           reason,
+    reason_detail:    document.getElementById('lo-notes').value.trim() || null,
+    role_function:    document.getElementById('lo-function').value || null,
+    seniority_level:  document.getElementById('lo-level').value || null,
+    offer_date:       document.getElementById('lo-offer-date').value || null,
+    outcome_date:     document.getElementById('lo-outcome-date').value || null,
+    notice_period_days: document.getElementById('lo-notice').value ? parseInt(document.getElementById('lo-notice').value) : null,
+    recorded_by_name: currentUser?.full_name || null,
+    recorded_by_id:   currentUser?.id || null,
+    notes:            document.getElementById('lo-notes').value.trim() || null,
+  };
+
+  // Try to match candidate by name
+  var candName = document.getElementById('lo-candidate').value.trim();
+  if (candName) {
+    var parts = candName.split(' ');
+    var {data:cands} = await sb.from('candidates').select('id').ilike('first_name', parts[0]+'%').limit(1).maybeSingle();
+    if (cands) payload.candidate_id = cands.id;
+  }
+
+  var {error} = await sb.from('offer_outcomes').insert(payload);
+  if (error) {
+    errEl.textContent = 'Error: ' + error.message;
+    errEl.style.display = 'block';
+    return;
+  }
+  toast('Outcome logged ✓');
+  closeModal('modal-log-outcome');
+  if (currentPage === 'offer_outcomes') renderOfferOutcomes();
+}
+
+async function renderOfferOutcomes() {
+  _pushHistory('offer_outcomes', 'Offer Outcomes', renderOfferOutcomes);
+  document.getElementById('page-title').textContent = 'Offer Outcomes';
+  document.getElementById('page-sub').textContent = 'Decline & post-signing dropout tracker';
+  document.getElementById('topbar-actions').innerHTML =
+    '<button class="btn btn-outline btn-sm" onclick="openLogOutcomeModal(\'declined\')" style="margin-right:6px">+ Log Decline</button>' +
+    '<button class="btn btn-primary btn-sm" onclick="openLogOutcomeModal(\'withdrawn\')">+ Log Dropout</button>';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var {data: outcomes, error} = await sb.from('offer_outcomes').select('*').order('outcome_date', {ascending:false});
+  if (error || !outcomes) { document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load outcomes</div><div class="empty-sub">Run supabase-patch-hr-features.sql first</div></div>'; return; }
+
+  // KPIs
+  var total = outcomes.length;
+  var declines = outcomes.filter(o=>o.outcome_type==='declined').length;
+  var dropouts = outcomes.filter(o=>o.outcome_type==='withdrawn').length;
+  var india = outcomes.filter(o=>o.location?.toLowerCase().includes('india')).length;
+
+  // Reason breakdown for chart
+  var reasonCounts = {};
+  outcomes.forEach(o => {
+    if (!o.reason) return;
+    reasonCounts[o.reason] = (reasonCounts[o.reason]||0)+1;
+  });
+  var topReasons = Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  var maxCount = topReasons[0]?.[1] || 1;
+
+  // Location breakdown
+  var locationCounts = {};
+  outcomes.forEach(o => {
+    var loc = o.location || 'Unknown';
+    locationCounts[loc] = (locationCounts[loc]||0)+1;
+  });
+  var topLocs = Object.entries(locationCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  // Filter controls
+  var locations = [...new Set(outcomes.map(o=>o.location).filter(Boolean))].sort();
+  var locationFilter = `<select id="oo-loc-filter" onchange="_ooApplyFilters()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text)">
+    <option value="">All Locations</option>${locations.map(l=>`<option>${l}</option>`).join('')}</select>`;
+  var typeFilter = `<select id="oo-type-filter" onchange="_ooApplyFilters()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text)">
+    <option value="">All Types</option><option value="declined">Declines</option><option value="withdrawn">Dropouts</option></select>`;
+
+  // Reason chart bars
+  var reasonBars = topReasons.map(([reason, count]) => {
+    var pct = Math.round(count/maxCount*100);
+    var label = [..._DECLINE_REASONS,..._WITHDRAWAL_REASONS].find(r=>r.value===reason)?.label || reason;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="color:var(--text-2);font-weight:500">${label}</span>
+        <span style="font-weight:700;color:var(--text)">${count}</span>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#dc2626,#f87171);border-radius:4px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Location chart bars
+  var locBars = topLocs.map(([loc, count]) => {
+    var pct = Math.round(count/(topLocs[0]?.[1]||1)*100);
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="color:var(--text-2);font-weight:500">${loc}</span>
+        <span style="font-weight:700;color:var(--text)">${count}</span>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:4px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Outcomes table
+  var reasonLabel = r => [..._DECLINE_REASONS,..._WITHDRAWAL_REASONS].find(x=>x.value===r)?.label || r || '—';
+  var typeTag = t => t==='withdrawn'
+    ? '<span style="background:#fef2f2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Dropout</span>'
+    : '<span style="background:#fef9c3;color:#b45309;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Decline</span>';
+
+  var tableRows = outcomes.map(o => `<tr id="oo-row-${o.id}" data-loc="${o.location||''}" data-type="${o.outcome_type||''}">
+    <td>${typeTag(o.outcome_type)}</td>
+    <td style="font-size:12px;color:var(--text)">${o.location||'—'}</td>
+    <td style="font-size:12px">${o.role_function||'—'}</td>
+    <td style="font-size:12px">${o.seniority_level||'—'}</td>
+    <td style="font-size:12px;max-width:200px">${reasonLabel(o.reason)}</td>
+    <td style="font-size:11px;color:var(--text-3)">${o.outcome_date||o.created_at?.slice(0,10)||'—'}</td>
+    <td style="font-size:11px;color:var(--text-3);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${o.notes||''}">${o.notes||'—'}</td>
+  </tr>`).join('');
+
+  document.getElementById('content').innerHTML = `
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      <div class="card kpi"><div class="kpi-val">${total}</div><div class="kpi-label">Total Logged</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#b45309">${declines}</div><div class="kpi-label">Offer Declines</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${dropouts}</div><div class="kpi-label">Post-Signing Dropouts</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#7c3aed">${india}</div><div class="kpi-label">India</div></div>
+    </div>
+
+    <!-- Charts -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Reasons</div></div>
+        <div class="card-body">${reasonBars || '<div class="text-muted" style="font-size:12px">No data yet</div>'}</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">By Location</div></div>
+        <div class="card-body">${locBars || '<div class="text-muted" style="font-size:12px">No data yet</div>'}</div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div class="card-title">All Outcomes</div>
+        <div style="display:flex;gap:8px">${locationFilter}${typeFilter}</div>
+      </div>
+      <table>
+        <thead><tr><th>Type</th><th>Location</th><th>Function</th><th>Level</th><th>Reason</th><th>Date</th><th>Notes</th></tr></thead>
+        <tbody id="oo-table-body">${tableRows || '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px">No outcomes logged yet — use the buttons above to record your first decline or dropout</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function _ooApplyFilters() {
+  var loc = document.getElementById('oo-loc-filter')?.value || '';
+  var type = document.getElementById('oo-type-filter')?.value || '';
+  document.querySelectorAll('#oo-table-body tr[id^="oo-row-"]').forEach(row => {
+    var matchLoc = !loc || row.dataset.loc === loc;
+    var matchType = !type || row.dataset.type === type;
+    row.style.display = matchLoc && matchType ? '' : 'none';
+  });
 }
 
 // ── HR REQUISITION ────────────────────────────────────────────
