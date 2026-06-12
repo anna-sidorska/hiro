@@ -1331,35 +1331,119 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 </div>
 
 <!-- OFFER MODAL -->
-<div class="modal-overlay" id="modal-offer">
-  <div class="modal">
-    <div class="modal-header">
+<div class="modal-overlay" id="modal-offer" style="align-items:flex-start;padding:20px 0;overflow-y:auto">
+  <div class="modal" style="max-width:680px;width:100%;margin:auto;max-height:none">
+    <div class="modal-header" style="position:sticky;top:0;z-index:10;background:var(--surface)">
       <div>
-        <div class="modal-title">Record Offer</div>
-        <div class="text-muted" style="font-size:12px;margin-top:2px" id="offer-candidate-name"></div>
+        <div class="modal-title">Offer Request</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:2px" id="offer-candidate-name"></div>
       </div>
       <button class="modal-close" onclick="closeModal('modal-offer')">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="offer-app-id">
-      <div class="form-group"><label>Offered Salary</label>
-        <div style="display:flex;gap:8px">
-          <select id="offer-currency" style="width:90px;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface)">
-            <option>USD</option><option>EUR</option><option>GBP</option><option>BRL</option><option>MXN</option><option>ARS</option><option>TRY</option><option>INR</option>
+      <input type="hidden" id="offer-role-id">
+
+      <!-- Pre-filled summary (read-only) -->
+      <div id="offer-prefill-summary" style="background:var(--surface-2);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;font-size:12px">
+        <div><span style="color:var(--text-3)">Req ID: </span><span id="offer-pf-req" style="font-weight:600">—</span></div>
+        <div><span style="color:var(--text-3)">Location: </span><span id="offer-pf-loc" style="font-weight:600">—</span></div>
+        <div><span style="color:var(--text-3)">Department: </span><span id="offer-pf-dept" style="font-weight:600">—</span></div>
+        <div><span style="color:var(--text-3)">Recruiter: </span><span id="offer-pf-recruiter" style="font-weight:600">—</span></div>
+        <div><span style="color:var(--text-3)">Hiring Manager: </span><span id="offer-pf-hm" style="font-weight:600">—</span></div>
+        <div><span style="color:var(--text-3)">Role: </span><span id="offer-pf-role" style="font-weight:600">—</span></div>
+      </div>
+
+      <!-- Details section -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Offer Details</div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Hire Type <span style="color:var(--red)">*</span></label>
+          <select id="offer-hire-type" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select...</option>
+            <option value="new_headcount">New Headcount</option>
+            <option value="replacement">Replacement</option>
+            <option value="backfill">Backfill</option>
+            <option value="contractor_conversion">Contractor Conversion</option>
+            <option value="transfer">Internal Transfer</option>
           </select>
-          <input id="offer-salary" type="number" placeholder="Amount" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit">
+        </div>
+        <div class="form-group"><label>Internal Job Title</label>
+          <input id="offer-internal-title" placeholder="e.g. Account Executive II" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
         </div>
       </div>
+
       <div class="form-grid">
-        <div class="form-group"><label>Start Date</label><input id="offer-start" type="date"></div>
-        <div class="form-group"><label>Offer Expiry</label><input id="offer-expiry" type="date"></div>
+        <div class="form-group"><label>Proposed Start Date <span style="color:var(--red)">*</span></label>
+          <input id="offer-start" type="date" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Offer Expiry Date</label>
+          <input id="offer-expiry" type="date" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
       </div>
-      <div class="form-group"><label>Notes</label>
-        <textarea id="offer-notes" rows="2" placeholder="Bonus, equity, other terms..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Hiring Manager</label>
+          <input id="offer-hm" placeholder="Name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+        <div class="form-group"><label>Location</label>
+          <input id="offer-location" placeholder="e.g. Madrid, Spain" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
       </div>
+
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:14px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Compensation</div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Currency <span style="color:var(--red)">*</span></label>
+          <select id="offer-currency" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option>USD</option><option>EUR</option><option>GBP</option><option>BRL</option><option>COP</option><option>MXN</option><option>ARS</option><option>TRY</option><option>INR</option><option>SGD</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Bonus (%)</label>
+          <input id="offer-bonus" type="number" placeholder="e.g. 15" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Base Salary Annual (LC)</label>
+          <input id="offer-salary-annual" type="number" placeholder="Annual amount" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)" oninput="_calcOfferMonthly('salary')">
+        </div>
+        <div class="form-group"><label>Base Salary Monthly (LC)</label>
+          <input id="offer-salary-monthly" type="number" placeholder="Monthly amount" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)" oninput="_calcOfferAnnual('salary')">
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group"><label>Commission Target Annual (LC)</label>
+          <input id="offer-comm-annual" type="number" placeholder="Annual commission" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)" oninput="_calcOfferMonthly('comm')">
+        </div>
+        <div class="form-group"><label>Commission Target Monthly (LC)</label>
+          <input id="offer-comm-monthly" type="number" placeholder="Monthly commission" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)" oninput="_calcOfferAnnual('comm')">
+        </div>
+      </div>
+
+      <div class="form-group"><label>Contractor Conversion</label>
+        <select id="offer-contractor" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <option value="">No</option><option value="yes">Yes</option>
+        </select>
+      </div>
+
+      <div class="form-group"><label>Offer Notes</label>
+        <textarea id="offer-notes" rows="3" placeholder="Equity, relocation allowance, sign-on bonus, special terms..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;resize:vertical;background:var(--surface);color:var(--text)"></textarea>
+      </div>
+
+      <!-- Approval chain for this offer -->
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:14px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Approval Chain</div>
+      <div id="offer-approvers-list" style="margin-bottom:8px"></div>
+      <button type="button" onclick="_offerAddApprover()" style="font-size:12px;color:var(--brand);background:none;border:1px dashed var(--brand);border-radius:var(--r);padding:6px 14px;cursor:pointer;width:100%;margin-bottom:4px">+ Add Approver</button>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:14px">Approvers will receive an email notification. Approval chain per location will be configurable in Settings.</div>
+
+      <div id="offer-modal-error" style="display:none;background:var(--red-bg);border-radius:var(--r);padding:10px;font-size:12px;color:var(--red-text);margin-bottom:10px"></div>
+
       <div class="form-actions">
         <button class="btn btn-outline" onclick="closeModal('modal-offer')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitOffer()">Record Offer</button>
+        <button class="btn btn-outline" onclick="submitOffer('save')">💾 Save Draft</button>
+        <button class="btn btn-primary" onclick="submitOffer('request')">📋 Request Approval</button>
       </div>
     </div>
   </div>
@@ -11087,35 +11171,188 @@ async function checkDuplicateCandidate(email) {
 }
 
 // ── OFFER TRACKING ────────────────────────────
-function openOfferModal(appId, candidateName) {
-  const overlay=document.getElementById('modal-offer');
-  if(!overlay) return;
-  document.getElementById('offer-app-id').value=appId;
-  document.getElementById('offer-candidate-name').textContent=candidateName||'Candidate';
-  document.getElementById('offer-salary').value='';
-  document.getElementById('offer-start').value='';
-  document.getElementById('offer-expiry').value='';
-  document.getElementById('offer-currency').value='USD';
-  document.getElementById('offer-notes').value='';
+// Auto-calculate annual/monthly
+function _calcOfferMonthly(type) {
+  var ann = parseFloat(document.getElementById('offer-'+type+'-annual')?.value||0);
+  var mEl = document.getElementById('offer-'+type+'-monthly');
+  if (ann && mEl && !mEl.value) mEl.value = Math.round(ann/12);
+}
+function _calcOfferAnnual(type) {
+  var mon = parseFloat(document.getElementById('offer-'+type+'-monthly')?.value||0);
+  var aEl = document.getElementById('offer-'+type+'-annual');
+  if (mon && aEl && !aEl.value) aEl.value = Math.round(mon*12);
+}
+
+function _offerAddApprover() {
+  var list = document.getElementById('offer-approvers-list');
+  var idx = list.children.length + 1;
+  var row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:24px 1fr 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--brand);text-align:center">${idx}</div>
+    <input placeholder="Name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <input placeholder="Email *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <button type="button" onclick="this.closest('div').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer">✕</button>`;
+  list.appendChild(row);
+}
+
+function _offerGetApprovers() {
+  return Array.from(document.getElementById('offer-approvers-list').children).map((row,i) => {
+    var inputs = row.querySelectorAll('input');
+    return {index:i, approver_name:inputs[0]?.value.trim(), approver_email:inputs[1]?.value.trim().toLowerCase(), status:'pending'};
+  }).filter(r => r.approver_name && r.approver_email);
+}
+
+async function openOfferModal(appId, candidateName) {
+  var overlay = document.getElementById('modal-offer');
+  if (!overlay) return;
+
+  // Reset form
+  document.getElementById('offer-app-id').value = appId;
+  document.getElementById('offer-candidate-name').textContent = candidateName || 'Candidate';
+  document.getElementById('offer-approvers-list').innerHTML = '';
+  document.getElementById('offer-modal-error').style.display = 'none';
+  ['offer-hire-type','offer-internal-title','offer-start','offer-expiry','offer-hm','offer-location',
+   'offer-salary-annual','offer-salary-monthly','offer-comm-annual','offer-comm-monthly',
+   'offer-bonus','offer-notes'].forEach(id => { var el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('offer-currency').value = 'USD';
+  document.getElementById('offer-contractor').value = '';
+
+  // Fetch application + role data to pre-fill
+  try {
+    var {data:app} = await sb.from('applications')
+      .select('*, roles(id,title,department,location,salary_currency,salary_min,salary_max,tracking_number,hr_manager,department_leader,approval_chain), candidates(location)')
+      .eq('id', appId).maybeSingle();
+
+    if (app) {
+      var role = app.roles;
+      document.getElementById('offer-role-id').value = role?.id || '';
+
+      // Pre-fill summary bar
+      document.getElementById('offer-pf-req').textContent     = role?.tracking_number || '—';
+      document.getElementById('offer-pf-loc').textContent     = role?.location || app.candidates?.location || '—';
+      document.getElementById('offer-pf-dept').textContent    = role?.department || '—';
+      document.getElementById('offer-pf-recruiter').textContent = currentUser?.full_name || '—';
+      document.getElementById('offer-pf-hm').textContent      = role?.department_leader || '—';
+      document.getElementById('offer-pf-role').textContent    = role?.title || '—';
+
+      // Pre-fill editable fields
+      if (role?.salary_currency) document.getElementById('offer-currency').value = role.salary_currency;
+      if (role?.location) document.getElementById('offer-location').value = role.location;
+      if (role?.department_leader) document.getElementById('offer-hm').value = role.department_leader;
+      if (role?.title) document.getElementById('offer-internal-title').value = role.title;
+      if (role?.salary_min) document.getElementById('offer-salary-annual').value = role.salary_min;
+      if (role?.salary_max) document.getElementById('offer-salary-monthly').value = Math.round(role.salary_max/12);
+
+      // Pre-populate approval chain from role
+      if (role?.approval_chain && Array.isArray(role.approval_chain) && role.approval_chain.length) {
+        role.approval_chain.forEach(a => {
+          var list = document.getElementById('offer-approvers-list');
+          var idx = list.children.length + 1;
+          var row = document.createElement('div');
+          row.style.cssText = 'display:grid;grid-template-columns:24px 1fr 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
+          row.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--brand);text-align:center">${idx}</div>
+            <input value="${a.approver_name||''}" placeholder="Name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <input value="${a.approver_email||''}" placeholder="Email *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <button type="button" onclick="this.closest('div').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer">✕</button>`;
+          list.appendChild(row);
+        });
+      }
+    }
+  } catch(e) { console.warn('Offer prefill skipped:', e.message); }
+
   openModal('modal-offer');
 }
-async function submitOffer() {
-  const appId=document.getElementById('offer-app-id').value;
-  if(!appId) return;
-  const salary=document.getElementById('offer-salary').value;
-  const {error}=await sb.from('applications').update({
-    stage:'offer',
-    offer_salary:salary?parseInt(salary):null,
-    offer_currency:document.getElementById('offer-currency').value,
-    offer_start_date:document.getElementById('offer-start').value||null,
-    offer_expiry_date:document.getElementById('offer-expiry').value||null,
-    offer_notes:document.getElementById('offer-notes').value.trim()||null,
-  }).eq('id',appId);
-  if(error){toast('Error: '+error.message,'err');return;}
-  await auditLog('offer_made','application',appId,{salary,currency:document.getElementById('offer-currency').value});
-  toast('Offer recorded'); closeModal('modal-offer');
-  openCandidateDrawer(appId);
-  if(currentPage==='pipeline') renderPipeline();
+
+async function submitOffer(action) {
+  action = action || 'save';
+  var appId   = document.getElementById('offer-app-id').value;
+  var roleId  = document.getElementById('offer-role-id').value;
+  var errEl   = document.getElementById('offer-modal-error');
+  errEl.style.display = 'none';
+  if (!appId) return;
+
+  var hireType  = document.getElementById('offer-hire-type').value;
+  var startDate = document.getElementById('offer-start').value;
+  if (action === 'request' && !hireType) { errEl.textContent='Hire Type is required'; errEl.style.display='block'; return; }
+  if (action === 'request' && !startDate) { errEl.textContent='Proposed Start Date is required'; errEl.style.display='block'; return; }
+
+  var salaryAnnual  = document.getElementById('offer-salary-annual').value;
+  var salaryMonthly = document.getElementById('offer-salary-monthly').value;
+  var commAnnual    = document.getElementById('offer-comm-annual').value;
+  var commMonthly   = document.getElementById('offer-comm-monthly').value;
+  var approvers     = _offerGetApprovers();
+
+  // Update application with core offer fields (backwards compatible)
+  var appUpdate = {
+    stage: 'offer',
+    offer_salary:       salaryAnnual ? parseInt(salaryAnnual) : (salaryMonthly ? parseInt(salaryMonthly)*12 : null),
+    offer_currency:     document.getElementById('offer-currency').value,
+    offer_start_date:   startDate || null,
+    offer_expiry_date:  document.getElementById('offer-expiry').value || null,
+    offer_notes:        document.getElementById('offer-notes').value.trim() || null,
+    offer_status:       action === 'request' ? 'pending' : 'pending',
+  };
+  var {error:appErr} = await sb.from('applications').update(appUpdate).eq('id', appId);
+  if (appErr) { errEl.textContent='Error: '+appErr.message; errEl.style.display='block'; return; }
+
+  // Save full offer request record
+  var offerPayload = {
+    application_id:     appId,
+    role_id:            roleId || null,
+    internal_job_title: document.getElementById('offer-internal-title').value.trim() || null,
+    hire_type:          hireType || null,
+    proposed_start_date: startDate || null,
+    offer_expiry_date:  document.getElementById('offer-expiry').value || null,
+    location:           document.getElementById('offer-location').value.trim() || null,
+    hiring_manager:     document.getElementById('offer-hm').value.trim() || null,
+    currency:           document.getElementById('offer-currency').value,
+    base_salary_annual: salaryAnnual ? parseFloat(salaryAnnual) : null,
+    base_salary_monthly: salaryMonthly ? parseFloat(salaryMonthly) : null,
+    commission_annual:  commAnnual ? parseFloat(commAnnual) : null,
+    commission_monthly: commMonthly ? parseFloat(commMonthly) : null,
+    bonus_pct:          document.getElementById('offer-bonus').value ? parseFloat(document.getElementById('offer-bonus').value) : null,
+    contractor_conversion: document.getElementById('offer-contractor').value === 'yes',
+    offer_notes:        document.getElementById('offer-notes').value.trim() || null,
+    offer_date:         new Date().toISOString().slice(0,10),
+    approval_chain:     approvers,
+    approval_status:    action === 'request' ? 'pending' : 'draft',
+    submitted_by:       currentUser?.id || null,
+    submitted_by_name:  currentUser?.full_name || null,
+    recruiter_name:     currentUser?.full_name || null,
+  };
+
+  var {error:offerErr} = await sb.from('offer_requests').insert(offerPayload);
+  // If offer_requests table not yet created, fall through gracefully
+  if (offerErr && !offerErr.message?.includes('42P01')) {
+    console.warn('offer_requests insert failed:', offerErr.message);
+  }
+
+  await auditLog('offer_request','application',appId,{action, hire_type:hireType});
+
+  if (action === 'request' && approvers.length) {
+    // Send approval request email (stub — opens mailto until Outlook is connected)
+    var candName = document.getElementById('offer-candidate-name').textContent;
+    var role = document.getElementById('offer-pf-role').textContent;
+    var salary = salaryAnnual ? document.getElementById('offer-currency').value+' '+Number(salaryAnnual).toLocaleString()+' annual' : '';
+    var toEmails = approvers.map(a=>a.approver_email).join(';');
+    var subject = encodeURIComponent('Offer Approval Required — '+candName+' · '+role);
+    var body = encodeURIComponent(
+      'Please review and approve the following offer:\n\n'+
+      'Candidate: '+candName+'\nRole: '+role+'\nHire Type: '+hireType+
+      (salary?'\nSalary: '+salary:'')+
+      (startDate?'\nStart Date: '+startDate:'')+
+      '\n\nPlease reply with your approval or any concerns.\n\nThank you,\n'+(currentUser?.full_name||'TA Team')
+    );
+    window.location.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
+    toast('✅ Offer request sent for approval');
+  } else if (action === 'request') {
+    toast('✅ Offer details saved — add approvers to send for approval');
+  } else {
+    toast('💾 Offer draft saved');
+  }
+
+  closeModal('modal-offer');
+  if (currentPage === 'pipeline') renderPipeline();
 }
 
 // ── INTERVIEW SCORECARD ───────────────────────
