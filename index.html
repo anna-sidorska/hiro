@@ -15346,8 +15346,10 @@ async function openCandidateFullPage(appId) {
     var textColor = isCurrent ? s.color : isPast ? '#64748b' : '#cbd5e1';
     var fontWeight= isCurrent ? '700' : '500';
     var dotBorder = isCurrent ? '2.5px solid ' + s.color : isPast ? '2px solid #94a3b8' : '2px solid #e2e8f0';
-    progressBar += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px">';
-    progressBar += '<div style="width:10px;height:10px;border-radius:50%;background:' + (isCurrent?s.color:isPast?'#94a3b8':'transparent') + ';border:' + dotBorder + ';position:relative">';
+    var clickable = !isCurrent;
+    progressBar += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:' + (clickable?'pointer':'default') + '"' +
+      (clickable ? ' onclick="_quickMoveStage(\'' + appId + '\',\'' + s.key + '\',\'' + s.label + '\')" title="Move to ' + s.label + '"' : '') + '>';
+    progressBar += '<div style="width:12px;height:12px;border-radius:50%;background:' + (isCurrent?s.color:isPast?'#94a3b8':'transparent') + ';border:' + dotBorder + ';position:relative' + (clickable?';transition:transform .15s':'') + '"' + (clickable?' onmouseover="this.style.transform=\'scale(1.4)\'" onmouseout="this.style.transform=\'\'"':'') + '>';
     if (isCurrent) progressBar += '<div style="position:absolute;inset:-4px;border-radius:50%;background:' + s.color + '22;border:1px solid ' + s.color + '55"></div>';
     progressBar += '</div>';
     progressBar += '<div style="font-size:10px;font-weight:' + fontWeight + ';color:' + textColor + ';white-space:nowrap">' + s.label + '</div>';
@@ -16193,6 +16195,16 @@ async function updateStageFullPage(appId) {
   await auditLog('stage_change','application',appId,{stage:stage});
   toast('Stage updated to ' + stage + ' ✓');
   // Refresh the full candidate page to reflect the new stage
+  openCandidateFullPage(appId);
+  if (currentPage === 'pipeline') renderPipeline();
+}
+
+async function _quickMoveStage(appId, stage, label) {
+  if (!confirm('Move to ' + label + '?')) return;
+  var {error} = await sb.from('applications').update({stage:stage}).eq('id',appId);
+  if (error) { toast('Error: '+error.message,'err'); return; }
+  await auditLog('stage_change','application',appId,{stage:stage});
+  toast('Moved to ' + label + ' ✓');
   openCandidateFullPage(appId);
   if (currentPage === 'pipeline') renderPipeline();
 }
