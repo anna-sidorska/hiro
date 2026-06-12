@@ -11380,13 +11380,15 @@ async function _cfpSubmitOffer(action) {
   if (errEl) errEl.style.display = 'none';
   if (!appId) { toast('Error: no application ID found','err'); return; }
 
-  // Disable buttons to prevent double-submit
-  document.querySelectorAll('#cfp-offer-content button').forEach(b => b.disabled = true);
-
+  // Validate BEFORE disabling buttons
   var hireType  = document.getElementById('cfp-offer-hire-type')?.value;
   var startDate = document.getElementById('cfp-offer-start')?.value;
   if (action==='request' && !hireType) { if(errEl){errEl.textContent='Hire Type required';errEl.style.display='block';} return; }
   if (action==='request' && !startDate) { if(errEl){errEl.textContent='Start Date required';errEl.style.display='block';} return; }
+
+  // Only disable after validation passes
+  var _offerBtns = document.querySelectorAll('#cfp-offer-content button');
+  _offerBtns.forEach(b => b.disabled = true);
 
   var salAnnual  = document.getElementById('cfp-offer-sal-annual')?.value;
   var salMonthly = document.getElementById('cfp-offer-sal-monthly')?.value;
@@ -11420,7 +11422,7 @@ async function _cfpSubmitOffer(action) {
       offer_expiry_date: appUpdateFull.offer_expiry_date,
       offer_notes: appUpdateFull.offer_notes,
     }).eq('id',appId);
-    if (appErr2) { if(errEl){errEl.textContent='Save failed: '+appErr2.message;errEl.style.display='block';} document.querySelectorAll('#cfp-offer-content button').forEach(b=>b.disabled=false); return; }
+    if (appErr2) { if(errEl){errEl.textContent='Save failed: '+appErr2.message;errEl.style.display='block';} _offerBtns.forEach(b=>b.disabled=false); return; }
   }
 
   // Upsert offer request record
