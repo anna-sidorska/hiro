@@ -5454,6 +5454,41 @@ function _rdS4Html(d) {
 // ══════════════════════════════════════════════
 // STAGE 5 — OFFER
 // ══════════════════════════════════════════════
+async function _requestOfferApproval(appId, roleId, candName) {
+  // Fetch offer details
+  var {data:app} = await sb.from('applications')
+    .select('offer_salary,offer_currency,offer_start_date,roles(title,department),candidates(location)')
+    .eq('id',appId).maybeSingle();
+
+  var roleTitle  = app?.roles?.title || 'the role';
+  var dept       = app?.roles?.department || '';
+  var salary     = app?.offer_salary ? (app.offer_currency||'USD')+' '+Number(app.offer_salary).toLocaleString() : 'TBC';
+  var startDate  = app?.offer_start_date || 'TBC';
+  var location   = app?.candidates?.location || '';
+
+  // Build approval request email body
+  var subject = encodeURIComponent('Offer Approval Request — ' + candName + ' · ' + roleTitle);
+  var body = encodeURIComponent(
+    'Hi,\n\n' +
+    'I am requesting your approval for the following offer:\n\n' +
+    'Candidate:   ' + candName + '\n' +
+    'Role:        ' + roleTitle + (dept?' ('+dept+')':'') + '\n' +
+    'Location:    ' + (location||'—') + '\n' +
+    'Offer:       ' + salary + '\n' +
+    'Start Date:  ' + startDate + '\n\n' +
+    'Please confirm your approval by replying to this email or logging into Hiro.\n\n' +
+    'Once approved, I will extend the offer to the candidate.\n\n' +
+    'Thank you,\n' + (currentUser?.full_name || 'TA Team')
+  );
+
+  // Open email draft
+  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+
+  // Mark as pending approval in DB and update UI
+  await sb.from('applications').update({offer_status:'pending', hm_decision:'pending'}).eq('id',appId);
+  toast('Approval request email opened ✓ — update status to Extended once approved');
+}
+
 async function _setOfferStatus(appId, roleId, newStatus) {
   const labels = {extended:'Offer Extended',accepted:'Offer Accepted',rejected:'Offer Rejected',withdrew:'Withdrew'};
   if (!confirm(`Mark as "${labels[newStatus]}"?`)) return;
@@ -5622,6 +5657,7 @@ function _rdS5Html(d) {
 
     // Status action buttons — show relevant next actions based on current status
     const statusBtns = [
+      offerStatus==='pending'  ? `<button class="btn btn-primary btn-sm" onclick="_requestOfferApproval('${a.id}','${roleId}','${candName.replace(/'/g,"\\'")}')">📋 Request Approval</button>` : '',
       offerStatus==='pending'  ? `<button class="btn btn-outline btn-sm" onclick="_setOfferStatus('${a.id}','${roleId}','extended')">📨 Mark Extended</button>` : '',
       offerStatus==='extended' ? `<button class="btn btn-success btn-sm" onclick="_setOfferStatus('${a.id}','${roleId}','accepted')">✅ Mark Accepted</button>` : '',
       offerStatus==='extended' ? `<button class="btn btn-danger btn-sm" onclick="_setOfferStatus('${a.id}','${roleId}','rejected')">❌ Mark Rejected</button>` : '',
@@ -16201,10 +16237,25 @@ async function updateStageFullPage(appId) {
 
 async function _quickMoveStage(appId, stage, label) {
   if (!confirm('Move to ' + label + '?')) return;
-  var {error} = await sb.from('applications').update({stage:stage}).eq('id',appId);
+  var {error, data:updatedApp} = await sb.from('applications').update({stage:stage}).eq('id',appId).select('role_id').single();
   if (error) { toast('Error: '+error.message,'err'); return; }
   await auditLog('stage_change','application',appId,{stage:stage});
-  toast('Moved to ' + label + ' ✓');
+
+  if (stage === 'offer') {
+    var roleId = updatedApp?.role_id;
+    // Show toast with action button to go directly to the offer tab
+    var t = document.getElementById('toast');
+    var el = document.createElement('div');
+    el.className = 'toast-item toast-ok';
+    el.style.cssText = 'max-width:360px';
+    el.innerHTML = '<span>✓</span><span style="flex:1">Moved to Offer stage</span>' +
+      (roleId ? '<button onclick="viewRoleDetail(\''+roleId+'\');setTimeout(()=>{var tabs=document.querySelectorAll(\'.rd-tab\');tabs.forEach(t=>{if(t.textContent.includes(\'Offer\'))t.click();});},600)" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;margin-left:8px">Go to Offer Tab →</button>' : '') +
+      '<button class="toast-close" onclick="this.closest(\'.toast-item\').remove()">✕</button>';
+    if (t) { t.appendChild(el); setTimeout(()=>el.remove(), 8000); }
+  } else {
+    toast('Moved to ' + label + ' ✓');
+  }
+
   openCandidateFullPage(appId);
   if (currentPage === 'pipeline') renderPipeline();
 }
