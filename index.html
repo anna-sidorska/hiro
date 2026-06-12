@@ -11425,7 +11425,7 @@ async function _cfpSubmitOffer(action) {
     if (appErr2) { if(errEl){errEl.textContent='Save failed: '+appErr2.message;errEl.style.display='block';} _offerBtns.forEach(b=>b.disabled=false); return; }
   }
 
-  // Upsert offer request record
+  // Upsert offer request record — use try/catch not .catch() (Supabase v2)
   var payload = {
     application_id: appId, role_id: roleId||null,
     hire_type: hireType||null, proposed_start_date: startDate||null,
@@ -11447,7 +11447,7 @@ async function _cfpSubmitOffer(action) {
     submitted_by: currentUser?.id||null,
     submitted_by_name: currentUser?.full_name||null,
   };
-  await sb.from('offer_requests').insert(payload).catch(()=>{});
+  try { await sb.from('offer_requests').insert(payload); } catch(e) { console.warn('offer_requests insert:', e.message); }
   await auditLog('offer_request','application',appId,{action});
 
   if (action==='request' && approvers.length) {
@@ -11480,7 +11480,7 @@ function _goToOfferTab() {
   closeModal('modal-offer');
   viewRoleDetail(roleId);
   setTimeout(() => {
-    document.querySelectorAll('.rd-tab').forEach(t => { if (t.textContent.includes('Offer')) t.click(); });
+    if (typeof _rdStage === 'function') _rdStage('s5');
   }, 700);
 }
 
@@ -16753,7 +16753,7 @@ async function _quickMoveStage(appId, stage, label) {
     el.className = 'toast-item toast-ok';
     el.style.cssText = 'max-width:360px';
     el.innerHTML = '<span>✓</span><span style="flex:1">Moved to Offer stage</span>' +
-      (roleId ? '<button onclick="viewRoleDetail(\''+roleId+'\');setTimeout(()=>{var tabs=document.querySelectorAll(\'.rd-tab\');tabs.forEach(t=>{if(t.textContent.includes(\'Offer\'))t.click();});},600)" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;margin-left:8px">Go to Offer Tab →</button>' : '') +
+      (roleId ? '<button onclick="viewRoleDetail(\''+roleId+'\');setTimeout(()=>{if(typeof _rdStage===\'function\')_rdStage(\'s5\');},700)" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;margin-left:8px">Go to Offer Tab →</button>' : '') +
       '<button class="toast-close" onclick="this.closest(\'.toast-item\').remove()">✕</button>';
     if (t) { t.appendChild(el); setTimeout(()=>el.remove(), 8000); }
   } else {
