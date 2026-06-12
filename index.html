@@ -1629,7 +1629,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
 <script>
 // ── PUBLIC PAGE FLAG (eval/booking links — set before EVERYTHING) ──
-const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply') || new URLSearchParams(window.location.search).get('internal') || new URLSearchParams(window.location.search).get('hm_survey') || new URLSearchParams(window.location.search).get('probation_review'));
+const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply') || new URLSearchParams(window.location.search).get('internal') || new URLSearchParams(window.location.search).get('hm_survey') || new URLSearchParams(window.location.search).get('probation_review') || new URLSearchParams(window.location.search).get('offer_approval'));
 
 // ── SUPABASE ──────────────────────────────────
 const SUPABASE_URL = 'https://zgecauwahfszpeungbfb.supabase.co';
@@ -11450,20 +11450,43 @@ async function _cfpSubmitOffer(action) {
   try { await sb.from('offer_requests').insert(payload); } catch(e) { console.warn('offer_requests insert:', e.message); }
   await auditLog('offer_request','application',appId,{action});
 
-  if (action==='request' && approvers.length) {
-    var role = document.getElementById('offer-pf-role')?.textContent || '';
-    var toEmails = approvers.map(a=>a.approver_email).join(';');
+  if (action==='request') {
+    // Get saved offer ID to generate the Hiro approval link
+    var {data:savedOffer} = await sb.from('offer_requests')
+      .select('id').eq('application_id', appId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+
+    var approvalLink = savedOffer?.id
+      ? window.location.origin + window.location.pathname + '?offer_approval=' + savedOffer.id
+      : null;
+
     var _cn = document.getElementById('cfp-offer-cand-name')?.value || 'Candidate';
     var _rt = document.getElementById('cfp-offer-role-title')?.value || document.getElementById('cfp-offer-title')?.value || '';
-    var subject = encodeURIComponent('Offer Approval Required — '+_cn+' · '+_rt);
-    var body = encodeURIComponent('Please review and approve the following offer:\n\nCandidate: '+_cn+'\nRole: '+_rt+'\nHire Type: '+hireType+(startDate?'\nStart Date: '+startDate:'')+(salAnnual?'\nSalary: '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual':'')+'\n\nPlease reply with your approval.\n\n'+(currentUser?.full_name||'TA Team'));
-    // Use window.open to avoid page navigation
-    var mailLink = document.createElement('a');
-    mailLink.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
-    mailLink.click();
-    toast('✅ Approval request sent — email draft opened');
-  } else if (action==='request') {
-    toast('✅ Offer saved — add approvers to send for approval', 'info');
+
+    if (approvers.length && approvalLink) {
+      var toEmails = approvers.map(a=>a.approver_email).join(';');
+      var subject = encodeURIComponent('Offer Approval Required — '+_cn+' · '+_rt);
+      var body = encodeURIComponent(
+        'Please review and approve the following offer:\n\n'+
+        'Candidate: '+_cn+'\nRole: '+_rt+'\nHire Type: '+(hireType||'—')+
+        (startDate?'\nStart Date: '+startDate:'')+
+        (salAnnual?'\nSalary: '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual':'')+
+        '\n\n──────────────────────────────────────\n'+
+        'Click the link below to review the full offer details and approve or reject directly in Hiro:\n\n'+
+        approvalLink+
+        '\n\nNo login required — you can approve directly on that page.\n'+
+        '──────────────────────────────────────\n\n'+
+        (currentUser?.full_name||'TA Team')
+      );
+      var mailLink = document.createElement('a');
+      mailLink.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
+      mailLink.click();
+      toast('✅ Approval email opened with Hiro review link');
+    } else if (approvalLink) {
+      prompt('No approvers added. Copy this link and share manually:', approvalLink);
+      toast('✅ Offer saved — share approval link with approvers', 'info');
+    } else {
+      toast('✅ Offer saved', 'info');
+    }
   } else {
     toast('💾 Offer draft saved');
   }
@@ -14387,15 +14410,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const bookId = urlParams.get('book');
   if (bookId) { _initBookingPage(bookId); }
-  // Check for ?internal=1 internal candidate self-registration page
   const internalReg = urlParams.get('internal');
   if (internalReg) { _initInternalRegistrationPage(); }
-  // HM Satisfaction survey
   const hmSurveyToken = urlParams.get('hm_survey');
   if (hmSurveyToken) { _initHmSurveyPage(hmSurveyToken); }
-  // Probation review
   const probationToken = urlParams.get('probation_review');
   if (probationToken) { _initProbationReviewPage(probationToken); }
+  const offerApprovalId = urlParams.get('offer_approval');
+  if (offerApprovalId) { _initOfferApprovalPage(offerApprovalId); }
 });
 
 
@@ -14500,6 +14522,86 @@ async function _submitProbationReview(token, reviewType) {
   var {error} = await sb.from('probation_reviews').update(payload).eq('review_token', token);
   if (error) { errEl.textContent='Error: '+error.message; errEl.style.display='block'; return; }
   document.getElementById('prob-review-body').innerHTML = '<div style="text-align:center;color:#16a34a;padding:60px"><div style="font-size:48px">✅</div><div style="font-size:18px;font-weight:700;margin-top:12px">Review submitted. Thank you!</div></div>';
+}
+
+// ── OFFER APPROVAL PUBLIC PAGE ────────────────────────────────
+async function _initOfferApprovalPage(offerId) {
+  document.body.innerHTML = '<div style="max-width:600px;margin:40px auto;padding:20px;font-family:Arial,sans-serif"><div id="offer-approval-body"><div style="text-align:center;padding:40px"><div style="width:40px;height:40px;border:3px solid #2563eb;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto"></div><div style="margin-top:12px;color:#64748b">Loading offer details...</div></div></div></div>';
+
+  var {data:offer, error} = await sb.from('offer_requests').select('*').eq('id', offerId).maybeSingle();
+  if (error || !offer) { document.getElementById('offer-approval-body').innerHTML = '<div style="text-align:center;color:#dc2626;padding:40px">Offer not found or link has expired.</div>'; return; }
+  if (offer.approval_status === 'approved') { document.getElementById('offer-approval-body').innerHTML = '<div style="text-align:center;padding:60px"><div style="font-size:48px;margin-bottom:12px">✅</div><div style="font-size:18px;font-weight:700;color:#16a34a">This offer has already been approved.</div></div>'; return; }
+  if (offer.approval_status === 'rejected') { document.getElementById('offer-approval-body').innerHTML = '<div style="text-align:center;padding:60px"><div style="font-size:48px;margin-bottom:12px">❌</div><div style="font-size:18px;font-weight:700;color:#dc2626">This offer has been rejected.</div><div style="color:#64748b;margin-top:8px">'+(offer.rejection_reason||'')+'</div></div>'; return; }
+
+  var fmt = v => v ? Number(v).toLocaleString() : '—';
+  var row = (label, value) => value ? `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9"><span style="color:#64748b;font-size:13px">${label}</span><span style="font-weight:600;font-size:13px">${value}</span></div>` : '';
+
+  document.getElementById('offer-approval-body').innerHTML = `
+    <div style="background:#1e3a5f;padding:24px;border-radius:14px;margin-bottom:24px;color:#fff;text-align:center">
+      <div style="font-size:24px;font-weight:800;margin-bottom:4px">Offer Approval Request</div>
+      <div style="font-size:13px;opacity:.8">Sovos Talent Acquisition · Please review and respond below</div>
+    </div>
+
+    <div style="background:#f8fafc;border-radius:12px;padding:20px;margin-bottom:20px">
+      ${row('Candidate', offer.internal_job_title ? offer.internal_job_title : '—')}
+      ${row('Role / Internal Title', offer.internal_job_title||'—')}
+      ${row('Department', offer.department||'—')}
+      ${row('Location', offer.location||'—')}
+      ${row('Hire Type', offer.hire_type ? offer.hire_type.replace('_',' ') : '—')}
+      ${row('Proposed Start Date', offer.proposed_start_date||'—')}
+      ${row('Currency', offer.currency||'—')}
+      ${row('Base Salary Annual', offer.base_salary_annual ? fmt(offer.base_salary_annual) : '—')}
+      ${row('Base Salary Monthly', offer.base_salary_monthly ? fmt(offer.base_salary_monthly) : '—')}
+      ${row('Commission Annual', offer.commission_annual ? fmt(offer.commission_annual) : '—')}
+      ${row('Bonus %', offer.bonus_pct ? offer.bonus_pct+'%' : '—')}
+      ${row('Hiring Manager', offer.hiring_manager||'—')}
+      ${row('Submitted by', offer.submitted_by_name||'—')}
+      ${offer.offer_notes ? `<div style="margin-top:12px;padding:10px;background:#fff;border-radius:8px;font-size:13px;color:#374151"><strong>Notes:</strong> ${offer.offer_notes}</div>` : ''}
+    </div>
+
+    <div style="margin-bottom:20px">
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Your name (for the record)</label>
+      <input id="oa-approver-name" placeholder="Full name" style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box">
+    </div>
+    <div id="oa-reject-reason" style="display:none;margin-bottom:20px">
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Reason for rejection</label>
+      <textarea id="oa-reason" rows="3" style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+    <div id="oa-error" style="display:none;color:#dc2626;font-size:13px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:12px">
+      <button onclick="_submitOfferApproval('${offerId}','approved')" style="flex:2;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">✅ Approve Offer</button>
+      <button onclick="document.getElementById('oa-reject-reason').style.display='block';this.style.display='none'" style="flex:1;padding:14px;background:#fef2f2;color:#dc2626;border:2px solid #dc2626;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">❌ Reject</button>
+    </div>
+    <div id="oa-reject-submit" style="display:none;margin-top:8px">
+      <button onclick="_submitOfferApproval('${offerId}','rejected')" style="width:100%;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Confirm Rejection</button>
+    </div>`;
+
+  // Show reject submit button when reason typed
+  document.getElementById('oa-reject-reason').addEventListener('input', () => {
+    document.getElementById('oa-reject-submit').style.display = 'block';
+  });
+}
+
+async function _submitOfferApproval(offerId, action) {
+  var name = document.getElementById('oa-approver-name')?.value.trim();
+  var reason = document.getElementById('oa-reason')?.value.trim();
+  var errEl = document.getElementById('oa-error');
+  if (!name) { if(errEl){errEl.textContent='Please enter your name';errEl.style.display='block';} return; }
+  if (action === 'rejected' && !reason) { if(errEl){errEl.textContent='Please provide a reason for rejection';errEl.style.display='block';} return; }
+
+  var update = {
+    approval_status: action,
+    approved_by: name,
+  };
+  if (action === 'approved') update.approved_at = new Date().toISOString();
+  if (action === 'rejected') { update.rejected_at = new Date().toISOString(); update.rejection_reason = reason; }
+
+  var {error} = await sb.from('offer_requests').update(update).eq('id', offerId);
+  if (error) { if(errEl){errEl.textContent='Error: '+error.message;errEl.style.display='block';} return; }
+
+  document.getElementById('offer-approval-body').innerHTML = action === 'approved'
+    ? '<div style="text-align:center;padding:60px"><div style="font-size:56px;margin-bottom:16px">✅</div><div style="font-size:20px;font-weight:700;color:#16a34a">Offer Approved</div><div style="color:#64748b;margin-top:8px">Thank you, '+name+'. The recruiting team has been notified.</div></div>'
+    : '<div style="text-align:center;padding:60px"><div style="font-size:56px;margin-bottom:16px">❌</div><div style="font-size:20px;font-weight:700;color:#dc2626">Offer Rejected</div><div style="color:#64748b;margin-top:8px">Thank you, '+name+'. Your feedback has been recorded.</div></div>';
 }
 
 // ── SETTINGS: GDPR tab ────────────────────────
