@@ -1813,6 +1813,9 @@ async function saveNewPassword() {
   } else {
     msgDiv.textContent = 'Password set! Signing you in…';
     msgDiv.style.display = 'block';
+    // Clear recovery flag and clean URL so refreshing doesn't re-trigger this
+    window._hasRecoveryToken = false;
+    window.history.replaceState({}, document.title, window.location.pathname);
     // Session is already active after updateUser — load the app
     setTimeout(async function() {
       var { data: { session } } = await sb.auth.getSession();
@@ -12706,8 +12709,10 @@ function _startAuthFlow() {
   }
 
   sb.auth.onAuthStateChange(async (event, session) => {
-    // PASSWORD_RECOVERY: show set-new-password form
+    // PASSWORD_RECOVERY: only show set-password if URL has recovery token (fresh link click)
+    // Ignore if already authenticated or if this is a stale event on reload
     if(event==='PASSWORD_RECOVERY') {
+      if (!window._hasRecoveryToken || currentUser) return;
       document.getElementById('login').classList.add('visible');
       document.getElementById('app').classList.remove('ready');
       showSetPasswordView();
