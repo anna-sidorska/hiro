@@ -5454,22 +5454,60 @@ function _rdS4Html(d) {
 // ══════════════════════════════════════════════
 // STAGE 5 — OFFER
 // ══════════════════════════════════════════════
+async function _setOfferStatus(appId, roleId, newStatus) {
+  const labels = {extended:'Offer Extended',accepted:'Offer Accepted',rejected:'Offer Rejected',withdrew:'Withdrew'};
+  if (!confirm(`Mark as "${labels[newStatus]}"?`)) return;
+
+  const {error} = await sb.from('applications').update({offer_status: newStatus}).eq('id', appId);
+  if (error) {
+    // Fallback if offer_status column not in schema yet
+    if (error.message?.includes('offer_status') || error.message?.includes('schema')) {
+      toast('Run: ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_status text DEFAULT \'pending\';', 'err');
+      return;
+    }
+    toast('Error: '+error.message,'err'); return;
+  }
+
+  if (newStatus === 'accepted') {
+    // Trigger post-offer engagement touch points
+    try {
+      const {data:app} = await sb.from('applications').select('candidate_id,role_id,candidates(location)').eq('id',appId).maybeSingle();
+      if (app?.candidate_id) {
+        const country = app.candidates?.location || '';
+        await _initPostOfferEngagement(appId, app.candidate_id, roleId, country);
+        toast('✅ Offer accepted — post-offer engagement schedule created!');
+      }
+    } catch(e) { toast('✅ Offer accepted'); }
+  } else if (newStatus === 'withdrew') {
+    toast('⚠ Marked as withdrew');
+    // Open dropout logger pre-filled
+    setTimeout(() => openLogOutcomeModal('withdrawn'), 500);
+  } else if (newStatus === 'rejected') {
+    toast('❌ Offer rejected');
+    setTimeout(() => openLogOutcomeModal('declined'), 500);
+  } else {
+    toast(`${labels[newStatus]} ✓`);
+  }
+
+  viewRoleDetail(roleId);
+}
+
 async function _rdS5MoveToHired(appId,roleId) {
   if(!confirm('Mark this candidate as Hired?')) return;
   const {error}=await sb.from('applications').update({stage:'hired'}).eq('id',appId);
   if(error){toast('Error: '+error.message,'err');return;}
   try{const uid=(await sb.auth.getUser()).data.user?.id;await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'candidate_hired',p_description:'Candidate hired from Offer stage'});}catch(e){}
 
-  // Auto-generate post-offer engagement + probation schedule
+  // Auto-generate probation schedule (post-offer engagement created at offer acceptance)
   try {
-    const {data:app} = await sb.from('applications').select('candidate_id,candidates(location)').eq('id',appId).maybeSingle();
+    const {data:app} = await sb.from('applications').select('candidate_id,offer_start_date,candidates(location)').eq('id',appId).maybeSingle();
     const candidateId = app?.candidate_id;
     const country = app?.candidates?.location || '';
+    const startDate = app?.offer_start_date ? new Date(app.offer_start_date) : new Date();
     if (candidateId) {
-      await _initPostOfferEngagement(appId, candidateId, roleId, country);
-      await _initProbationSchedule(candidateId, roleId, appId, country, new Date());
+      await _initProbationSchedule(candidateId, roleId, appId, country, startDate);
     }
-  } catch(e) { console.warn('Post-hire init skipped:', e.message); }
+  } catch(e) { console.warn('Probation init skipped:', e.message); }
 
   toast('🎉 Marked as Hired! Post-offer engagement & probation schedule created.');
   viewRoleDetail(roleId);
@@ -5561,6 +5599,14 @@ function _rdS5Html(d) {
   const offerApps=apps.filter(a=>a.stage==='offer');
   const hired=apps.filter(a=>a.stage==='hired');
 
+  const _offerStatusMap = {
+    pending:  {label:'Pending Approval', color:'#64748b', bg:'#f1f5f9'},
+    extended: {label:'Offer Extended',   color:'#2563eb', bg:'#eff6ff'},
+    accepted: {label:'Offer Accepted',   color:'#16a34a', bg:'#f0fdf4'},
+    rejected: {label:'Offer Rejected',   color:'#dc2626', bg:'#fef2f2'},
+    withdrew: {label:'Withdrew',         color:'#d97706', bg:'#fffbeb'},
+  };
+
   const offerCard=a=>{
     const c=a.candidates;
     const offeredSal=a.offer_salary;
@@ -5570,17 +5616,33 @@ function _rdS5Html(d) {
     const salDiff=offeredSal&&expectedSal?Math.round(((offeredSal-expectedSal)/expectedSal)*100):null;
     const salColor=salDiff===null?'var(--text-3)':salDiff>=0?'var(--green-text)':'var(--amber-text)';
     const salBg=salDiff===null?'var(--surface-2)':salDiff>=0?'var(--green-bg)':'var(--amber-bg)';
-    return `<div class="card" style="margin-bottom:12px;border:1.5px solid var(--border)">
+    const offerStatus = a.offer_status || 'pending';
+    const statusInfo = _offerStatusMap[offerStatus] || _offerStatusMap.pending;
+    const candName = `${c?.first_name||''} ${c?.last_name||''}`.trim();
+
+    // Status action buttons — show relevant next actions based on current status
+    const statusBtns = [
+      offerStatus==='pending'  ? `<button class="btn btn-outline btn-sm" onclick="_setOfferStatus('${a.id}','${roleId}','extended')">📨 Mark Extended</button>` : '',
+      offerStatus==='extended' ? `<button class="btn btn-success btn-sm" onclick="_setOfferStatus('${a.id}','${roleId}','accepted')">✅ Mark Accepted</button>` : '',
+      offerStatus==='extended' ? `<button class="btn btn-danger btn-sm" onclick="_setOfferStatus('${a.id}','${roleId}','rejected')">❌ Mark Rejected</button>` : '',
+      offerStatus==='accepted' ? `<button class="btn btn-outline btn-sm" style="color:#d97706;border-color:#d97706" onclick="_setOfferStatus('${a.id}','${roleId}','withdrew')">⚠ Withdrew</button>` : '',
+      offerStatus==='accepted' ? `<button class="btn btn-success btn-sm" onclick="_rdS5MoveToHired('${a.id}','${roleId}')">🎉 Mark Hired</button>` : '',
+    ].filter(Boolean).join('');
+
+    return `<div class="card" style="margin-bottom:12px;border:1.5px solid ${statusInfo.color}40">
       <div class="card-header" style="background:var(--surface-2)">
-        <div>
-          <div style="font-size:14px;font-weight:700">${c?.first_name||''} ${c?.last_name||''}</div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:2px">${c?.current_title||''} ${c?.location?'· '+c.location:''}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div>
+            <div style="font-size:14px;font-weight:700">${candName}</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">${c?.current_title||''} ${c?.location?'· '+c.location:''}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:${statusInfo.bg};color:${statusInfo.color}">${statusInfo.label}</span>
         </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-outline btn-sm" onclick="openCandidateDrawer('${a.id}')">View Profile</button>
-          <button class="btn btn-outline btn-sm" onclick="openOfferModal('${a.id}','${(c?.first_name||'')+' '+(c?.last_name||'')}')">✏️ Edit Offer</button>
-          <button class="btn btn-danger btn-sm" style="font-size:11px" onclick="_rdS5DeclineOffer('${a.id}','${roleId}')">✕ Decline</button>
-          <button class="btn btn-success btn-sm" onclick="_rdS5MoveToHired('${a.id}','${roleId}')">🎉 Mark Hired</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="openCandidateDrawer('${a.id}')">Profile</button>
+          <button class="btn btn-outline btn-sm" onclick="openOfferModal('${a.id}','${candName.replace(/'/g,"\\'")}')">✏️ Edit</button>
+          ${statusBtns}
+          ${!['rejected','withdrew'].includes(offerStatus)?`<button class="btn btn-ghost btn-sm" style="color:var(--red-text)" onclick="_rdS5DeclineOffer('${a.id}','${roleId}')">✕</button>`:''}
         </div>
       </div>
       <div class="card-body">
