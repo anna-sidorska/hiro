@@ -1440,10 +1440,13 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
       <div id="offer-modal-error" style="display:none;background:var(--red-bg);border-radius:var(--r);padding:10px;font-size:12px;color:var(--red-text);margin-bottom:10px"></div>
 
-      <div class="form-actions">
-        <button class="btn btn-outline" onclick="closeModal('modal-offer')">Cancel</button>
-        <button class="btn btn-outline" onclick="submitOffer('save')">💾 Save Draft</button>
-        <button class="btn btn-primary" onclick="submitOffer('request')">📋 Request Approval</button>
+      <div class="form-actions" style="justify-content:space-between">
+        <button class="btn btn-ghost btn-sm" id="offer-goto-tab-btn" onclick="_goToOfferTab()" style="display:none">View in Offer Tab →</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline" onclick="closeModal('modal-offer')">Cancel</button>
+          <button class="btn btn-outline" onclick="submitOffer('save')">💾 Save Draft</button>
+          <button class="btn btn-primary" onclick="submitOffer('request')">📋 Request Approval</button>
+        </div>
       </div>
     </div>
   </div>
@@ -11260,7 +11263,22 @@ async function openOfferModal(appId, candidateName) {
     }
   } catch(e) { console.warn('Offer prefill skipped:', e.message); }
 
+  // Show "Go to Offer Tab" button if role is linked
+  var gotoBtn = document.getElementById('offer-goto-tab-btn');
+  var roleIdVal = document.getElementById('offer-role-id').value;
+  if (gotoBtn) gotoBtn.style.display = roleIdVal ? 'block' : 'none';
+
   openModal('modal-offer');
+}
+
+function _goToOfferTab() {
+  var roleId = document.getElementById('offer-role-id').value;
+  if (!roleId) return;
+  closeModal('modal-offer');
+  viewRoleDetail(roleId);
+  setTimeout(() => {
+    document.querySelectorAll('.rd-tab').forEach(t => { if (t.textContent.includes('Offer')) t.click(); });
+  }, 700);
 }
 
 async function submitOffer(action) {
@@ -15582,10 +15600,12 @@ async function openCandidateFullPage(appId) {
   var _cfpJdId = app.jd_id || '';
   window._drawerCandidateId = c.id;
   window._drawerCandidateName = fullName;
+  var _isOfferStage = app.stage === 'offer';
   document.getElementById('topbar-actions').innerHTML =
     '<button class="btn btn-outline btn-sm" onclick="openApplyModal(\'' + c.id + '\')">+ Apply to Role</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openComposeModal(\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✉ Email</button>' +
     (_cfpRoleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + c.id + '\',\'' + _cfpRoleId + '\',\'' + _cfpJdId + '\')">🔗 Eval Link</button>' : '') +
+    (_cfpRoleId ? '<button class="btn btn-primary btn-sm" onclick="openOfferModal(\'' + appId + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">📋 Offer Request</button>' : '') +
     '<button class="btn btn-danger btn-sm" onclick="rejectApplication(\'' + appId + '\')">✕ Reject</button>' +
     ((currentUser?.role==='admin'||currentUser?.role==='manager') ? '<button class="btn btn-danger btn-sm" onclick="confirmDeleteCandidate()" style="background:var(--red-bg);color:var(--red-text);border:1px solid var(--red)">🗑 Delete</button>' : '');
 
