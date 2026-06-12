@@ -1361,11 +1361,8 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <div class="form-group"><label>Hire Type <span style="color:var(--red)">*</span></label>
           <select id="offer-hire-type" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
             <option value="">Select...</option>
-            <option value="new_headcount">New Headcount</option>
-            <option value="replacement">Replacement</option>
-            <option value="backfill">Backfill</option>
-            <option value="contractor_conversion">Contractor Conversion</option>
-            <option value="transfer">Internal Transfer</option>
+            <option value="external">External</option>
+            <option value="internal">Internal</option>
           </select>
         </div>
         <div class="form-group"><label>Internal Job Title</label>
@@ -11327,10 +11324,12 @@ async function _loadCfpOfferTab(appId, roleId) {
 
     <input type="hidden" id="cfp-offer-app-id" value="${appId}">
     <input type="hidden" id="cfp-offer-role-id" value="${roleId}">
+    <input type="hidden" id="cfp-offer-cand-name" value="${candName}">
+    <input type="hidden" id="cfp-offer-role-title" value="${role.title||''}">
 
     ${sec('Offer Details')}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      ${fld('Hire Type *',`<select id="cfp-offer-hire-type" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">Select...</option><option value="new_headcount"${of.hire_type==='new_headcount'?' selected':''}>New Headcount</option><option value="replacement"${of.hire_type==='replacement'?' selected':''}>Replacement</option><option value="backfill"${of.hire_type==='backfill'?' selected':''}>Backfill</option><option value="contractor_conversion"${of.hire_type==='contractor_conversion'?' selected':''}>Contractor Conversion</option><option value="transfer"${of.hire_type==='transfer'?' selected':''}>Internal Transfer</option></select>`)}
+      ${fld('Hire Type *',`<select id="cfp-offer-hire-type" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">Select...</option><option value="external"${of.hire_type==='external'?' selected':''}>External</option><option value="internal"${of.hire_type==='internal'?' selected':''}>Internal</option></select>`)}
       ${fld('Internal Job Title',inp('cfp-offer-title', of.internal_job_title||role.title,'e.g. Account Executive II'))}
       ${fld('Proposed Start Date *',inp('cfp-offer-start', of.proposed_start_date,'','date'))}
       ${fld('Offer Expiry',inp('cfp-offer-expiry', of.offer_expiry_date,'','date'))}
@@ -11436,12 +11435,14 @@ async function _cfpSubmitOffer(action) {
   if (action==='request' && approvers.length) {
     var role = document.getElementById('offer-pf-role')?.textContent || '';
     var toEmails = approvers.map(a=>a.approver_email).join(';');
-    var subject = encodeURIComponent('Offer Approval Required — '+candName+' · '+(document.getElementById('cfp-offer-title')?.value||role));
-    var body = encodeURIComponent('Please review and approve the following offer:\n\nCandidate: '+candName+'\nHire Type: '+hireType+(startDate?'\nStart Date: '+startDate:'')+(salAnnual?'\nSalary: '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual':'')+'\n\nPlease reply with your approval.\n\n'+(currentUser?.full_name||'TA Team'));
+    var _cn = document.getElementById('cfp-offer-cand-name')?.value || 'Candidate';
+    var _rt = document.getElementById('cfp-offer-role-title')?.value || document.getElementById('cfp-offer-title')?.value || '';
+    var subject = encodeURIComponent('Offer Approval Required — '+_cn+' · '+_rt);
+    var body = encodeURIComponent('Please review and approve the following offer:\n\nCandidate: '+_cn+'\nRole: '+_rt+'\nHire Type: '+hireType+(startDate?'\nStart Date: '+startDate:'')+(salAnnual?'\nSalary: '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual':'')+'\n\nPlease reply with your approval.\n\n'+(currentUser?.full_name||'TA Team'));
     window.location.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
     toast('✅ Approval request sent');
   } else if (action==='request') {
-    toast('✅ Offer saved — add approvers to send for approval');
+    toast('✅ Offer saved — add approvers to send for approval', 'info');
   } else {
     toast('💾 Offer draft saved');
   }
