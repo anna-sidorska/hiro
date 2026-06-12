@@ -2016,39 +2016,32 @@ function renderSidebarNav() {
     // ── MANAGE section ──
     navHtml += '<hr class="sb-section-sep"><div class="sb-section">Manage</div>';
     if (!_isHrRole) {
-      if (_r !== 'admin') {
-        navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
-      }
       navHtml += '<button class="sb-item" id="nav-tasks" onclick="nav(\'tasks\',this)">' + icon.tasks + ' Tasks <span class="sb-badge" id="sb-task-count" style="display:none"></span></button>';
       navHtml += '<button class="sb-item" id="nav-jd_library" onclick="nav(\'jd_library\',this)">' + icon.jd_library + ' JD Library</button>';
       navHtml += '<button class="sb-item" id="nav-email_templates" onclick="nav(\'email_templates\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email Templates</button>';
-    } else {
-      navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
     }
-    // HR Portal: only for admin or hr roles
-    if (_r === 'admin' || _r === 'hr') {
+    if (_r === 'admin' || _r === 'hr' || _r === 'recruiter') {
       navHtml += '<button class="sb-item" id="nav-hr_portal" onclick="nav(\'hr_portal\',this)">' + icon.hr_portal + ' HR Portal</button>';
-      navHtml += '<button class="sb-item" id="nav-offer_outcomes" onclick="nav(\'offer_outcomes\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Offer Outcomes</button>';
-      navHtml += '<button class="sb-item" id="nav-post_offer" onclick="nav(\'post_offer\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Post-Offer</button>';
-      navHtml += '<button class="sb-item" id="nav-probation" onclick="nav(\'probation\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Probation</button>';
-      navHtml += '<button class="sb-item" id="nav-fpa_report" onclick="nav(\'fpa_report\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8h.01M11 8h6M7 12h.01M11 12h6"/></svg> FP&A Report</button>';
-      navHtml += '<button class="sb-item" id="nav-recruiter_dashboard" onclick="nav(\'recruiter_dashboard\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Recruiter Stats</button>';
       navHtml += '<button class="sb-item" id="nav-agencies" onclick="nav(\'agencies\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Agencies</button>';
-      navHtml += '<button class="sb-item" id="nav-hm_satisfaction" onclick="nav(\'hm_satisfaction\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> HM Feedback</button>';
     }
-    // Scheduling Hub for coordinator
     if (_r === 'coordinator') {
       navHtml += '<button class="sb-item" id="nav-scheduling_hub" onclick="nav(\'scheduling_hub\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Scheduling Hub</button>';
     }
 
-    // ── REPORTS section (admin only) ──
+    // ── REPORTS section ──
+    navHtml += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+    if (_r === 'admin' || _r === 'recruiter' || _r === 'hr') {
+      navHtml += '<button class="sb-item" id="nav-hiring_dashboard" onclick="nav(\'hiring_dashboard\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polyline points="14,8 16,10 20,6"/></svg> Hiring Dashboard</button>';
+      navHtml += '<button class="sb-item" id="nav-fpa_report" onclick="nav(\'fpa_report\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> FP&amp;A Report</button>';
+      navHtml += '<button class="sb-item" id="nav-recruiter_dashboard" onclick="nav(\'recruiter_dashboard\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Recruiter Stats</button>';
+      navHtml += '<button class="sb-item" id="nav-offer_outcomes" onclick="nav(\'offer_outcomes\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Offer Outcomes</button>';
+      navHtml += '<button class="sb-item" id="nav-hm_satisfaction" onclick="nav(\'hm_satisfaction\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> HM Feedback</button>';
+    }
     if (_r === 'admin') {
-      navHtml += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
-      navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
-      navHtml += '<button class="sb-item" id="nav-hiring_dashboard" onclick="nav(\'hiring_dashboard\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8h4M6 12h8M6 12"/><polyline points="14,8 16,10 20,6"/></svg> Hiring Dashboard</button>';
-      navHtml += '<button class="sb-item" id="nav-recruiter_stats" onclick="nav(\'recruiter_stats\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Recruiter Stats</button>';
       navHtml += '<button class="sb-item" id="nav-roles_tracker" onclick="nav(\'roles_tracker\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> Roles Tracker</button>';
     }
+
     // ── ADMIN section ──
     if (_r === 'admin') {
       navHtml += '<hr class="sb-section-sep"><div class="sb-section">Admin</div>';
@@ -14750,7 +14743,18 @@ async function renderHrPortal() {
     return;
   }
   document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openHrReqModal()">+ Open Requisition</button>';
-  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading HR Portal...</div>';
+
+  // Tab navigation within HR Portal
+  var _hrTab = window._hrPortalTab || 'requisitions';
+  var tabBar = `<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">
+    ${[['requisitions','📋 Requisitions'],['post_offer','👤 Post-Offer Engagement'],['probation','✅ Probation']].map(([id,label])=>`
+    <button onclick="window._hrPortalTab='${id}';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${_hrTab===id?'700':'500'};color:${_hrTab===id?'var(--brand)':'var(--text-3)'};border-bottom:${_hrTab===id?'2px solid var(--brand)':'2px solid transparent'};margin-bottom:-2px">${label}</button>`).join('')}
+  </div>`;
+
+  if (_hrTab === 'post_offer') { document.getElementById('content').innerHTML = tabBar + '<div id="hr-tab-content"><div class="loading"><div class="spinner"></div></div></div>'; await _renderPostOfferInPortal(); return; }
+  if (_hrTab === 'probation') { document.getElementById('content').innerHTML = tabBar + '<div id="hr-tab-content"><div class="loading"><div class="spinner"></div></div></div>'; await _renderProbationInPortal(); return; }
+
+  document.getElementById('content').innerHTML = tabBar + '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
   var results = await Promise.allSettled([
     sb.from('roles').select('*, applications(count), profiles!hiring_manager_id(full_name)').order('created_at', {ascending:false}),
@@ -14803,7 +14807,10 @@ async function renderHrPortal() {
       '</td></tr>';
   }).join('');
 
-  document.getElementById('content').innerHTML =
+  var _hrTabBar = document.querySelector('[onclick*="_hrPortalTab"]')?.closest('div') || null;
+  var _tabHtml = _hrTabBar ? _hrTabBar.outerHTML : `<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px"><button onclick="window._hrPortalTab='requisitions';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--brand);border-bottom:2px solid var(--brand);margin-bottom:-2px">📋 Requisitions</button><button onclick="window._hrPortalTab='post_offer';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-2px">👤 Post-Offer Engagement</button><button onclick="window._hrPortalTab='probation';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-2px">✅ Probation</button></div>`;
+
+  document.getElementById('content').innerHTML = _tabHtml +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">' +
     '<div class="card kpi"><div class="kpi-val" style="color:var(--brand)">' + totalBudget + '</div><div class="kpi-label">Open Roles</div></div>' +
     '<div class="card kpi"><div class="kpi-val" style="color:var(--green)">' + hired30 + '</div><div class="kpi-label">Hires (30d)</div></div>' +
@@ -14813,6 +14820,55 @@ async function renderHrPortal() {
     '<div class="card"><div class="card-header"><div class="card-title">All Roles</div></div>' +
     '<table><thead><tr><th>Role</th><th>Department</th><th>Salary Band</th><th>Hiring Manager</th><th>Apps / HC</th><th>Approval</th><th>TTH Target</th><th>Opened</th><th></th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table></div>';
+}
+
+async function _renderPostOfferInPortal() {
+  // Reuse post-offer logic, inject into tab content area
+  var container = document.getElementById('hr-tab-content');
+  if (!container) return;
+  var {data:tps} = await sb.from('post_offer_touchpoints').select('*, candidates(first_name,last_name), roles(title)').order('scheduled_date',{ascending:true});
+  if (!tps) { container.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Run supabase-patch-hr-features.sql first</div></div>'; return; }
+  var today = new Date().toISOString().slice(0,10);
+  var byCand = {};
+  tps.forEach(t => { var k=t.candidate_id||'x'; if(!byCand[k])byCand[k]={cand:t.candidates,role:t.roles,tps:[]}; byCand[k].tps.push(t); });
+  var statusTag = s => ({pending:'<span style="background:#f1f5f9;color:#64748b;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Pending</span>',completed:'<span style="background:#f0fdf4;color:#16a34a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Done</span>',missed:'<span style="background:#fef2f2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Missed</span>'})[s]||'';
+  var sentimentColor = s => ({positive:'#16a34a',neutral:'#64748b',at_risk:'#dc2626',no_response:'#d97706'}[s]||'#64748b');
+  container.innerHTML = Object.values(byCand).map(({cand,role,tps:ctps})=>{
+    var name = cand?cand.first_name+' '+cand.last_name:'Unknown';
+    var done = ctps.filter(t=>t.status==='completed').length;
+    var rows = ctps.map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="width:20px;height:20px;border-radius:50%;background:${t.status==='completed'?'#16a34a':t.status==='missed'?'#dc2626':'#e2e8f0'};display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;flex-shrink:0">${t.touchpoint_number}</div>
+      <div style="flex:1"><div style="font-size:12px;font-weight:600">${t.touchpoint_label}</div><div style="font-size:10px;color:var(--text-3)">${t.owner_role}·${t.scheduled_date||'—'}</div></div>
+      ${statusTag(t.status)}
+      ${t.sentiment?`<span style="font-size:10px;font-weight:600;color:${sentimentColor(t.sentiment)}">${t.sentiment}</span>`:''}
+      ${t.status==='pending'?`<button onclick="_markTouchpoint('${t.id}')" style="font-size:10px;padding:2px 7px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">Done</button>`:''}
+    </div>`).join('');
+    return `<div class="card" style="margin-bottom:12px"><div class="card-header"><div class="card-title">${name}</div><div style="font-size:11px;color:var(--text-3)">${role?.title||''} · ${done}/${ctps.length} done</div></div><div class="card-body" style="padding-top:4px">${rows}</div></div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">👤</div><div class="empty-title">No post-offer engagement records yet</div><div class="empty-sub">Created automatically when a candidate is marked as hired</div></div>';
+}
+
+async function _renderProbationInPortal() {
+  var container = document.getElementById('hr-tab-content');
+  if (!container) return;
+  var {data:reviews} = await sb.from('probation_reviews').select('*, candidates(first_name,last_name), roles(title)').order('scheduled_date',{ascending:true});
+  if (!reviews) { container.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Run supabase-patch-hr-features.sql first</div></div>'; return; }
+  var today = new Date().toISOString().slice(0,10);
+  var flagColor = f => ({on_track:'#16a34a',needs_support:'#d97706',at_risk:'#dc2626'}[f]||'#64748b');
+  var rows = reviews.map(r=>{
+    var name = r.candidates?r.candidates.first_name+' '+r.candidates.last_name:'—';
+    var overdue = r.status==='pending' && r.scheduled_date < today;
+    return `<tr>
+      <td style="font-weight:600">${name}</td>
+      <td style="font-size:12px">${r.roles?.title||'—'}</td>
+      <td><span style="font-size:11px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:2px 7px;border-radius:99px">Day ${r.review_day}</span>${r.review_type==='final'?' <span style="font-size:10px;background:#fef9c3;color:#b45309;padding:2px 5px;border-radius:99px">Final</span>':''}</td>
+      <td style="font-size:12px;color:${overdue?'#dc2626':''};font-weight:${overdue?700:400}">${r.scheduled_date||'—'}${overdue?' ⚠':''}</td>
+      <td>${r.status_flag?`<span style="color:${flagColor(r.status_flag)};font-weight:600;font-size:11px">${r.status_flag.replace('_',' ')}</span>`:'—'}</td>
+      <td style="display:flex;gap:4px">${r.status==='pending'?`<button onclick="_completeProbationReview('${r.id}')" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">Complete</button><button onclick="_copyProbationLink('${r.review_token}')" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer" title="Copy link">🔗</button>`:'<span style="color:#16a34a;font-size:11px">✓</span>'}</td>
+    </tr>`;
+  }).join('');
+  container.innerHTML = `<div class="card"><div class="card-header"><div class="card-title">All Probation Reviews</div></div>
+    <table><thead><tr><th>Candidate</th><th>Role</th><th>Review</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">No probation reviews yet</td></tr>'}</tbody></table></div>`;
 }
 
 async function approveRole(roleId) {
