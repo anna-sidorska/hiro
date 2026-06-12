@@ -2124,7 +2124,7 @@ function nav(page, el) {
     email_templates:'Email Templates', jd_library:'JD Library',
     hm_roles:'My Roles', hm_interviews:'My Interviews', team:'Team',
     communications:'Communications', integrations:'Integrations', gdpr:'GDPR',
-    hr_portal:'HR Portal',
+    hr_portal:'HR Portal', offer_outcomes:'Offer Outcomes',
     home:'Home', team_users:'Team & Users', management_view:'Overview', scheduling_hub:'Scheduling Hub', recruiter_stats:'Recruiter Stats', roles_tracker:'Roles Tracker', hiring_dashboard:'Hiring Dashboard',
   };
   document.getElementById('page-title').textContent = titles[page]||page;
@@ -2154,6 +2154,7 @@ function nav(page, el) {
     integrations: renderIntegrations,
     gdpr: renderGdpr,
     hr_portal: renderHrPortal,
+    offer_outcomes: renderOfferOutcomes,
     team_users: renderTeamUsers,
     management_view: renderManagement,
     scheduling_hub: renderSchedulingHub,
