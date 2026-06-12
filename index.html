@@ -11378,7 +11378,10 @@ async function _cfpSubmitOffer(action) {
   var roleId = document.getElementById('cfp-offer-role-id')?.value;
   var errEl  = document.getElementById('cfp-offer-error');
   if (errEl) errEl.style.display = 'none';
-  if (!appId) return;
+  if (!appId) { toast('Error: no application ID found','err'); return; }
+
+  // Disable buttons to prevent double-submit
+  document.querySelectorAll('#cfp-offer-content button').forEach(b => b.disabled = true);
 
   var hireType  = document.getElementById('cfp-offer-hire-type')?.value;
   var startDate = document.getElementById('cfp-offer-start')?.value;
@@ -11396,16 +11399,29 @@ async function _cfpSubmitOffer(action) {
     return {index:i, approver_name:inputs[0]?.value.trim(), approver_email:inputs[1]?.value.trim().toLowerCase(), status:'pending'};
   }).filter(r=>r.approver_name && r.approver_email);
 
-  // Update application
-  await sb.from('applications').update({
+  // Update application — try with offer_status, fall back without if column missing
+  var appUpdateFull = {
     stage:'offer',
     offer_salary: salAnnual?parseInt(salAnnual):(salMonthly?parseInt(salMonthly)*12:null),
     offer_currency: document.getElementById('cfp-offer-currency')?.value,
     offer_start_date: startDate||null,
     offer_expiry_date: document.getElementById('cfp-offer-expiry')?.value||null,
     offer_notes: document.getElementById('cfp-offer-notes')?.value.trim()||null,
-    offer_status: action==='request'?'pending':'pending',
-  }).eq('id',appId);
+    offer_status: 'pending',
+  };
+  var {error:appErr} = await sb.from('applications').update(appUpdateFull).eq('id',appId);
+  if (appErr) {
+    // Try without offer_status if column missing
+    var {error:appErr2} = await sb.from('applications').update({
+      stage:'offer',
+      offer_salary: appUpdateFull.offer_salary,
+      offer_currency: appUpdateFull.offer_currency,
+      offer_start_date: appUpdateFull.offer_start_date,
+      offer_expiry_date: appUpdateFull.offer_expiry_date,
+      offer_notes: appUpdateFull.offer_notes,
+    }).eq('id',appId);
+    if (appErr2) { if(errEl){errEl.textContent='Save failed: '+appErr2.message;errEl.style.display='block';} document.querySelectorAll('#cfp-offer-content button').forEach(b=>b.disabled=false); return; }
+  }
 
   // Upsert offer request record
   var payload = {
@@ -11439,8 +11455,11 @@ async function _cfpSubmitOffer(action) {
     var _rt = document.getElementById('cfp-offer-role-title')?.value || document.getElementById('cfp-offer-title')?.value || '';
     var subject = encodeURIComponent('Offer Approval Required — '+_cn+' · '+_rt);
     var body = encodeURIComponent('Please review and approve the following offer:\n\nCandidate: '+_cn+'\nRole: '+_rt+'\nHire Type: '+hireType+(startDate?'\nStart Date: '+startDate:'')+(salAnnual?'\nSalary: '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual':'')+'\n\nPlease reply with your approval.\n\n'+(currentUser?.full_name||'TA Team'));
-    window.location.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
-    toast('✅ Approval request sent');
+    // Use window.open to avoid page navigation
+    var mailLink = document.createElement('a');
+    mailLink.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
+    mailLink.click();
+    toast('✅ Approval request sent — email draft opened');
   } else if (action==='request') {
     toast('✅ Offer saved — add approvers to send for approval', 'info');
   } else {
@@ -11452,8 +11471,10 @@ async function _cfpSubmitOffer(action) {
 }
 
 function _goToOfferTab() {
-  var roleId = document.getElementById('offer-role-id')?.value || window._cfpRoleId;
-  if (!roleId) return;
+  var roleId = document.getElementById('cfp-offer-role-id')?.value ||
+               document.getElementById('offer-role-id')?.value ||
+               window._hiroCurrentRoleId;
+  if (!roleId) { toast('No role linked to this candidate','err'); return; }
   closeModal('modal-offer');
   viewRoleDetail(roleId);
   setTimeout(() => {
@@ -15778,6 +15799,7 @@ async function openCandidateFullPage(appId) {
 
   var _cfpRoleId = app.role_id || '';
   var _cfpJdId = app.jd_id || '';
+  window._hiroCurrentRoleId = _cfpRoleId; // global for _goToOfferTab
   window._drawerCandidateId = c.id;
   window._drawerCandidateName = fullName;
   var _isOfferStage = app.stage === 'offer';
