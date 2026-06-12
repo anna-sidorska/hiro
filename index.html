@@ -11271,6 +11271,185 @@ async function openOfferModal(appId, candidateName) {
   openModal('modal-offer');
 }
 
+async function _loadCfpOfferTab(appId, roleId) {
+  var container = document.getElementById('cfp-offer-content');
+  if (!container) return;
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  // Fetch app + role + existing offer request
+  var [{data:app}, {data:existingOffer}] = await Promise.all([
+    sb.from('applications').select('*, roles(id,title,department,location,salary_currency,salary_min,salary_max,tracking_number,department_leader,approval_chain), candidates(location,first_name,last_name)').eq('id',appId).maybeSingle(),
+    sb.from('offer_requests').select('*').eq('application_id',appId).order('created_at',{ascending:false}).limit(1).maybeSingle(),
+  ]);
+
+  var role = app?.roles || {};
+  var cand = app?.candidates || {};
+  var of   = existingOffer || {};
+  var candName = (cand.first_name||'') + ' ' + (cand.last_name||'');
+
+  // Status bar
+  var ofStatus  = app?.offer_status || 'pending';
+  var statusMap = {pending:{label:'Pending Approval',color:'#64748b',bg:'#f1f5f9',icon:'⏳'},extended:{label:'Offer Extended',color:'#2563eb',bg:'#eff6ff',icon:'📨'},accepted:{label:'Offer Accepted',color:'#16a34a',bg:'#f0fdf4',icon:'✅'},rejected:{label:'Offer Rejected',color:'#dc2626',bg:'#fef2f2',icon:'❌'},withdrew:{label:'Withdrew',color:'#d97706',bg:'#fffbeb',icon:'⚠️'}};
+  var si = statusMap[ofStatus] || statusMap.pending;
+  var currencies = ['USD','EUR','GBP','BRL','COP','MXN','ARS','TRY','INR','SGD'].map(c=>`<option${(of.currency||role.salary_currency||'USD')===c?' selected':''}>${c}</option>`).join('');
+
+  var approverRows = '';
+  var chain = of.approval_chain || (role.approval_chain && Array.isArray(role.approval_chain) ? role.approval_chain : []);
+  chain.forEach((a,i) => {
+    approverRows += `<div class="cfp-offer-approver-row" style="display:grid;grid-template-columns:24px 1fr 1fr 32px;gap:6px;align-items:center;margin-bottom:6px">
+      <div style="font-size:11px;font-weight:700;color:var(--brand);text-align:center">${i+1}</div>
+      <input value="${a.approver_name||''}" placeholder="Name" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+      <input value="${a.approver_email||''}" placeholder="Email" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+      <button type="button" onclick="this.closest('.cfp-offer-approver-row').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer">✕</button>
+    </div>`;
+  });
+
+  var inp = (id,val,ph,type='text') => `<input id="${id}" type="${type}" value="${val||''}" placeholder="${ph}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">`;
+  var fld = (label,content) => `<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);display:block;margin-bottom:4px">${label}</label>${content}</div>`;
+  var sec = (title) => `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">${title}</div>`;
+
+  container.innerHTML = `
+    <!-- Status + Go to Offer Tab -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:12px;font-weight:700;padding:4px 12px;border-radius:99px;background:${si.bg};color:${si.color}">${si.icon} ${si.label}</span>
+      ${roleId?`<button onclick="_goToOfferTab()" style="font-size:12px;padding:6px 14px;background:var(--brand);color:#fff;border:none;border-radius:var(--r);cursor:pointer;font-weight:600">Go to Offer Tab →</button>`:''}
+    </div>
+
+    <!-- Pre-filled summary -->
+    <div style="background:var(--surface-2);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;font-size:12px">
+      <div><span style="color:var(--text-3)">Req ID: </span><b>${role.tracking_number||'—'}</b></div>
+      <div><span style="color:var(--text-3)">Role: </span><b>${role.title||'—'}</b></div>
+      <div><span style="color:var(--text-3)">Dept: </span><b>${role.department||'—'}</b></div>
+      <div><span style="color:var(--text-3)">Location: </span><b>${role.location||cand.location||'—'}</b></div>
+      <div><span style="color:var(--text-3)">HM: </span><b>${role.department_leader||'—'}</b></div>
+      <div><span style="color:var(--text-3)">Recruiter: </span><b>${window.currentUser?.full_name||'—'}</b></div>
+    </div>
+
+    <input type="hidden" id="cfp-offer-app-id" value="${appId}">
+    <input type="hidden" id="cfp-offer-role-id" value="${roleId}">
+
+    ${sec('Offer Details')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      ${fld('Hire Type *',`<select id="cfp-offer-hire-type" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">Select...</option><option value="new_headcount"${of.hire_type==='new_headcount'?' selected':''}>New Headcount</option><option value="replacement"${of.hire_type==='replacement'?' selected':''}>Replacement</option><option value="backfill"${of.hire_type==='backfill'?' selected':''}>Backfill</option><option value="contractor_conversion"${of.hire_type==='contractor_conversion'?' selected':''}>Contractor Conversion</option><option value="transfer"${of.hire_type==='transfer'?' selected':''}>Internal Transfer</option></select>`)}
+      ${fld('Internal Job Title',inp('cfp-offer-title', of.internal_job_title||role.title,'e.g. Account Executive II'))}
+      ${fld('Proposed Start Date *',inp('cfp-offer-start', of.proposed_start_date,'','date'))}
+      ${fld('Offer Expiry',inp('cfp-offer-expiry', of.offer_expiry_date,'','date'))}
+      ${fld('Hiring Manager',inp('cfp-offer-hm', of.hiring_manager||role.department_leader,'Name'))}
+      ${fld('Location',inp('cfp-offer-loc', of.location||role.location,'e.g. Madrid, Spain'))}
+    </div>
+
+    ${sec('Compensation')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      ${fld('Currency *',`<select id="cfp-offer-currency" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">${currencies}</select>`)}
+      ${fld('Bonus (%)',inp('cfp-offer-bonus', of.bonus_pct,'e.g. 15','number'))}
+      ${fld('Base Salary Annual (LC)',inp('cfp-offer-sal-annual', of.base_salary_annual||role.salary_min,'Annual','number'))}
+      ${fld('Base Salary Monthly (LC)',inp('cfp-offer-sal-monthly', of.base_salary_monthly,'Monthly (auto-calc)','number'))}
+      ${fld('Commission Annual (LC)',inp('cfp-offer-comm-annual', of.commission_annual,'Annual','number'))}
+      ${fld('Commission Monthly (LC)',inp('cfp-offer-comm-monthly', of.commission_monthly,'Monthly (auto-calc)','number'))}
+    </div>
+    ${fld('Contractor Conversion',`<select id="cfp-offer-contractor" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"><option value="">No</option><option value="yes"${of.contractor_conversion?' selected':''}>Yes</option></select>`)}
+    ${fld('Offer Notes',`<textarea id="cfp-offer-notes" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;resize:vertical;background:var(--surface);color:var(--text)">${of.offer_notes||''}</textarea>`)}
+
+    ${sec('Approval Chain')}
+    <div id="cfp-offer-approvers">${approverRows}</div>
+    <button type="button" onclick="_cfpOfferAddApprover()" style="font-size:12px;color:var(--brand);background:none;border:1px dashed var(--brand);border-radius:var(--r);padding:6px 14px;cursor:pointer;width:100%;margin-bottom:16px">+ Add Approver</button>
+
+    <div id="cfp-offer-error" style="display:none;background:var(--red-bg);border-radius:var(--r);padding:10px;font-size:12px;color:var(--red-text);margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="_cfpSubmitOffer('save')" style="flex:1;padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:600;color:var(--text)">💾 Save Draft</button>
+      <button onclick="_cfpSubmitOffer('request')" style="flex:2;padding:10px;background:var(--brand);color:#fff;border:none;border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:700">📋 Request Approval</button>
+    </div>`;
+}
+
+function _cfpOfferAddApprover() {
+  var list = document.getElementById('cfp-offer-approvers');
+  var idx = list.querySelectorAll('.cfp-offer-approver-row').length + 1;
+  var row = document.createElement('div');
+  row.className = 'cfp-offer-approver-row';
+  row.style.cssText = 'display:grid;grid-template-columns:24px 1fr 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--brand);text-align:center">${idx}</div>
+    <input placeholder="Name" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <input placeholder="Email" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <button type="button" onclick="this.closest('.cfp-offer-approver-row').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer">✕</button>`;
+  list.appendChild(row);
+}
+
+async function _cfpSubmitOffer(action) {
+  var appId  = document.getElementById('cfp-offer-app-id')?.value;
+  var roleId = document.getElementById('cfp-offer-role-id')?.value;
+  var errEl  = document.getElementById('cfp-offer-error');
+  if (errEl) errEl.style.display = 'none';
+  if (!appId) return;
+
+  var hireType  = document.getElementById('cfp-offer-hire-type')?.value;
+  var startDate = document.getElementById('cfp-offer-start')?.value;
+  if (action==='request' && !hireType) { if(errEl){errEl.textContent='Hire Type required';errEl.style.display='block';} return; }
+  if (action==='request' && !startDate) { if(errEl){errEl.textContent='Start Date required';errEl.style.display='block';} return; }
+
+  var salAnnual  = document.getElementById('cfp-offer-sal-annual')?.value;
+  var salMonthly = document.getElementById('cfp-offer-sal-monthly')?.value;
+  var commAnnual = document.getElementById('cfp-offer-comm-annual')?.value;
+  var commMonthly= document.getElementById('cfp-offer-comm-monthly')?.value;
+
+  // Collect approvers
+  var approvers = Array.from(document.querySelectorAll('.cfp-offer-approver-row')).map((row,i) => {
+    var inputs = row.querySelectorAll('input');
+    return {index:i, approver_name:inputs[0]?.value.trim(), approver_email:inputs[1]?.value.trim().toLowerCase(), status:'pending'};
+  }).filter(r=>r.approver_name && r.approver_email);
+
+  // Update application
+  await sb.from('applications').update({
+    stage:'offer',
+    offer_salary: salAnnual?parseInt(salAnnual):(salMonthly?parseInt(salMonthly)*12:null),
+    offer_currency: document.getElementById('cfp-offer-currency')?.value,
+    offer_start_date: startDate||null,
+    offer_expiry_date: document.getElementById('cfp-offer-expiry')?.value||null,
+    offer_notes: document.getElementById('cfp-offer-notes')?.value.trim()||null,
+    offer_status: action==='request'?'pending':'pending',
+  }).eq('id',appId);
+
+  // Upsert offer request record
+  var payload = {
+    application_id: appId, role_id: roleId||null,
+    hire_type: hireType||null, proposed_start_date: startDate||null,
+    offer_expiry_date: document.getElementById('cfp-offer-expiry')?.value||null,
+    internal_job_title: document.getElementById('cfp-offer-title')?.value.trim()||null,
+    location: document.getElementById('cfp-offer-loc')?.value.trim()||null,
+    hiring_manager: document.getElementById('cfp-offer-hm')?.value.trim()||null,
+    currency: document.getElementById('cfp-offer-currency')?.value,
+    base_salary_annual: salAnnual?parseFloat(salAnnual):null,
+    base_salary_monthly: salMonthly?parseFloat(salMonthly):null,
+    commission_annual: commAnnual?parseFloat(commAnnual):null,
+    commission_monthly: commMonthly?parseFloat(commMonthly):null,
+    bonus_pct: document.getElementById('cfp-offer-bonus')?.value?parseFloat(document.getElementById('cfp-offer-bonus').value):null,
+    contractor_conversion: document.getElementById('cfp-offer-contractor')?.value==='yes',
+    offer_notes: document.getElementById('cfp-offer-notes')?.value.trim()||null,
+    offer_date: new Date().toISOString().slice(0,10),
+    approval_chain: approvers,
+    approval_status: action==='request'?'pending':'draft',
+    submitted_by: currentUser?.id||null,
+    submitted_by_name: currentUser?.full_name||null,
+  };
+  await sb.from('offer_requests').insert(payload).catch(()=>{});
+  await auditLog('offer_request','application',appId,{action});
+
+  if (action==='request' && approvers.length) {
+    var role = document.getElementById('offer-pf-role')?.textContent || '';
+    var toEmails = approvers.map(a=>a.approver_email).join(';');
+    var subject = encodeURIComponent('Offer Approval Required — '+candName+' · '+(document.getElementById('cfp-offer-title')?.value||role));
+    var body = encodeURIComponent('Please review and approve the following offer:\n\nCandidate: '+candName+'\nHire Type: '+hireType+(startDate?'\nStart Date: '+startDate:'')+(salAnnual?'\nSalary: '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual':'')+'\n\nPlease reply with your approval.\n\n'+(currentUser?.full_name||'TA Team'));
+    window.location.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
+    toast('✅ Approval request sent');
+  } else if (action==='request') {
+    toast('✅ Offer saved — add approvers to send for approval');
+  } else {
+    toast('💾 Offer draft saved');
+  }
+
+  // Reload the tab
+  _loadCfpOfferTab(appId, roleId);
+}
+
 function _goToOfferTab() {
   var roleId = document.getElementById('offer-role-id')?.value || window._cfpRoleId;
   if (!roleId) return;
@@ -15775,6 +15954,7 @@ async function openCandidateFullPage(appId) {
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-activity" onclick="switchCfpTab(this,\'cfp-tab-activity\')">⏱ Activity</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-apps" onclick="switchCfpTab(this,\'cfp-tab-apps\')">📁 Applications</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-notes" onclick="switchCfpTab(this,\'cfp-tab-notes\')">📝 Notes</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-offer" onclick="switchCfpTab(this,\'cfp-tab-offer\');_loadCfpOfferTab(\'' + appId + '\',\'' + (app.role_id||'') + '\')" style="' + (app.stage==='offer'?'color:var(--brand);background:var(--surface);box-shadow:var(--shadow)':'') + '">💼 Offer</button>';
   rightCol += '</div>';
 
   // EPP pane (always visible, active by default)
@@ -15827,6 +16007,11 @@ async function openCandidateFullPage(appId) {
   rightCol += '<button class="btn btn-primary btn-sm" style="align-self:flex-end" onclick="addCfpNote(\'' + appId + '\')">Add</button></div>';
   rightCol += '</div>';
 
+  // Offer tab pane
+  rightCol += '<div id="cfp-tab-offer" class="cfp-tab-pane" style="display:none">';
+  rightCol += '<div id="cfp-offer-content"><div class="loading"><div class="spinner"></div></div></div>';
+  rightCol += '</div>';
+
   rightCol += '</div>';
 
   document.getElementById('content').innerHTML =
@@ -15838,8 +16023,14 @@ async function openCandidateFullPage(appId) {
   loadCfpCommunications(c.id, c.email, fullName, appId, app.roles ? app.roles.title : '', app.stage, app.role_id||'', app.jd_id||'');
   loadCfpEvaluations(c.id);
   loadCfpNotes(appId);
-  // EPP is the default active tab — load it immediately
-  _loadCfpEppTab();
+
+  // Auto-activate Offer tab if at offer stage, otherwise EPP
+  if (app.stage === 'offer') {
+    var offerTabBtn = document.querySelector('[data-tab="cfp-tab-offer"]');
+    if (offerTabBtn) { switchCfpTab(offerTabBtn, 'cfp-tab-offer'); _loadCfpOfferTab(appId, app.role_id||''); }
+  } else {
+    _loadCfpEppTab();
+  }
 }
 
 // ── INLINE CV VIEWER ─────────────────────────────────────────────────
