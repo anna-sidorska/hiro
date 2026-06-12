@@ -1545,7 +1545,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
 <script>
 // ── PUBLIC PAGE FLAG (eval/booking links — set before EVERYTHING) ──
-const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply') || new URLSearchParams(window.location.search).get('internal'));
+const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply') || new URLSearchParams(window.location.search).get('internal') || new URLSearchParams(window.location.search).get('hm_survey') || new URLSearchParams(window.location.search).get('probation_review'));
 
 // ── SUPABASE ──────────────────────────────────
 const SUPABASE_URL = 'https://zgecauwahfszpeungbfb.supabase.co';
@@ -2032,6 +2032,9 @@ function renderSidebarNav() {
       navHtml += '<button class="sb-item" id="nav-post_offer" onclick="nav(\'post_offer\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Post-Offer</button>';
       navHtml += '<button class="sb-item" id="nav-probation" onclick="nav(\'probation\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Probation</button>';
       navHtml += '<button class="sb-item" id="nav-fpa_report" onclick="nav(\'fpa_report\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8h.01M11 8h6M7 12h.01M11 12h6"/></svg> FP&A Report</button>';
+      navHtml += '<button class="sb-item" id="nav-recruiter_dashboard" onclick="nav(\'recruiter_dashboard\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Recruiter Stats</button>';
+      navHtml += '<button class="sb-item" id="nav-agencies" onclick="nav(\'agencies\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Agencies</button>';
+      navHtml += '<button class="sb-item" id="nav-hm_satisfaction" onclick="nav(\'hm_satisfaction\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> HM Feedback</button>';
     }
     // Scheduling Hub for coordinator
     if (_r === 'coordinator') {
@@ -2127,7 +2130,7 @@ function nav(page, el) {
     email_templates:'Email Templates', jd_library:'JD Library',
     hm_roles:'My Roles', hm_interviews:'My Interviews', team:'Team',
     communications:'Communications', integrations:'Integrations', gdpr:'GDPR',
-    hr_portal:'HR Portal', offer_outcomes:'Offer Outcomes', post_offer:'Post-Offer Engagement', probation:'Probation Tracker', fpa_report:'FP&A Report',
+    hr_portal:'HR Portal', offer_outcomes:'Offer Outcomes', post_offer:'Post-Offer Engagement', probation:'Probation Tracker', fpa_report:'FP&A Report', recruiter_dashboard:'Recruiter Performance', agencies:'Agency Tracker', hm_satisfaction:'HM Satisfaction',
     home:'Home', team_users:'Team & Users', management_view:'Overview', scheduling_hub:'Scheduling Hub', recruiter_stats:'Recruiter Stats', roles_tracker:'Roles Tracker', hiring_dashboard:'Hiring Dashboard',
   };
   document.getElementById('page-title').textContent = titles[page]||page;
@@ -2161,6 +2164,9 @@ function nav(page, el) {
     post_offer: renderPostOffer,
     probation: renderProbationDashboard,
     fpa_report: renderFpaReport,
+    recruiter_dashboard: renderRecruiterDashboard,
+    agencies: renderAgencies,
+    hm_satisfaction: renderHmSatisfaction,
     team_users: renderTeamUsers,
     management_view: renderManagement,
     scheduling_hub: renderSchedulingHub,
@@ -4347,6 +4353,8 @@ async function viewRoleDetail(roleId) {
         <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="openSourceModal('${role.id}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔍 Source Candidates</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="openRediscoveryModal('${role.id}','${t}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔄 Past Candidates</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="_rdActivityPanel();document.getElementById('role-more-menu-${role.id}').style.display='none'">📋 Activity Log</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="_refreshAdvert('${role.id}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔄 Refresh Ad</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="_openMergeRoleModal('${role.id}','${t}');document.getElementById('role-more-menu-${role.id}').style.display='none'">🔀 Merge Role</button>
         <button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px" onclick="_reassignRecruiter('${role.id}');document.getElementById('role-more-menu-${role.id}').style.display='none'">👤 Reassign Recruiter</button>
         <div style="border-top:1px solid var(--border);margin:4px 0"></div>
         ${role.status==='open'?`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;padding:8px 14px;border-radius:0;font-size:12px;color:var(--amber)" onclick="setRoleStatus('${role.id}','on_hold');viewRoleDetail('${role.id}')">⏸ Put On Hold</button>`:''}
@@ -8270,7 +8278,7 @@ async function renderProbationDashboard() {
       <td style="font-size:12px;color:${isOverdue?'#dc2626':''};font-weight:${isOverdue?'700':'400'}">${r.scheduled_date||'—'}${isOverdue?' ⚠':''}</td>
       <td>${r.status_flag?`<span style="font-size:11px;font-weight:600;color:${flagColor(r.status_flag)}">${flagLabel(r.status_flag)}</span>`:'<span style="font-size:11px;color:var(--text-3)">—</span>'}</td>
       <td style="font-size:11px">${r.country||'—'}</td>
-      <td>${r.status==='pending'?`<button onclick="_completeProbationReview('${r.id}')" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">Complete</button>`:`<span style="font-size:11px;color:#16a34a;font-weight:600">✓ Done</span>`}</td>
+      <td style="display:flex;gap:4px">${r.status==='pending'?`<button onclick="_completeProbationReview('${r.id}')" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">Complete</button><button onclick="_copyProbationLink('${r.review_token}')" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer" title="Copy shareable review link">🔗</button>`:`<span style="font-size:11px;color:#16a34a;font-weight:600">✓ Done</span>`}</td>
     </tr>`;
   };
 
@@ -8287,6 +8295,11 @@ async function renderProbationDashboard() {
         <tbody>${reviews.map(reviewRow).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px">No probation reviews yet — auto-created when candidate is marked as hired</td></tr>'}</tbody>
       </table>
     </div>`;
+}
+
+function _copyProbationLink(token) {
+  var link = window.location.origin+window.location.pathname+'?probation_review='+token;
+  navigator.clipboard?.writeText(link).then(()=>toast('Review link copied ✓')).catch(()=>prompt('Copy this link and send to the manager:',link));
 }
 
 async function _completeProbationReview(reviewId) {
@@ -8412,8 +8425,272 @@ async function renderFpaReport() {
     </div>`;
 }
 
-function _exportFpacsv() {
-  toast('CSV export coming soon — data visible above', 'info');
+async function _exportFpacsv() {
+  var {data:roles} = await sb.from('roles').select('title,department,location,status,headcount,salary_min,salary_max,salary_currency,is_budgeted,created_at').not('status','eq','cancelled').order('department');
+  if (!roles || !roles.length) { toast('No data to export','err'); return; }
+  var rows = [['Title','Department','Location','Status','Headcount','Currency','Salary Min','Salary Max','Budgeted','Opened'].join(',')];
+  roles.forEach(r => rows.push([r.title,r.department||'',r.location||'',r.status,r.headcount||1,r.salary_currency||'',r.salary_min||'',r.salary_max||'',r.is_budgeted?'Yes':'No',r.created_at?.slice(0,10)].map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')));
+  var blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hiro-fpa-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+  toast('CSV exported ✓');
+}
+
+// ── RECRUITER PERFORMANCE DASHBOARD ──────────────────────────
+async function renderRecruiterDashboard() {
+  _pushHistory('recruiter_dashboard','Recruiter Performance',renderRecruiterDashboard);
+  document.getElementById('page-title').textContent = 'Recruiter Performance';
+  document.getElementById('page-sub').textContent = 'TTF, acceptance rate, eval completion';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var [profsRes, appsRes, evalsRes, rolesRes] = await Promise.all([
+    sb.from('profiles').select('id,full_name,email,role').in('role',['recruiter','admin']).order('full_name'),
+    sb.from('applications').select('id,stage,created_at,updated_at,role_id,candidates(source)').not('stage','eq','withdrawn'),
+    sb.from('interview_evaluations').select('id,link_id,submitted_at'),
+    sb.from('roles').select('id,title,status,assigned_recruiter_id,created_at').not('status','eq','cancelled'),
+  ]);
+
+  var profs = profsRes.data || [];
+  var apps = appsRes.data || [];
+  var evals = evalsRes.data || [];
+  var roles = rolesRes.data || [];
+
+  var stats = profs.map(p => {
+    var myRoles = roles.filter(r=>r.assigned_recruiter_id===p.id);
+    var myHired = apps.filter(a=>a.stage==='hired');
+    var myOffers = apps.filter(a=>a.stage==='offer');
+    var hiredRoleIds = new Set(myHired.map(a=>a.role_id));
+    var filledRoles = myRoles.filter(r=>hiredRoleIds.has(r.id));
+    var avgTtf = filledRoles.length ? Math.round(filledRoles.reduce((s,r)=>{
+      var hireDate = myHired.find(a=>a.role_id===r.id)?.updated_at;
+      return s + (hireDate ? Math.round((new Date(hireDate)-new Date(r.created_at))/86400000) : 0);
+    },0)/filledRoles.length) : null;
+    return {name:p.full_name, email:p.email, activeRoles:myRoles.filter(r=>r.status==='open').length, hired:filledRoles.length, inOffer:myOffers.length, avgTtf};
+  });
+
+  var rows = stats.map(s=>`<tr>
+    <td style="font-weight:600">${s.name}</td>
+    <td style="text-align:center">${s.activeRoles}</td>
+    <td style="text-align:center;font-weight:700;color:var(--green-text)">${s.hired}</td>
+    <td style="text-align:center;color:#d97706">${s.inOffer}</td>
+    <td style="text-align:center">${s.avgTtf?s.avgTtf+'d':'—'}</td>
+  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:20px">No data</td></tr>';
+
+  document.getElementById('content').innerHTML = `<div class="card"><div class="card-header"><div class="card-title">Recruiter Performance</div></div>
+    <table><thead><tr><th>Recruiter</th><th style="text-align:center">Active Roles</th><th style="text-align:center">Hires</th><th style="text-align:center">In Offer</th><th style="text-align:center">Avg TTF</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+// ── AGENCY TRACKER ────────────────────────────────────────────
+async function renderAgencies() {
+  _pushHistory('agencies','Agency Tracker',renderAgencies);
+  document.getElementById('page-title').textContent = 'Agency Tracker';
+  document.getElementById('page-sub').textContent = 'Submissions, fees & SLA tracking';
+  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="_openAddAgencyModal()">+ Add Agency</button>';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var {data:agencies} = await sb.from('agencies').select('*').eq('active',true).order('name');
+  var {data:subs} = await sb.from('agency_submissions').select('*,agencies(name)').order('submitted_at',{ascending:false});
+
+  agencies = agencies || []; subs = subs || [];
+
+  var agencyRows = agencies.map(a => {
+    var mySubs = subs.filter(s=>s.agency_id===a.id);
+    var hired = mySubs.filter(s=>s.status==='hired').length;
+    var convRate = mySubs.length ? Math.round(hired/mySubs.length*100) : 0;
+    var totalFees = mySubs.filter(s=>s.fee_paid).reduce((sum,s)=>sum+(s.success_fee||0),0);
+    return `<tr>
+      <td style="font-weight:600">${a.name}${a.preferred?'<span style="margin-left:6px;font-size:10px;background:#fef9c3;color:#b45309;padding:2px 6px;border-radius:99px">⭐ Preferred</span>':''}</td>
+      <td style="font-size:12px">${(a.regions||[]).join(', ')||'—'}</td>
+      <td style="font-size:12px">${a.fee_pct?a.fee_pct+'%':'—'}</td>
+      <td style="text-align:center">${mySubs.length}</td>
+      <td style="text-align:center;font-weight:700;color:var(--green-text)">${hired}</td>
+      <td style="text-align:center">${convRate}%</td>
+      <td style="font-size:12px">${totalFees?'$'+Math.round(totalFees).toLocaleString():'—'}</td>
+      <td><button onclick="_agencySub('${a.id}','${a.name.replace(/'/g,"\\'")}',event)" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">+ Sub</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-3)">No agencies yet — add your first agency above</td></tr>';
+
+  document.getElementById('content').innerHTML = `<div class="card">
+    <div class="card-header"><div class="card-title">Agencies</div></div>
+    <table><thead><tr><th>Agency</th><th>Regions</th><th>Fee %</th><th style="text-align:center">Submissions</th><th style="text-align:center">Hires</th><th style="text-align:center">Conv.</th><th>Total Fees Paid</th><th></th></tr></thead>
+    <tbody>${agencyRows}</tbody></table></div>`;
+}
+
+async function _openAddAgencyModal() {
+  var name = prompt('Agency name:'); if (!name) return;
+  var fee = prompt('Fee % (e.g. 15):') || null;
+  var contact = prompt('Contact email:') || null;
+  var regions = prompt('Regions (comma separated, e.g. UK, EMEA):') || '';
+  var {error} = await sb.from('agencies').insert({name:name.trim(), fee_pct:fee?parseFloat(fee):null, contact_email:contact, regions:regions.split(',').map(r=>r.trim()).filter(Boolean), created_by:currentUser?.id});
+  if (error) { toast('Error: '+error.message,'err'); return; }
+  toast('Agency added ✓');
+  renderAgencies();
+}
+
+async function _agencySub(agencyId, agencyName) {
+  var {data:roles} = await sb.from('roles').select('id,title').eq('status','open').order('title');
+  if (!roles?.length) { toast('No open roles','err'); return; }
+  var roleList = roles.map((r,i)=>`${i+1}. ${r.title}`).join('\n');
+  var pick = prompt(`Log submission for ${agencyName}\n\nSelect role:\n${roleList}\n\nType number:`);
+  if (!pick) return;
+  var role = roles[parseInt(pick)-1];
+  if (!role) { toast('Invalid selection','err'); return; }
+  var candName = prompt('Candidate name:') || 'Unknown';
+  await sb.from('agency_submissions').insert({agency_id:agencyId, role_id:role.id, status:'submitted', submitted_at:new Date().toISOString().slice(0,10)});
+  toast('Submission logged ✓');
+  renderAgencies();
+}
+
+// ── HM SATISFACTION ───────────────────────────────────────────
+async function renderHmSatisfaction() {
+  _pushHistory('hm_satisfaction','HM Satisfaction',renderHmSatisfaction);
+  document.getElementById('page-title').textContent = 'HM Satisfaction';
+  document.getElementById('page-sub').textContent = 'Hiring manager feedback on TA partnership';
+  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="_sendHmSurvey()">Send Survey</button>';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var {data:scores} = await sb.from('hm_satisfaction_scores').select('*, roles(title)').not('submitted_at','is',null).order('created_at',{ascending:false});
+  scores = scores || [];
+
+  var avg = arr => arr.length ? (arr.reduce((s,v)=>s+v,0)/arr.length).toFixed(1) : '—';
+  var allOverall = scores.map(s=>s.overall_score).filter(Boolean);
+  var allPartnership = scores.map(s=>s.partnership_score).filter(Boolean);
+  var allCandQuality = scores.map(s=>s.candidate_quality).filter(Boolean);
+  var allComms = scores.map(s=>s.communication_score).filter(Boolean);
+
+  var scoreBar = (label, val) => {
+    var n = parseFloat(val); if (!n) return '';
+    var pct = Math.round(n/5*100);
+    var color = n>=4?'#16a34a':n>=3?'#d97706':'#dc2626';
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <div style="font-size:12px;color:var(--text-3);width:110px">${label}</div>
+      <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${color};border-radius:4px"></div></div>
+      <div style="font-size:12px;font-weight:700;color:${color};width:24px">${val}</div>
+    </div>`;
+  };
+
+  var rows = scores.map(s=>`<tr>
+    <td style="font-weight:600">${s.hm_name||'—'}</td>
+    <td style="font-size:12px">${s.roles?.title||'—'}</td>
+    <td style="text-align:center;font-weight:700;color:${s.overall_score>=4?'#16a34a':s.overall_score>=3?'#d97706':'#dc2626'}">${s.overall_score||'—'}/5</td>
+    <td style="text-align:center">${s.candidate_quality||'—'}/5</td>
+    <td style="text-align:center">${s.communication_score||'—'}/5</td>
+    <td style="font-size:11px;max-width:200px;color:var(--text-3)">${s.comments||'—'}</td>
+    <td style="font-size:11px;color:var(--text-3)">${s.created_at?.slice(0,10)||'—'}</td>
+  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3)">No surveys completed yet</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div class="card"><div class="card-header"><div class="card-title">Average Scores (${scores.length} responses)</div></div>
+        <div class="card-body">
+          ${scoreBar('Overall',avg(allOverall))}
+          ${scoreBar('TA Partnership',avg(allPartnership))}
+          ${scoreBar('Candidate Quality',avg(allCandQuality))}
+          ${scoreBar('Communication',avg(allComms))}
+        </div>
+      </div>
+      <div class="card kpi" style="flex-direction:column;align-items:flex-start;padding:20px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:8px">Would Recommend TA Team</div>
+        <div style="font-size:32px;font-weight:800;color:var(--brand)">${scores.filter(s=>s.would_recommend).length}/${scores.length}</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:4px">HMs who would recommend working with this recruiter again</div>
+      </div>
+    </div>
+    <div class="card"><div class="card-header"><div class="card-title">All Responses</div></div>
+      <table><thead><tr><th>HM</th><th>Role</th><th>Overall</th><th>Cand Quality</th><th>Comms</th><th>Comments</th><th>Date</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+}
+
+async function _sendHmSurvey() {
+  var hmEmail = prompt('HM email address:'); if (!hmEmail) return;
+  var hmName = prompt('HM name:') || hmEmail;
+  var {data:roles} = await sb.from('roles').select('id,title').eq('status','open').order('title');
+  var pick = prompt('Role (optional — type number or leave blank):\n'+(roles||[]).map((r,i)=>`${i+1}. ${r.title}`).join('\n'));
+  var role = pick ? roles?.[parseInt(pick)-1] : null;
+  var {data:survey,error} = await sb.from('hm_satisfaction_scores').insert({hm_email:hmEmail, hm_name:hmName, role_id:role?.id||null}).select('survey_token').single();
+  if (error) { toast('Error creating survey: '+error.message,'err'); return; }
+  var link = window.location.origin+window.location.pathname+'?hm_survey='+survey.survey_token;
+  prompt('Survey link (copy and send to HM):', link);
+  toast('Survey created ✓ — copy the link above and send to '+hmName);
+}
+
+// ── ROLE MERGE ────────────────────────────────────────────────
+async function _openMergeRoleModal(roleId, roleTitle) {
+  var {data:roles} = await sb.from('roles').select('id,title,department,status').eq('status','open').neq('id',roleId).order('title');
+  if (!roles?.length) { toast('No other open roles to merge into','err'); return; }
+  var opts = roles.map(r=>`<option value="${r.id}">${r.title}${r.department?' · '+r.department:''}</option>`).join('');
+  var sel = `<select id="merge-target-sel" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text);margin-top:8px"><option value="">Select role to merge into...</option>${opts}</select>`;
+  var confirmed = confirm(`Merge "${roleTitle}" into another role?\n\nThis will move all candidates and applications to the target role and close this one.\n\nSelect the target role in the next step.`);
+  if (!confirmed) return;
+  var target = prompt('Paste the target role ID (copy from URL or role card):\n\nOpen roles:\n'+roles.map(r=>r.title+' → '+r.id).join('\n'));
+  if (!target || !target.trim()) return;
+  target = target.trim();
+  if (!roles.find(r=>r.id===target)) { toast('Role ID not found','err'); return; }
+  if (!confirm('Confirm merge? This cannot be undone.')) return;
+  // Move applications
+  await sb.from('applications').update({role_id:target}).eq('role_id',roleId);
+  // Close source role
+  await sb.from('roles').update({status:'closed', merged_into_role_id:target, merged_at:new Date().toISOString()}).eq('id',roleId);
+  await auditLog('merge','role',roleId,{merged_into:target});
+  toast('Role merged ✓');
+  viewRoleDetail(target);
+}
+
+// ── AD REFRESH ────────────────────────────────────────────────
+async function _refreshAdvert(roleId) {
+  if (!confirm('Mark job advert as refreshed? This logs the refresh date and increments the counter.')) return;
+  var {data:role} = await sb.from('roles').select('ad_refresh_count,title').eq('id',roleId).maybeSingle();
+  var count = (role?.ad_refresh_count||0) + 1;
+  await sb.from('roles').update({last_ad_refresh_at:new Date().toISOString(), ad_refresh_count:count}).eq('id',roleId);
+  await auditLog('refresh_ad','role',roleId,{count, title:role?.title});
+  toast(`Ad refreshed ✓ (${count} total refresh${count>1?'es':''})`);
+}
+
+// ── APPROVAL WORKFLOW ─────────────────────────────────────────
+// Called from HR Portal — approver actions a pending requisition
+async function _approveRequisition(roleId, action) {
+  // action: 'approved' | 'rejected' | 'requested_changes'
+  var notes = null;
+  if (action === 'rejected' || action === 'requested_changes') {
+    notes = prompt(action==='rejected'?'Reason for rejection:':'What changes are needed?');
+    if (notes === null) return; // cancelled
+  }
+  var newStatus = action === 'approved' ? 'approved' : action === 'rejected' ? 'rejected' : 'draft';
+  var update = {req_status: newStatus};
+  if (action === 'approved') update.approved_at = new Date().toISOString();
+  if (action === 'rejected') update.rejected_at = new Date().toISOString();
+  if (notes) update.rejection_reason = notes;
+  var {error} = await sb.from('roles').update(update).eq('id', roleId);
+  if (error) { toast('Error: '+error.message,'err'); return; }
+  // Log to approval history
+  await sb.from('role_approvals').insert({
+    role_id: roleId, approver_name: currentUser?.full_name||'', approver_email: currentUser?.email||'',
+    action, notes, decided_at: new Date().toISOString()
+  });
+  await auditLog(action,'role',roleId,{action,notes});
+  toast(action==='approved'?'✅ Requisition approved':action==='rejected'?'❌ Requisition rejected':'📝 Changes requested');
+  renderHrPortal();
+}
+
+// Assign recruiter to approved requisition
+async function _assignRecruiter(roleId) {
+  var {data:recruiters} = await sb.from('profiles').select('id,full_name,email').in('role',['recruiter','admin']).order('full_name');
+  if (!recruiters?.length) { toast('No recruiters found','err'); return; }
+  var list = recruiters.map((r,i)=>`${i+1}. ${r.full_name} (${r.email})`).join('\n');
+  var pick = prompt('Assign recruiter:\n\n'+list+'\n\nType the number:');
+  if (!pick) return;
+  var idx = parseInt(pick) - 1;
+  var recruiter = recruiters[idx];
+  if (!recruiter) { toast('Invalid selection','err'); return; }
+  var {error} = await sb.from('roles').update({
+    assigned_recruiter_id: recruiter.id,
+    req_status: 'assigned',
+    assigned_at: new Date().toISOString()
+  }).eq('id', roleId);
+  if (error) { toast('Error: '+error.message,'err'); return; }
+  await auditLog('assign_recruiter','role',roleId,{recruiter_name:recruiter.full_name, recruiter_email:recruiter.email});
+  toast(`${recruiter.full_name} assigned ✓`);
+  renderHrPortal();
 }
 
 // ── HR REQUISITION ────────────────────────────────────────────
@@ -13559,8 +13836,117 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check for ?internal=1 internal candidate self-registration page
   const internalReg = urlParams.get('internal');
   if (internalReg) { _initInternalRegistrationPage(); }
+  // HM Satisfaction survey
+  const hmSurveyToken = urlParams.get('hm_survey');
+  if (hmSurveyToken) { _initHmSurveyPage(hmSurveyToken); }
+  // Probation review
+  const probationToken = urlParams.get('probation_review');
+  if (probationToken) { _initProbationReviewPage(probationToken); }
 });
 
+
+// ── HM SURVEY PUBLIC PAGE ─────────────────────────────────────
+async function _initHmSurveyPage(token) {
+  document.body.innerHTML = '<div style="max-width:560px;margin:40px auto;padding:20px;font-family:Arial,sans-serif"><div id="hm-survey-body"><div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:12px;color:#64748b">Loading survey...</div></div></div></div>';
+  var {data:survey} = await sb.from('hm_satisfaction_scores').select('*, roles(title)').eq('survey_token', token).maybeSingle();
+  if (!survey) { document.getElementById('hm-survey-body').innerHTML = '<div style="text-align:center;color:#dc2626;padding:40px">Survey not found or already completed.</div>'; return; }
+  if (survey.submitted_at) { document.getElementById('hm-survey-body').innerHTML = '<div style="text-align:center;color:#16a34a;padding:40px;font-size:18px;font-weight:700">✅ Thank you — your feedback has been submitted.</div>'; return; }
+  var scoreRow = (id, label) => `<div style="margin-bottom:16px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">${label}</label><div style="display:flex;gap:8px">${[1,2,3,4,5].map(n=>`<label style="cursor:pointer;flex:1;text-align:center;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-weight:700" onclick="this.parentElement.querySelectorAll('label').forEach(l=>l.style.borderColor='#e2e8f0');this.style.borderColor='#2563eb'">${n}</label><input type="radio" name="${id}" value="${n}" style="display:none">`).join('')}</div></div>`;
+  document.getElementById('hm-survey-body').innerHTML = `
+    <div style="background:#1e3a5f;padding:20px;border-radius:12px;margin-bottom:24px;color:#fff;text-align:center">
+      <div style="font-size:22px;font-weight:800;margin-bottom:4px">Hiring Manager Feedback</div>
+      <div style="font-size:14px;opacity:.8">${survey.roles?.title||'Role Feedback'} · Sovos Talent Acquisition</div>
+    </div>
+    ${scoreRow('hm-overall','Overall Experience with TA (1=Poor, 5=Excellent)')}
+    ${scoreRow('hm-partnership','TA Partnership & Collaboration')}
+    ${scoreRow('hm-speed','Speed to Fill')}
+    ${scoreRow('hm-quality','Quality of Candidates Presented')}
+    ${scoreRow('hm-comms','Recruiter Communication')}
+    <div style="margin-bottom:16px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Would you recommend working with this recruiter again?</label>
+      <div style="display:flex;gap:8px"><button id="hm-yes-btn" onclick="document.getElementById('hm-recommend').value='true';this.style.background='#f0fdf4';this.style.borderColor='#16a34a';document.getElementById('hm-no-btn').style.background='';document.getElementById('hm-no-btn').style.borderColor='#e2e8f0'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">✅ Yes</button>
+      <button id="hm-no-btn" onclick="document.getElementById('hm-recommend').value='false';this.style.background='#fef2f2';this.style.borderColor='#dc2626';document.getElementById('hm-yes-btn').style.background='';document.getElementById('hm-yes-btn').style.borderColor='#e2e8f0'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">❌ No</button></div>
+      <input type="hidden" id="hm-recommend"></div>
+    <div style="margin-bottom:20px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Any comments or suggestions?</label>
+      <textarea id="hm-comments" rows="4" style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea></div>
+    <div id="hm-survey-err" style="display:none;color:#dc2626;margin-bottom:8px;font-size:13px"></div>
+    <button onclick="_submitHmSurvey('${token}')" style="width:100%;padding:14px;background:#1e3a5f;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Submit Feedback</button>`;
+}
+
+async function _submitHmSurvey(token) {
+  var get = id => document.querySelector('input[name="'+id+'"]:checked')?.value;
+  var errEl = document.getElementById('hm-survey-err');
+  if (!get('hm-overall')) { errEl.textContent='Please rate your overall experience'; errEl.style.display='block'; return; }
+  var {error} = await sb.from('hm_satisfaction_scores').update({
+    overall_score: parseInt(get('hm-overall')),
+    partnership_score: parseInt(get('hm-partnership')||0)||null,
+    speed_score: parseInt(get('hm-speed')||0)||null,
+    candidate_quality: parseInt(get('hm-quality')||0)||null,
+    communication_score: parseInt(get('hm-comms')||0)||null,
+    would_recommend: document.getElementById('hm-recommend').value === 'true',
+    comments: document.getElementById('hm-comments').value.trim() || null,
+    submitted_at: new Date().toISOString()
+  }).eq('survey_token', token);
+  if (error) { errEl.textContent='Error: '+error.message; errEl.style.display='block'; return; }
+  document.getElementById('hm-survey-body').innerHTML = '<div style="text-align:center;color:#16a34a;padding:60px"><div style="font-size:48px;margin-bottom:16px">✅</div><div style="font-size:20px;font-weight:700">Thank you for your feedback!</div><div style="font-size:14px;color:#64748b;margin-top:8px">Your response has been recorded and shared with the TA team.</div></div>';
+}
+
+// ── PROBATION REVIEW PUBLIC PAGE ──────────────────────────────
+async function _initProbationReviewPage(token) {
+  document.body.innerHTML = '<div style="max-width:600px;margin:40px auto;padding:20px;font-family:Arial,sans-serif"><div id="prob-review-body"><div style="text-align:center;padding:40px"><div class="spinner"></div></div></div></div>';
+  var {data:review} = await sb.from('probation_reviews').select('*, candidates(first_name,last_name), roles(title)').eq('review_token', token).maybeSingle();
+  if (!review) { document.getElementById('prob-review-body').innerHTML = '<div style="text-align:center;color:#dc2626;padding:40px">Review link not found or expired.</div>'; return; }
+  if (review.submitted_at) { document.getElementById('prob-review-body').innerHTML = '<div style="text-align:center;color:#16a34a;padding:60px"><div style="font-size:48px">✅</div><div style="font-size:18px;font-weight:700;margin-top:12px">Review already submitted. Thank you.</div></div>'; return; }
+  var name = review.candidates ? review.candidates.first_name+' '+review.candidates.last_name : 'the new hire';
+  var scoreRow = (id, label) => `<div style="margin-bottom:16px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">${label}</label><div style="display:flex;gap:8px">${[1,2,3,4,5].map(n=>`<label style="cursor:pointer;flex:1;text-align:center;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-weight:700" onclick="this.parentElement.querySelectorAll('label').forEach(l=>l.style.borderColor='#e2e8f0');this.style.borderColor='#2563eb'">${n}</label><input type="radio" name="${id}" value="${n}" style="display:none">`).join('')}</div></div>`;
+  document.getElementById('prob-review-body').innerHTML = `
+    <div style="background:#1e3a5f;padding:20px;border-radius:12px;margin-bottom:24px;color:#fff;text-align:center">
+      <div style="font-size:22px;font-weight:800;margin-bottom:4px">Probation Review — Day ${review.review_day}</div>
+      <div style="font-size:14px;opacity:.8">${name} · ${review.roles?.title||''}</div>
+      ${review.review_type==='final'?'<div style="margin-top:8px;font-size:13px;background:rgba(255,255,255,.2);padding:4px 12px;border-radius:99px;display:inline-block">Final Review</div>':''}
+    </div>
+    ${scoreRow('prob-performance','Performance vs Objectives (1=Below, 5=Exceeds)')}
+    ${scoreRow('prob-integration','Team Integration & Culture Fit')}
+    ${scoreRow('prob-overall','Overall Confidence in Hire')}
+    <div style="margin-bottom:16px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Key Achievements This Period</label>
+      <textarea id="prob-achievements" rows="3" style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea></div>
+    <div style="margin-bottom:16px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Development Areas / Concerns</label>
+      <textarea id="prob-development" rows="3" style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea></div>
+    <div style="margin-bottom:16px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Current Status</label>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('prob-flag').value='on_track';this.style.background='#f0fdf4';this.style.borderColor='#16a34a'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">✅ On Track</button>
+        <button onclick="document.getElementById('prob-flag').value='needs_support';this.style.background='#fffbeb';this.style.borderColor='#d97706'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">⚠ Needs Support</button>
+        <button onclick="document.getElementById('prob-flag').value='at_risk';this.style.background='#fef2f2';this.style.borderColor='#dc2626'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">🔴 At Risk</button>
+      </div><input type="hidden" id="prob-flag"></div>
+    ${review.review_type==='final'?`<div style="margin-bottom:16px"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Final Recommendation</label>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('prob-rec').value='pass';this.style.background='#f0fdf4';this.style.borderColor='#16a34a'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">✅ Pass Probation</button>
+        <button onclick="document.getElementById('prob-rec').value='extend';this.style.background='#fffbeb';this.style.borderColor='#d97706'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">⏳ Extend</button>
+        <button onclick="document.getElementById('prob-rec').value='fail';this.style.background='#fef2f2';this.style.borderColor='#dc2626'" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:700">❌ Fail</button>
+      </div><input type="hidden" id="prob-rec"></div>`:''}
+    <div id="prob-review-err" style="display:none;color:#dc2626;margin-bottom:8px;font-size:13px"></div>
+    <button onclick="_submitProbationReview('${token}','${review.review_type}')" style="width:100%;padding:14px;background:#1e3a5f;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Submit Review</button>`;
+}
+
+async function _submitProbationReview(token, reviewType) {
+  var get = id => document.querySelector('input[name="'+id+'"]:checked')?.value;
+  var errEl = document.getElementById('prob-review-err');
+  if (!get('prob-overall')) { errEl.textContent='Please select an overall rating'; errEl.style.display='block'; return; }
+  if (!document.getElementById('prob-flag').value) { errEl.textContent='Please select current status'; errEl.style.display='block'; return; }
+  var payload = {
+    status: 'completed', completed_date: new Date().toISOString().slice(0,10),
+    score_performance: parseInt(get('prob-performance')||0)||null,
+    score_integration: parseInt(get('prob-integration')||0)||null,
+    score_overall: parseInt(get('prob-overall')),
+    achievements: document.getElementById('prob-achievements').value.trim()||null,
+    development_areas: document.getElementById('prob-development').value.trim()||null,
+    status_flag: document.getElementById('prob-flag').value,
+    submitted_at: new Date().toISOString(),
+  };
+  if (reviewType==='final' && document.getElementById('prob-rec')) payload.recommendation = document.getElementById('prob-rec').value || null;
+  var {error} = await sb.from('probation_reviews').update(payload).eq('review_token', token);
+  if (error) { errEl.textContent='Error: '+error.message; errEl.style.display='block'; return; }
+  document.getElementById('prob-review-body').innerHTML = '<div style="text-align:center;color:#16a34a;padding:60px"><div style="font-size:48px">✅</div><div style="font-size:18px;font-weight:700;margin-top:12px">Review submitted. Thank you!</div></div>';
+}
 
 // ── SETTINGS: GDPR tab ────────────────────────
 async function _settingsRenderGdpr() {
@@ -14411,7 +14797,9 @@ async function renderHrPortal() {
       '<td>' + (r.tth_target_days?r.tth_target_days+'d':'—') + '</td>' +
       '<td>' + fmtDate(r.created_at) + '</td>' +
       '<td>' +
-      (_canEditHrPortal && r.approval_status==='pending_approval' ? '<button class="btn btn-success btn-sm" onclick="approveRole(\'' + r.id + '\')">Approve</button>' : '') +
+      (_canEditHrPortal && (r.req_status==='pending_approval'||r.approval_status==='pending_approval') ? '<button class="btn btn-success btn-sm" style="margin-right:4px" onclick="_approveRequisition(\''+r.id+'\',\'approved\')">✅ Approve</button><button class="btn btn-danger btn-sm" style="margin-right:4px" onclick="_approveRequisition(\''+r.id+'\',\'rejected\')">❌ Reject</button>' : '') +
+      (_canEditHrPortal && r.req_status==='approved' && !r.assigned_recruiter_id ? '<button class="btn btn-primary btn-sm" onclick="_assignRecruiter(\''+r.id+'\')">Assign Recruiter</button>' : '') +
+      (r.assigned_recruiter_id ? '<span style="font-size:11px;color:var(--green-text)">✓ Assigned</span>' : '') +
       '</td></tr>';
   }).join('');
 
