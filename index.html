@@ -16188,10 +16188,12 @@ async function updateStageFullPage(appId) {
   var sel = document.getElementById('cfp-stage-select');
   if (!sel) return;
   var stage = sel.value;
-  var err = await sb.from('applications').update({stage:stage}).eq('id',appId);
-  if (err.error) { toast('Error updating stage','err'); return; }
+  var {error} = await sb.from('applications').update({stage:stage}).eq('id',appId);
+  if (error) { toast('Error updating stage: '+error.message,'err'); return; }
   await auditLog('stage_change','application',appId,{stage:stage});
-  toast('Stage updated');
+  toast('Stage updated to ' + stage + ' ✓');
+  // Refresh the full candidate page to reflect the new stage
+  openCandidateFullPage(appId);
   if (currentPage === 'pipeline') renderPipeline();
 }
 
