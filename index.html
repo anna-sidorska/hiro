@@ -2029,6 +2029,9 @@ function renderSidebarNav() {
     if (_r === 'admin' || _r === 'hr') {
       navHtml += '<button class="sb-item" id="nav-hr_portal" onclick="nav(\'hr_portal\',this)">' + icon.hr_portal + ' HR Portal</button>';
       navHtml += '<button class="sb-item" id="nav-offer_outcomes" onclick="nav(\'offer_outcomes\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Offer Outcomes</button>';
+      navHtml += '<button class="sb-item" id="nav-post_offer" onclick="nav(\'post_offer\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Post-Offer</button>';
+      navHtml += '<button class="sb-item" id="nav-probation" onclick="nav(\'probation\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Probation</button>';
+      navHtml += '<button class="sb-item" id="nav-fpa_report" onclick="nav(\'fpa_report\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8h.01M11 8h6M7 12h.01M11 12h6"/></svg> FP&A Report</button>';
     }
     // Scheduling Hub for coordinator
     if (_r === 'coordinator') {
@@ -2124,7 +2127,7 @@ function nav(page, el) {
     email_templates:'Email Templates', jd_library:'JD Library',
     hm_roles:'My Roles', hm_interviews:'My Interviews', team:'Team',
     communications:'Communications', integrations:'Integrations', gdpr:'GDPR',
-    hr_portal:'HR Portal', offer_outcomes:'Offer Outcomes',
+    hr_portal:'HR Portal', offer_outcomes:'Offer Outcomes', post_offer:'Post-Offer Engagement', probation:'Probation Tracker', fpa_report:'FP&A Report',
     home:'Home', team_users:'Team & Users', management_view:'Overview', scheduling_hub:'Scheduling Hub', recruiter_stats:'Recruiter Stats', roles_tracker:'Roles Tracker', hiring_dashboard:'Hiring Dashboard',
   };
   document.getElementById('page-title').textContent = titles[page]||page;
@@ -2155,6 +2158,9 @@ function nav(page, el) {
     gdpr: renderGdpr,
     hr_portal: renderHrPortal,
     offer_outcomes: renderOfferOutcomes,
+    post_offer: renderPostOffer,
+    probation: renderProbationDashboard,
+    fpa_report: renderFpaReport,
     team_users: renderTeamUsers,
     management_view: renderManagement,
     scheduling_hub: renderSchedulingHub,
@@ -5452,8 +5458,91 @@ async function _rdS5MoveToHired(appId,roleId) {
   const {error}=await sb.from('applications').update({stage:'hired'}).eq('id',appId);
   if(error){toast('Error: '+error.message,'err');return;}
   try{const uid=(await sb.auth.getUser()).data.user?.id;await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'candidate_hired',p_description:'Candidate hired from Offer stage'});}catch(e){}
-  toast('🎉 Marked as Hired!');
+
+  // Auto-generate post-offer engagement + probation schedule
+  try {
+    const {data:app} = await sb.from('applications').select('candidate_id,candidates(location)').eq('id',appId).maybeSingle();
+    const candidateId = app?.candidate_id;
+    const country = app?.candidates?.location || '';
+    if (candidateId) {
+      await _initPostOfferEngagement(appId, candidateId, roleId, country);
+      await _initProbationSchedule(candidateId, roleId, appId, country, new Date());
+    }
+  } catch(e) { console.warn('Post-hire init skipped:', e.message); }
+
+  toast('🎉 Marked as Hired! Post-offer engagement & probation schedule created.');
   viewRoleDetail(roleId);
+}
+
+// ── POST-OFFER ENGAGEMENT FRAMEWORK ──────────────────────────
+const _TOUCHPOINT_FRAMEWORK = {
+  india: [
+    {n:1, label:'Welcome Call',          type:'call',    owner:'recruiter', day:0},
+    {n:2, label:'Welcome Message & Kit', type:'message', owner:'recruiter', day:2},
+    {n:3, label:'Week 1 Check-in',       type:'call',    owner:'recruiter', day:7},
+    {n:4, label:'Team Introduction',     type:'intro',   owner:'hm',        day:14},
+    {n:5, label:'Week 3 Check-in',       type:'call',    owner:'recruiter', day:21},
+    {n:6, label:'Mid-Notice Check-in',   type:'call',    owner:'recruiter', day:30},
+    {n:7, label:'Progress & Wellbeing',  type:'call',    owner:'recruiter', day:45},
+    {n:8, label:'Pre-Start Logistics',   type:'call',    owner:'recruiter', day:60},
+    {n:9, label:'Final Countdown',       type:'message', owner:'hm',        day:75},
+    {n:10,label:'Day 1 Welcome',         type:'meeting', owner:'hm',        day:90},
+  ],
+  default: [
+    {n:1, label:'Welcome Call',          type:'call',    owner:'recruiter', day:0},
+    {n:2, label:'Welcome Message',       type:'message', owner:'recruiter', day:2},
+    {n:3, label:'Week 1 Check-in',       type:'call',    owner:'recruiter', day:7},
+    {n:4, label:'Pre-Start Logistics',   type:'call',    owner:'recruiter', day:21},
+    {n:5, label:'Day 1 Welcome',         type:'meeting', owner:'hm',        day:28},
+  ],
+};
+
+async function _initPostOfferEngagement(appId, candidateId, roleId, country) {
+  const isIndia = (country||'').toLowerCase().includes('india');
+  const framework = isIndia ? _TOUCHPOINT_FRAMEWORK.india : _TOUCHPOINT_FRAMEWORK.default;
+  const baseDate = new Date();
+  const rows = framework.map(tp => ({
+    candidate_id:      candidateId,
+    role_id:           roleId,
+    application_id:    appId,
+    touchpoint_number: tp.n,
+    touchpoint_label:  tp.label,
+    touchpoint_type:   tp.type,
+    owner_role:        tp.owner,
+    scheduled_date:    new Date(baseDate.getTime() + tp.day*86400000).toISOString().slice(0,10),
+    status:            'pending',
+    country:           isIndia ? 'India' : (country || 'Other'),
+  }));
+  await sb.from('post_offer_touchpoints').insert(rows);
+}
+
+async function _initProbationSchedule(candidateId, roleId, appId, country, startDate) {
+  // Get country config
+  const {data:config} = await sb.from('probation_config')
+    .select('*').ilike('country', '%'+(country||'United States').split(',')[0]+'%').maybeSingle();
+  const probDays = config?.probation_days || 90;
+  const reviewDays = config?.review_days || [30,60,90];
+  const sd = startDate || new Date();
+
+  const rows = reviewDays.map(day => ({
+    candidate_id:  candidateId,
+    role_id:       roleId,
+    application_id: appId,
+    review_day:    day,
+    review_type:   day === probDays ? 'final' : 'interim',
+    country:       country || null,
+    scheduled_date: new Date(sd.getTime() + day*86400000).toISOString().slice(0,10),
+    status:        'pending',
+  }));
+  await sb.from('probation_reviews').insert(rows);
+
+  // Create new hire progress record
+  await sb.from('new_hire_progress').insert({
+    candidate_id:  candidateId,
+    role_id:       roleId,
+    start_date:    sd.toISOString().slice(0,10),
+    country:       country || null,
+  });
 }
 
 async function _rdS5DeclineOffer(appId,roleId) {
@@ -8065,6 +8154,266 @@ function _ooApplyFilters() {
     var matchType = !type || row.dataset.type === type;
     row.style.display = matchLoc && matchType ? '' : 'none';
   });
+}
+
+// ── POST-OFFER ENGAGEMENT PAGE ────────────────────────────────
+async function renderPostOffer() {
+  _pushHistory('post_offer','Post-Offer Engagement',renderPostOffer);
+  document.getElementById('page-title').textContent = 'Post-Offer Engagement';
+  document.getElementById('page-sub').textContent = 'Touch point tracking · India & global';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var {data:tps} = await sb.from('post_offer_touchpoints')
+    .select('*, candidates(first_name,last_name), roles(title)')
+    .order('scheduled_date', {ascending:true});
+
+  if (!tps) { document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Run supabase-patch-hr-features.sql first</div></div>'; return; }
+
+  var pending = tps.filter(t=>t.status==='pending');
+  var overdue = pending.filter(t=>t.scheduled_date && t.scheduled_date < new Date().toISOString().slice(0,10));
+  var completed = tps.filter(t=>t.status==='completed');
+  var atRisk = tps.filter(t=>t.sentiment==='at_risk');
+
+  var sentimentColor = s => ({positive:'#16a34a',neutral:'#64748b',at_risk:'#dc2626',no_response:'#d97706'}[s]||'#64748b');
+  var sentimentLabel = s => ({positive:'Positive',neutral:'Neutral',at_risk:'At Risk',no_response:'No Response'}[s]||'Pending');
+  var statusTag = s => ({
+    pending:   '<span style="background:#f1f5f9;color:#64748b;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Pending</span>',
+    completed: '<span style="background:#f0fdf4;color:#16a34a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Done</span>',
+    missed:    '<span style="background:#fef2f2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Missed</span>',
+    skipped:   '<span style="background:#fef9c3;color:#b45309;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">Skipped</span>',
+  })[s] || '';
+
+  // Group by candidate
+  var byCand = {};
+  tps.forEach(t => {
+    var key = t.candidate_id || 'unknown';
+    if (!byCand[key]) byCand[key] = {cand:t.candidates, role:t.roles, tps:[]};
+    byCand[key].tps.push(t);
+  });
+
+  var candCards = Object.values(byCand).map(({cand,role,tps:ctps}) => {
+    var name = cand ? cand.first_name+' '+cand.last_name : 'Unknown';
+    var pendingCount = ctps.filter(t=>t.status==='pending').length;
+    var doneCount = ctps.filter(t=>t.status==='completed').length;
+    var hasRisk = ctps.some(t=>t.sentiment==='at_risk');
+    var tpRows = ctps.map(t => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="width:22px;height:22px;border-radius:50%;background:${t.status==='completed'?'#16a34a':t.status==='missed'?'#dc2626':'#e2e8f0'};display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:700;flex-shrink:0">${t.touchpoint_number}</div>
+      <div style="flex:1"><div style="font-size:12px;font-weight:600">${t.touchpoint_label}</div><div style="font-size:10px;color:var(--text-3)">${t.owner_role} · ${t.scheduled_date||'—'}</div></div>
+      ${statusTag(t.status)}
+      ${t.sentiment?`<span style="font-size:10px;font-weight:600;color:${sentimentColor(t.sentiment)}">${sentimentLabel(t.sentiment)}</span>`:''}
+      ${t.status==='pending'?`<button onclick="_markTouchpoint('${t.id}')" style="font-size:10px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer;color:var(--text-2)">Mark Done</button>`:''}
+    </div>`).join('');
+
+    return `<div class="card" style="margin-bottom:14px">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="card-title">${name} ${hasRisk?'<span style="color:#dc2626">⚠ At Risk</span>':''}</div>
+          <div style="font-size:11px;color:var(--text-3)">${role?.title||''} · ${doneCount}/${ctps.length} touch points completed</div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <div style="width:80px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.round(doneCount/ctps.length*100)}%;background:#16a34a;border-radius:3px"></div></div>
+        </div>
+      </div>
+      <div class="card-body" style="padding-top:4px">${tpRows}</div>
+    </div>`;
+  }).join('') || '<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No post-offer engagement records yet</div><div class="empty-sub">Touch point schedules are created automatically when a candidate is marked as hired</div></div>';
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      <div class="card kpi"><div class="kpi-val">${Object.keys(byCand).length}</div><div class="kpi-label">Active Candidates</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#d97706">${overdue.length}</div><div class="kpi-label">Overdue Touch Points</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${atRisk.length}</div><div class="kpi-label">At Risk</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${completed.length}</div><div class="kpi-label">Completed</div></div>
+    </div>
+    ${candCards}`;
+}
+
+async function _markTouchpoint(tpId) {
+  var sentiment = prompt('Sentiment? Type: positive / neutral / at_risk / no_response') || 'neutral';
+  var notes = prompt('Notes (optional):') || null;
+  await sb.from('post_offer_touchpoints').update({status:'completed', completed_date:new Date().toISOString().slice(0,10), sentiment, notes}).eq('id',tpId);
+  toast('Touch point marked complete ✓');
+  renderPostOffer();
+}
+
+// ── PROBATION DASHBOARD ───────────────────────────────────────
+async function renderProbationDashboard() {
+  _pushHistory('probation','Probation Tracker',renderProbationDashboard);
+  document.getElementById('page-title').textContent = 'Probation Tracker';
+  document.getElementById('page-sub').textContent = '30/60/90 day reviews · country-specific';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var {data:reviews} = await sb.from('probation_reviews')
+    .select('*, candidates(first_name,last_name), roles(title)')
+    .order('scheduled_date', {ascending:true});
+
+  if (!reviews) { document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Run supabase-patch-hr-features.sql first</div></div>'; return; }
+
+  var today = new Date().toISOString().slice(0,10);
+  var overdue = reviews.filter(r=>r.status==='pending' && r.scheduled_date < today);
+  var upcoming = reviews.filter(r=>r.status==='pending' && r.scheduled_date >= today);
+  var completed = reviews.filter(r=>r.status==='completed');
+
+  var flagColor = f => ({on_track:'#16a34a',needs_support:'#d97706',at_risk:'#dc2626'}[f]||'#64748b');
+  var flagLabel = f => ({on_track:'On Track',needs_support:'Needs Support',at_risk:'At Risk'}[f]||'Pending');
+
+  var reviewRow = r => {
+    var name = r.candidates ? r.candidates.first_name+' '+r.candidates.last_name : '—';
+    var isOverdue = r.status==='pending' && r.scheduled_date < today;
+    return `<tr>
+      <td style="font-weight:600">${name}</td>
+      <td style="font-size:12px">${r.roles?.title||'—'}</td>
+      <td><span style="font-size:11px;font-weight:700;background:#eff6ff;color:#1d4ed8;padding:2px 7px;border-radius:99px">Day ${r.review_day}</span>
+          ${r.review_type==='final'?'<span style="font-size:10px;font-weight:700;background:#fef9c3;color:#b45309;padding:2px 5px;border-radius:99px;margin-left:4px">Final</span>':''}</td>
+      <td style="font-size:12px;color:${isOverdue?'#dc2626':''};font-weight:${isOverdue?'700':'400'}">${r.scheduled_date||'—'}${isOverdue?' ⚠':''}</td>
+      <td>${r.status_flag?`<span style="font-size:11px;font-weight:600;color:${flagColor(r.status_flag)}">${flagLabel(r.status_flag)}</span>`:'<span style="font-size:11px;color:var(--text-3)">—</span>'}</td>
+      <td style="font-size:11px">${r.country||'—'}</td>
+      <td>${r.status==='pending'?`<button onclick="_completeProbationReview('${r.id}')" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer">Complete</button>`:`<span style="font-size:11px;color:#16a34a;font-weight:600">✓ Done</span>`}</td>
+    </tr>`;
+  };
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${overdue.length}</div><div class="kpi-label">Overdue Reviews</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#d97706">${upcoming.length}</div><div class="kpi-label">Upcoming Reviews</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${completed.length}</div><div class="kpi-label">Completed</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">All Probation Reviews</div></div>
+      <table>
+        <thead><tr><th>Candidate</th><th>Role</th><th>Review</th><th>Scheduled</th><th>Status</th><th>Country</th><th></th></tr></thead>
+        <tbody>${reviews.map(reviewRow).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px">No probation reviews yet — auto-created when candidate is marked as hired</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function _completeProbationReview(reviewId) {
+  var flag = prompt('Status flag? Type: on_track / needs_support / at_risk') || 'on_track';
+  var notes = prompt('Manager comments (optional):') || null;
+  await sb.from('probation_reviews').update({
+    status: 'completed', completed_date: new Date().toISOString().slice(0,10),
+    status_flag: flag, manager_comments: notes, submitted_at: new Date().toISOString()
+  }).eq('id', reviewId);
+  toast('Probation review completed ✓');
+  renderProbationDashboard();
+}
+
+// ── FP&A REPORT ───────────────────────────────────────────────
+async function renderFpaReport() {
+  _pushHistory('fpa_report','FP&A Report',renderFpaReport);
+  document.getElementById('page-title').textContent = 'FP&A Report';
+  document.getElementById('page-sub').textContent = 'Headcount & cost tracking for Finance';
+  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-outline btn-sm" onclick="_exportFpacsv()">Export CSV</button>';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var [rolesRes, appsRes, offersRes] = await Promise.all([
+    sb.from('roles').select('*').not('status','eq','cancelled').order('created_at',{ascending:false}),
+    sb.from('applications').select('stage,role_id,offer_salary,offer_currency,created_at,updated_at'),
+    sb.from('applications').select('offer_salary,offer_currency,role_id,stage,candidates(location)').eq('stage','offer'),
+  ]);
+
+  var roles = rolesRes.data || [];
+  var apps = appsRes.data || [];
+  var offers = offersRes.data || [];
+
+  var openRoles = roles.filter(r=>r.status==='open');
+  var totalHC = openRoles.reduce((s,r)=>s+(r.headcount||1),0);
+  var budgetedRoles = openRoles.filter(r=>r.is_budgeted===true);
+  var unbudgeted = openRoles.filter(r=>r.is_budgeted===false);
+  var inOffer = offers.length;
+
+  // Salary commitment — sum of max salary targets for open roles
+  var totalSalaryCommitment = openRoles.reduce((s,r)=>s+(r.salary_max||r.salary_min||0),0);
+  var totalOfferValue = offers.reduce((s,o)=>s+(o.offer_salary||0),0);
+
+  // TTH by department
+  var hiredApps = apps.filter(a=>a.stage==='hired' && a.updated_at && a.created_at);
+  var tthByDept = {};
+  hiredApps.forEach(a => {
+    var role = roles.find(r=>r.id===a.role_id);
+    var dept = role?.department || 'Unknown';
+    var days = Math.round((new Date(a.updated_at)-new Date(a.created_at))/86400000);
+    if (!tthByDept[dept]) tthByDept[dept] = [];
+    tthByDept[dept].push(days);
+  });
+
+  // Department headcount table
+  var deptHC = {};
+  openRoles.forEach(r => {
+    var d = r.department || 'Unknown';
+    if (!deptHC[d]) deptHC[d] = {open:0, hc:0, budgeted:0, salMin:0, salMax:0};
+    deptHC[d].open++;
+    deptHC[d].hc += r.headcount||1;
+    if (r.is_budgeted) deptHC[d].budgeted++;
+    deptHC[d].salMin += r.salary_min||0;
+    deptHC[d].salMax += r.salary_max||0;
+  });
+
+  var fmtK = n => n>=1000 ? '$'+Math.round(n/1000)+'k' : n?'$'+n:'—';
+  var deptRows = Object.entries(deptHC).sort((a,b)=>b[1].hc-a[1].hc).map(([dept,d]) => {
+    var avgTth = tthByDept[dept] ? Math.round(tthByDept[dept].reduce((s,v)=>s+v,0)/tthByDept[dept].length) : null;
+    return `<tr>
+      <td style="font-weight:600">${dept}</td>
+      <td style="text-align:center">${d.open}</td>
+      <td style="text-align:center;font-weight:700">${d.hc}</td>
+      <td style="text-align:center">${d.budgeted}/${d.open}</td>
+      <td style="font-size:12px">${d.salMin?fmtK(d.salMin):''} ${d.salMax?'– '+fmtK(d.salMax):''}</td>
+      <td style="font-size:12px">${avgTth?avgTth+'d avg':'—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px">No open roles</td></tr>';
+
+  // Offer pipeline rows
+  var offerRows = offers.map(o => {
+    var role = roles.find(r=>r.id===o.role_id);
+    return `<tr>
+      <td style="font-weight:600">${role?.title||'—'}</td>
+      <td>${role?.department||'—'}</td>
+      <td>${o.candidates?.location||'—'}</td>
+      <td style="font-weight:700">${o.offer_salary?(o.offer_currency||'USD')+' '+Number(o.offer_salary).toLocaleString():'Pending'}</td>
+      <td>${role?.salary_max?fmtK(role.salary_max):'—'}</td>
+      <td>${o.offer_salary&&role?.salary_max?`<span style="color:${o.offer_salary<=role.salary_max?'#16a34a':'#dc2626'}">${o.offer_salary<=role.salary_max?'Within':'Over'} budget</span>`:'—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px">No active offers</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${totalHC}</div><div class="kpi-label">Open Headcount</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${budgetedRoles.length}</div><div class="kpi-label">Budgeted Roles</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${unbudgeted.length}</div><div class="kpi-label">Unbudgeted</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#d97706">${inOffer}</div><div class="kpi-label">In Offer Stage</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div class="card kpi" style="flex-direction:column;align-items:flex-start;padding:16px 20px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Total Salary Commitment (open roles)</div>
+        <div style="font-size:24px;font-weight:800;color:var(--brand)">${totalSalaryCommitment?'$'+Math.round(totalSalaryCommitment/1000)+'k annualised':'—'}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">Based on max salary targets of open roles</div>
+      </div>
+      <div class="card kpi" style="flex-direction:column;align-items:flex-start;padding:16px 20px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Active Offer Value</div>
+        <div style="font-size:24px;font-weight:800;color:#d97706">${totalOfferValue?'$'+Math.round(totalOfferValue/1000)+'k':'—'}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">Total salary of candidates currently in offer</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div class="card-title">Headcount by Department</div></div>
+      <table>
+        <thead><tr><th>Department</th><th style="text-align:center">Open Roles</th><th style="text-align:center">Headcount</th><th style="text-align:center">Budgeted</th><th>Salary Range</th><th>Avg TTF</th></tr></thead>
+        <tbody>${deptRows}</tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Active Offer Pipeline</div></div>
+      <table>
+        <thead><tr><th>Role</th><th>Department</th><th>Location</th><th>Offer Value</th><th>Budget Target</th><th>Budget Status</th></tr></thead>
+        <tbody>${offerRows}</tbody>
+      </table>
+    </div>`;
+}
+
+function _exportFpacsv() {
+  toast('CSV export coming soon — data visible above', 'info');
 }
 
 // ── HR REQUISITION ────────────────────────────────────────────
