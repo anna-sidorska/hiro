@@ -5053,12 +5053,14 @@ function _rdS1Html(d) {
           ${apBadge}
         </div>
         <div style="display:flex;gap:6px">
-          ${roleJd
+          ${roleJd && apStatus !== 'changes_requested'
             ?`<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openLinkJdModal('${roleId}')">Swap JD</button>
                <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">Edit JD</button>`
-            :`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openLinkJdModal('${roleId}')">📚 Link from Library</button>
-              <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>`}
-          ${roleJd&&apStatus!=='approved'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">📧 Send to HM for Approval</button>`:''}
+            : !roleJd
+            ?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openLinkJdModal('${roleId}')">📚 Link from Library</button>
+              <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openJdEditor(null,null,'${roleId}')">+ New JD</button>`
+            :''}
+          ${roleJd&&apStatus!=='approved'&&apStatus!=='changes_requested'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">📧 Send to HM for Approval</button>`:''}
           ${roleJd&&apStatus==='approved'?`<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--text-3)" onclick="_undoJdApproval('${roleId}')">Undo Approval</button>`:''}
         </div>
       </div>
@@ -12785,6 +12787,7 @@ function parseJdHtml(html, filename='') {
 async function openJdEditor(jdId=null, prefill=null, roleId=null, roleOnly=false) {
   _jdEditId=jdId; _jdComps={stage1:[],stage2:[],stage3:[]}; _jdActiveStage=1; _jdRoleId=roleId||null;
   window._jdRoleOnlyEdit = roleOnly; // if true: pre-fill from jdId but save as new role-specific record
+  window._jdRoleOnlySourceId = null; // reset — will be set below if roleOnly
   document.getElementById('jd-modal-title').textContent=jdId?'Edit Job Description':(prefill?'Import from Word — Review & Save':'New Job Description');
   ['jd-title','jd-region','jd-summary','jd-responsibilities','jd-requirements'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('jd-dept').value='';
@@ -12860,6 +12863,7 @@ async function openJdEditor(jdId=null, prefill=null, roleId=null, roleOnly=false
 
       // Role-only mode: will save as new record — clear edit ID and show banner
       if (roleOnly) {
+        window._jdRoleOnlySourceId = jdId; // remember original so we can unlink it after save
         _jdEditId = null; // force INSERT on save
         document.getElementById('jd-modal-title').textContent = 'Edit JD for This Role';
         const roleBanner = document.createElement('div');
@@ -13019,9 +13023,20 @@ async function saveJd(andPack=false) {
     } else { toast('Save error: '+saveErr.message,'err'); }
     return;
   }
-  window._jdRoleOnlyEdit = false; // clear flag
+  // Capture before clearing
+  const _wasRoleOnly = window._jdRoleOnlyEdit;
+  const _roleOnlySrcId = window._jdRoleOnlySourceId;
+  window._jdRoleOnlyEdit = false;
+  window._jdRoleOnlySourceId = null;
+
   if (!_jdEditId) savedId = savedData?.id;
   toast('JD saved ✓'); closeModal('modal-jd-editor');
+
+  // Role-only copy: unlink the source (library) JD from this role so only the new copy is linked
+  if (_wasRoleOnly && _roleOnlySrcId && savedId && savedId !== _roleOnlySrcId) {
+    try { await sb.from('job_descriptions').update({role_id: null}).eq('id', _roleOnlySrcId); } catch(e) {}
+  }
+
   if(andPack && savedId) { setTimeout(()=>openInterviewPack(savedId),350); return; }
   // If opened from role detail (currentPage === 'roles' and _jdRoleId set), refresh role
   if(_jdRoleId && currentPage === 'roles') {
