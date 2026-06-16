@@ -9021,23 +9021,45 @@ async function _approveRequisition(roleId, action) {
 
 // Assign recruiter to approved requisition
 async function _assignRecruiter(roleId) {
-  var {data:recruiters} = await sb.from('profiles').select('id,full_name,email').in('role',['recruiter','admin']).order('full_name');
+  var {data:recruiters} = await sb.from('profiles').select('id,full_name,email,role').in('role',['recruiter','admin','coordinator']).order('full_name');
   if (!recruiters?.length) { toast('No recruiters found','err'); return; }
-  var list = recruiters.map((r,i)=>`${i+1}. ${r.full_name} (${r.email})`).join('\n');
-  var pick = prompt('Assign recruiter:\n\n'+list+'\n\nType the number:');
-  if (!pick) return;
-  var idx = parseInt(pick) - 1;
-  var recruiter = recruiters[idx];
-  if (!recruiter) { toast('Invalid selection','err'); return; }
-  var {error} = await sb.from('roles').update({
-    assigned_recruiter_id: recruiter.id,
-    req_status: 'assigned',
-    assigned_at: new Date().toISOString()
-  }).eq('id', roleId);
-  if (error) { toast('Error: '+error.message,'err'); return; }
-  await auditLog('assign_recruiter','role',roleId,{recruiter_name:recruiter.full_name, recruiter_email:recruiter.email});
-  toast(`${recruiter.full_name} assigned ✓`);
-  renderHrPortal();
+
+  var old = document.getElementById('assign-rec-modal'); if (old) old.remove();
+  var opts = recruiters.map(r=>`<option value="${r.id}">${r.full_name} · ${r.email}</option>`).join('');
+  var m = document.createElement('div');
+  m.id = 'assign-rec-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+  m.innerHTML = `<div style="background:#132038;border-radius:14px;padding:28px;width:400px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.7)">
+    <div style="font-weight:700;font-size:16px;margin-bottom:6px;color:var(--text)">Assign Recruiter</div>
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:16px">Select a recruiter to own this requisition</div>
+    <select id="assign-rec-sel" style="width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text);font-size:14px;font-family:inherit;margin-bottom:20px">
+      <option value="">— Select recruiter —</option>${opts}
+    </select>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="document.getElementById('assign-rec-modal').remove()" style="padding:9px 18px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:13px;font-family:inherit">Cancel</button>
+      <button id="assign-rec-confirm" style="padding:9px 20px;border-radius:8px;border:none;background:var(--brand);color:#000;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">Assign</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  // Close on backdrop click
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+
+  document.getElementById('assign-rec-confirm').onclick = async function() {
+    var selEl = document.getElementById('assign-rec-sel');
+    var chosenId = selEl.value;
+    if (!chosenId) { selEl.style.borderColor='var(--red)'; return; }
+    var recruiter = recruiters.find(r => r.id === chosenId);
+    m.remove();
+    var {error} = await sb.from('roles').update({
+      assigned_recruiter_id: chosenId,
+      req_status: 'assigned',
+      assigned_at: new Date().toISOString()
+    }).eq('id', roleId);
+    if (error) { toast('Error: '+error.message,'err'); return; }
+    await auditLog('assign_recruiter','role',roleId,{recruiter_name:recruiter?.full_name, recruiter_email:recruiter?.email});
+    toast(`${recruiter?.full_name} assigned ✓`);
+    renderHrPortal();
+  };
 }
 
 // ── HR REQUISITION ────────────────────────────────────────────
