@@ -9105,9 +9105,9 @@ async function _showReqApprovalModal(roleId) {
   </div>`;
   document.body.appendChild(overlay);
 
-  // Fetch role data
+  // Fetch role data — no FK join, use stored text fields directly
   const {data:role, error} = await sb.from('roles')
-    .select('*,profiles(full_name,email)')
+    .select('*')
     .eq('id', roleId).maybeSingle();
 
   const body = document.getElementById('req-ap-body');
@@ -9137,7 +9137,7 @@ async function _showReqApprovalModal(roleId) {
       ${row('Department', role.department||'—')}
       ${row('Job Function', role.job_function||null)}
       ${row('Region', role.careers_region||role.region||null)}
-      ${row('Submitted by', role.opened_by_name||role.profiles?.full_name||null)}
+      ${row('Submitted by', role.opened_by_name||null)}
       ${row('Hiring Manager', role.hiring_manager_name||null)}
       ${row('Dept Leader', role.department_leader||null)}
       ${row('FP&A Partner', role.fp_and_a_partner||null)}
