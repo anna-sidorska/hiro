@@ -9127,6 +9127,97 @@ const _DEPT_MAP = {
   'Transformation':                  { elt: 'Eva Krauss',        fpa: 'Jason Luginbuhl' },
 };
 
+// ── LOCATION → TRACKING PREFIX + CURRENCY ────────────────────────
+const _LOC_CONFIG = {
+  // United States
+  'US-Remote':              { prefix:'US',   currency:'USD' },
+  'US-Atlanta':             { prefix:'US',   currency:'USD' },
+  'US-Minneapolis':         { prefix:'US',   currency:'USD' },
+  // Europe
+  'France - Paris':         { prefix:'EUR',  currency:'EUR' },
+  'Germany':                { prefix:'EUR',  currency:'EUR' },
+  'Lithuania':              { prefix:'EUR',  currency:'EUR' },
+  'Netherlands':            { prefix:'EUR',  currency:'EUR' },
+  'Portugal - Lisbon':      { prefix:'EUR',  currency:'EUR' },
+  'Portugal - Porto':       { prefix:'EUR',  currency:'EUR' },
+  'Spain':                  { prefix:'EUR',  currency:'EUR' },
+  'Sweden - Stockholm':     { prefix:'EUR',  currency:'EUR' },
+  'UK-Brighton':            { prefix:'EUR',  currency:'GBP' },
+  'UK-London':              { prefix:'EUR',  currency:'GBP' },
+  // Turkey
+  'Turkey - Istanbul':      { prefix:'TRY',  currency:'TRY' },
+  // APAC
+  'India - Navi Mumbai':    { prefix:'APAC', currency:'INR' },
+  'Malaysia':               { prefix:'APAC', currency:'USD' },
+  // Brazil
+  'Brazil - Sao Paulo':     { prefix:'BRA',  currency:'BRL' },
+  // Argentina
+  'Argentina - Tucuman':    { prefix:'ARG',  currency:'ARS' },
+  // SSA (South & Central America — excl. ARG/BRA)
+  'Chile - Santiago':       { prefix:'SSA',  currency:'USD' },
+  'Colombia - Bogota':      { prefix:'SSA',  currency:'USD' },
+  'Ecuador - Quito':        { prefix:'SSA',  currency:'USD' },
+  'Mexico - Mexico City':   { prefix:'SSA',  currency:'MXN' },
+  'Peru - Lima':            { prefix:'SSA',  currency:'USD' },
+};
+
+const _LOC_OPTIONS = [
+  '── United States ──',
+  'US-Remote','US-Atlanta','US-Minneapolis',
+  '── Europe ──',
+  'France - Paris','Germany','Lithuania','Netherlands',
+  'Portugal - Lisbon','Portugal - Porto','Spain','Sweden - Stockholm',
+  'UK-Brighton','UK-London',
+  '── Turkey ──',
+  'Turkey - Istanbul',
+  '── APAC ──',
+  'India - Navi Mumbai','Malaysia',
+  '── Brazil ──',
+  'Brazil - Sao Paulo',
+  '── Argentina ──',
+  'Argentina - Tucuman',
+  '── Latin America ──',
+  'Chile - Santiago','Colombia - Bogota','Ecuador - Quito',
+  'Mexico - Mexico City','Peru - Lima',
+];
+
+async function _reqLocationChange(selectEl, rowIdx) {
+  var loc = selectEl.value;
+  var cfg = _LOC_CONFIG[loc];
+  if (!cfg) return;
+
+  // Auto-select currency on same row
+  var row = selectEl.closest('div[style*="grid"]');
+  if (row) {
+    var currSel = row.querySelectorAll('select')[1];
+    if (currSel) currSel.value = cfg.currency;
+  }
+
+  // Only auto-generate tracking if this is the FIRST data row
+  if (rowIdx !== 0) return;
+  var trackingEl = document.getElementById('req-tracking');
+  if (!trackingEl) return;
+
+  // Find highest existing number for this prefix
+  var prefix = cfg.prefix;
+  var {data:existing} = await sb.from('roles')
+    .select('tracking_number')
+    .like('tracking_number', prefix+'-%')
+    .order('tracking_number', {ascending:false});
+
+  var maxNum = 0;
+  (existing||[]).forEach(r => {
+    var m = r.tracking_number?.match(/^[A-Z]+-(\d+)$/);
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
+  });
+  var nextNum = String(maxNum + 1).padStart(3,'0');
+  var newTracking = prefix+'-'+nextNum;
+
+  trackingEl.value = newTracking;
+  trackingEl.style.background = 'var(--brand-light)';
+  setTimeout(()=>trackingEl.style.background='', 1400);
+}
+
 function _reqDeptChange(dept) {
   var mapping = _DEPT_MAP[dept];
   if (!mapping) return;
@@ -9149,8 +9240,13 @@ function _reqAddLocation() {
   }
   const row = document.createElement('div');
   row.style.cssText = 'display:grid;grid-template-columns:2fr 90px 1fr 1fr 80px 80px 32px;gap:6px;align-items:center;margin-bottom:6px';
+  var locOpts = _LOC_OPTIONS.map(o => o.startsWith('──')
+    ? `<option disabled style="color:var(--text-3);font-size:11px">${o}</option>`
+    : `<option value="${o}">${o}</option>`).join('');
   row.innerHTML = `
-    <input placeholder="Location / Country *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+    <select onchange="_reqLocationChange(this,${idx})" style="padding:7px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
+      <option value="">Select location...</option>${locOpts}
+    </select>
     <select style="padding:7px 6px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
       <option>USD</option><option>EUR</option><option>GBP</option><option>BRL</option><option>MXN</option><option>ARS</option><option>TRY</option><option>INR</option>
     </select>
@@ -9168,7 +9264,7 @@ function _reqGetLocations() {
     const inputs = row.querySelectorAll('input,select');
     if (inputs.length < 6) return null; // skip header row
     return {
-      location:       inputs[0].value.trim(),
+      location:       inputs[0].value?.trim() || '',  // now a select
       currency:       inputs[1].value,
       salary_min:     inputs[2].value ? parseInt(inputs[2].value) : null,
       salary_max:     inputs[3].value ? parseInt(inputs[3].value) : null,
