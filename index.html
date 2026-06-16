@@ -1014,19 +1014,19 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
       <div class="form-grid">
         <div class="form-group"><label>FP&A Business Partner <span style="color:var(--red)">*</span></label>
-          <input id="req-fpa" placeholder="Name" autocomplete="off" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <input id="req-fpa" placeholder="Name" autocomplete="nope" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
         </div>
         <div class="form-group"><label>Head of Talent Acquisition <span style="color:var(--red)">*</span></label>
-          <input id="req-head-ta" placeholder="Name" autocomplete="off" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <input id="req-head-ta" placeholder="Name" autocomplete="nope" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
         </div>
       </div>
 
       <div class="form-grid">
         <div class="form-group"><label>Head of HR <span style="color:var(--red)">*</span></label>
-          <input id="req-head-hr" placeholder="Name" autocomplete="off" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <input id="req-head-hr" placeholder="Name" autocomplete="nope" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
         </div>
         <div class="form-group"><label>HR Manager / Generalist <span style="color:var(--red)">*</span></label>
-          <input id="req-hr-mgr" placeholder="Name" autocomplete="off" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <input id="req-hr-mgr" placeholder="Name" autocomplete="nope" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
         </div>
       </div>
 
@@ -2499,7 +2499,7 @@ async function renderDashboard() {
     sb.from('applications').select('*,candidates(first_name,last_name,source),roles(title)').not('stage','in','(hired,rejected,withdrawn)').gte('created_at', weekAgoISO),
     sb.from('profiles').select('id,full_name,email'),
     sb.from('applications').select('id,stage,role_id,candidate_id,candidates(first_name,last_name,email,source),roles(title,id)').not('stage','in','(hired,rejected,withdrawn)').eq('candidates.source','Internal Pool'),
-    sb.from('role_jd_approvals').select('id,role_id,status,comments,reviewed_by_name,reviewed_by_email,reviewed_at').eq('status','changes_requested').order('reviewed_at',{ascending:false}),
+    sb.from('role_jd_approvals').select('id,role_id,status,comments,reviewed_at').eq('status','changes_requested').order('reviewed_at',{ascending:false}),
   ]);
 
   function safeVal(i) { return results[i].status === 'fulfilled' ? results[i].value : {}; }
@@ -2565,8 +2565,9 @@ async function renderDashboard() {
   var myRoleIdSet = new Set(myRoles.map(function(r){ return r.id; }));
   jdChangesAll.filter(function(jc){ return myRoleIdSet.has(jc.role_id); }).forEach(function(jc) {
     var role = myRoles.find(function(r){ return r.id === jc.role_id; });
-    var hmName = jc.reviewed_by_name || 'Hiring Manager';
-    var hmEmail = jc.reviewed_by_email || '';
+    // HM name/email stored in localStorage when approval link was sent
+    var hmName = localStorage.getItem('hiro_hm_name_' + jc.role_id) || '';
+    var hmEmail = localStorage.getItem('hiro_hm_email_' + jc.role_id) || '';
     alerts.push({
       type: 'jd_changes',
       roleId: jc.role_id,
@@ -2574,7 +2575,8 @@ async function renderDashboard() {
       hmEmail: hmEmail,
       hmName: hmName,
       comments: jc.comments,
-      html: '✏️ <strong>JD changes requested</strong> — ' + (role ? role.title : 'Unknown role') + (hmName ? ' by ' + hmName : '') +
+      html: '✏️ <strong>JD changes requested</strong> — ' + (role ? role.title : 'Unknown role') +
+        (hmName ? ' by <strong>' + hmName + '</strong>' : '') +
         (jc.comments ? ': <em>"' + jc.comments.replace(/"/g,'&quot;').substring(0,120) + (jc.comments.length>120?'…':'') + '"</em>' : ' (no comment left)')
     });
   });
@@ -5086,25 +5088,36 @@ function _rdS1Html(d) {
             <div style="display:flex;flex-wrap:wrap;gap:4px">${roleJd.competencies.map(c=>`<span style="background:var(--brand-light);color:var(--brand-dark);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500">${c}</span>`).join('')}</div>
           </div>`:''}
           <!-- Approval block -->
-          ${apStatus==='changes_requested'&&jdApprovals[0]?`
-          <div style="margin-top:10px;padding:14px 16px;background:rgba(251,191,36,.08);border:1.5px solid rgba(251,191,36,.5);border-radius:var(--r)">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:700;color:#fbbf24">✏️ Changes Requested</span>
-              ${jdApprovals[0].reviewed_by_name?`<span style="font-size:12px;color:var(--text-3)">by ${jdApprovals[0].reviewed_by_name}</span>`:''}
-              ${jdApprovals[0].reviewed_at?`<span style="font-size:11px;color:var(--text-3);margin-left:auto">${fmtDate(jdApprovals[0].reviewed_at)}</span>`:''}
-            </div>
-            ${jdApprovals[0].comments?`<div style="font-size:13px;color:var(--text);line-height:1.5;padding:10px 12px;background:rgba(251,191,36,.06);border-radius:6px;border-left:3px solid #fbbf24;margin-bottom:10px">"${jdApprovals[0].comments}"</div>`:`<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;font-style:italic">No comment left — contact the hiring manager directly.</div>`}
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">✏️ Edit JD</button>
-              ${jdApprovals[0].reviewed_by_email?`<a href="mailto:${jdApprovals[0].reviewed_by_email}?subject=JD+Update+—+${encodeURIComponent(roleJd.title||'')}&body=Hi+${encodeURIComponent(jdApprovals[0].reviewed_by_name||'')},%0A%0AThanks+for+your+feedback.+I%27ve+updated+the+JD+and+will+send+you+a+fresh+link+to+review.%0A%0ABest,%0A${encodeURIComponent(currentUser?.full_name||'')}" class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px;text-decoration:none">✉️ Reply to HM</a>`:''}
-              <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">📧 Resend Updated JD</button>
-            </div>
-          </div>`:`
-          <div style="margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:var(--r);display:flex;align-items:center;gap:10px">
-            <span style="font-size:12px;font-weight:600;color:var(--text-2)">HM Approval:</span>
-            ${apBadge}
-            ${jdApprovals.length&&jdApprovals[0].reviewed_at?`<span style="font-size:11px;color:var(--text-3);margin-left:auto">${fmtDate(jdApprovals[0].reviewed_at)}</span>`:''}
-          </div>`}
+          ${(()=>{
+            const _hmN = localStorage.getItem('hiro_hm_name_'+roleId)||'';
+            const _hmE = localStorage.getItem('hiro_hm_email_'+roleId)||'';
+            if (apStatus==='changes_requested' && jdApprovals[0]) {
+              const _replyBtn = _hmE
+                ? `<a href="mailto:${_hmE}?subject=JD+Update+%E2%80%94+${encodeURIComponent(roleJd?.title||'')}&body=Hi+${encodeURIComponent(_hmN?_hmN.split(' ')[0]:'')},%0A%0AThanks+for+your+feedback.+I%27ve+updated+the+JD+and+will+send+a+fresh+link.%0A%0ABest,+${encodeURIComponent(currentUser?.full_name||'')}" class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px;text-decoration:none">✉️ Reply to HM</a>`
+                : '';
+              return `<div style="margin-top:10px;padding:14px 16px;background:rgba(251,191,36,.08);border:1.5px solid rgba(251,191,36,.5);border-radius:var(--r)">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                  <span style="font-size:13px;font-weight:700;color:#fbbf24">✏️ Changes Requested</span>
+                  ${_hmN ? `<span style="font-size:12px;color:var(--text-3)">by ${_hmN}</span>` : ''}
+                  ${jdApprovals[0].reviewed_at ? `<span style="font-size:11px;color:var(--text-3);margin-left:auto">${fmtDate(jdApprovals[0].reviewed_at)}</span>` : ''}
+                </div>
+                ${jdApprovals[0].comments
+                  ? `<div style="font-size:13px;color:var(--text);line-height:1.5;padding:10px 12px;background:rgba(251,191,36,.06);border-radius:6px;border-left:3px solid #fbbf24;margin-bottom:10px">"${jdApprovals[0].comments}"</div>`
+                  : `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;font-style:italic">No comment left — contact the hiring manager directly.</div>`}
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">✏️ Edit JD</button>
+                  ${_replyBtn}
+                  <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">📧 Resend Updated JD</button>
+                </div>
+              </div>`;
+            } else {
+              return `<div style="margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:var(--r);display:flex;align-items:center;gap:10px">
+                <span style="font-size:12px;font-weight:600;color:var(--text-2)">HM Approval:</span>
+                ${apBadge}
+                ${jdApprovals.length&&jdApprovals[0]?.reviewed_at ? `<span style="font-size:11px;color:var(--text-3);margin-left:auto">${fmtDate(jdApprovals[0].reviewed_at)}</span>` : ''}
+              </div>`;
+            }
+          })()}
         `:`
           <div style="text-align:center;padding:20px 0">
             <div style="font-size:32px;margin-bottom:8px">📚</div>
@@ -11886,31 +11899,36 @@ async function _cfpSubmitOffer(action) {
     var _cn = document.getElementById('cfp-offer-cand-name')?.value || 'Candidate';
     var _rt = document.getElementById('cfp-offer-role-title')?.value || document.getElementById('cfp-offer-title')?.value || '';
 
-    if (approvers.length && approvalLink) {
-      var toEmails = approvers.map(a=>a.approver_email).join(';');
-      var subject = encodeURIComponent('Offer Approval Required — '+_cn+' · '+_rt);
-      var body = encodeURIComponent(
-        'Please review and approve the following offer:\n\n'+
-        'Candidate: '+_cn+'\nRole: '+_rt+'\nHire Type: '+(hireType||'—')+
-        (startDate?'\nStart Date: '+startDate:'')+
-        (salAnnual?'\nSalary: '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual':'')+
-        '\n\n──────────────────────────────────────\n'+
-        'Click the link below to review the full offer details and approve or reject directly in Hiro:\n\n'+
-        approvalLink+
-        '\n\nNo login required — you can approve directly on that page.\n'+
-        '──────────────────────────────────────\n\n'+
-        (currentUser?.full_name||'TA Team')
-      );
-      var mailLink = document.createElement('a');
-      mailLink.href = 'mailto:'+toEmails+'?subject='+subject+'&body='+body;
-      mailLink.click();
-      toast('✅ Approval email opened with Hiro review link');
-    } else if (approvalLink) {
-      prompt('No approvers added. Copy this link and share manually:', approvalLink);
-      toast('✅ Offer saved — share approval link with approvers', 'info');
-    } else {
-      toast('✅ Offer saved', 'info');
-    }
+    // Build email and open modal regardless of whether approvers are set
+    var toEmails = approvers.map(a=>a.approver_email).filter(Boolean).join('; ');
+    var emailSubject = 'Offer Approval Required — '+_cn+' · '+_rt;
+    var emailBody =
+      'Hi,\n\n'+
+      'I am requesting your approval for the following offer:\n\n'+
+      'Candidate:   '+_cn+'\n'+
+      'Role:        '+_rt+'\n'+
+      'Hire Type:   '+(hireType||'—')+'\n'+
+      (startDate?'Start Date:  '+startDate+'\n':'')+
+      (salAnnual?'Salary:      '+(document.getElementById('cfp-offer-currency')?.value||'')+' '+Number(salAnnual).toLocaleString()+' annual\n':'')+
+      '\n──────────────────────────────────────\n'+
+      (approvalLink
+        ? 'Click the link below to review the full offer and approve or reject directly in Hiro:\n\n'+approvalLink+'\n\nNo login required — you can approve directly on that page.\n'
+        : 'Please log into Hiro to review and approve this offer.\n')+
+      '──────────────────────────────────────\n\n'+
+      'Once approved, I will extend the offer to the candidate.\n\n'+
+      'Thank you,\n'+(currentUser?.full_name||'TA Team');
+
+    var toEl = document.getElementById('oa-email-to');
+    var subEl = document.getElementById('oa-email-subject');
+    var linkEl = document.getElementById('oa-email-link');
+    var bodyEl = document.getElementById('oa-email-body');
+    if (toEl) toEl.value = toEmails;
+    if (subEl) subEl.value = emailSubject;
+    if (linkEl) linkEl.value = approvalLink || '(offer_requests record not found — check Supabase)';
+    if (bodyEl) bodyEl.value = emailBody;
+    var modalTitle = document.querySelector('#modal-offer-approval-email .modal-title');
+    if (modalTitle) modalTitle.textContent = '📧 Send Offer for Approval';
+    openModal('modal-offer-approval-email');
   } else {
     toast('💾 Offer draft saved');
   }
