@@ -952,7 +952,28 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
       <div class="form-grid">
         <div class="form-group"><label>Department <span style="color:var(--red)">*</span></label>
-          <input id="req-dept" placeholder="e.g. Sales" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <select id="req-dept" onchange="_reqDeptChange(this.value)" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+            <option value="">Select department...</option>
+            <option>Business Development</option>
+            <option>Client Support</option>
+            <option>Corporate Marketing/Enablement</option>
+            <option>Customer Success/Renewals</option>
+            <option>eCommerce</option>
+            <option>Executive Office/Strategy</option>
+            <option>Finance/Accounting/Business Apps</option>
+            <option>IT Operations/InfoSec</option>
+            <option>Legal</option>
+            <option>Partners/Alliances</option>
+            <option>Product Development</option>
+            <option>Product Management</option>
+            <option>Professional/Managed Services</option>
+            <option>Regulatory Analysis &amp; Design</option>
+            <option>Revenue Operations</option>
+            <option>Sales - Direct</option>
+            <option>Sales Engineering</option>
+            <option>Talent</option>
+            <option>Transformation</option>
+          </select>
         </div>
         <div class="form-group"><label>Careers Page Region <span style="color:var(--red)">*</span></label>
           <select id="req-region" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
@@ -9059,6 +9080,39 @@ async function openHrReqModal() {
   _reqAddLocation();
 
   openModal('modal-hr-req');
+}
+
+// ── DEPARTMENT → FP&A + ELT auto-fill ─────────────────────────────
+const _DEPT_MAP = {
+  'Business Development':            { elt: 'Chris Lynch',       fpa: 'Claire Warner' },
+  'Client Support':                  { elt: 'Gregg Spratto',     fpa: 'Aaron Grassi' },
+  'Corporate Marketing/Enablement':  { elt: 'Chris Lynch',       fpa: 'Claire Warner' },
+  'Customer Success/Renewals':       { elt: 'Alice Katwan',      fpa: 'Claire Warner' },
+  'eCommerce':                       { elt: 'Ryan Buma',         fpa: 'Jason Luginbuhl' },
+  'Executive Office/Strategy':       { elt: 'Kevin Akeroyd',     fpa: 'Jacob Barden' },
+  'Finance/Accounting/Business Apps':{ elt: 'David Woodworth',   fpa: 'Jacob Barden' },
+  'IT Operations/InfoSec':           { elt: 'Gregg Spratto',     fpa: 'Aaron Grassi' },
+  'Legal':                           { elt: 'Justin Pentz',      fpa: 'Mathew Aultman' },
+  'Partners/Alliances':              { elt: 'Chris Clinton',     fpa: 'Claire Warner' },
+  'Product Development':             { elt: 'Gregg Spratto',     fpa: 'Aaron Grassi' },
+  'Product Management':              { elt: 'Gregg Spratto',     fpa: 'Aaron Grassi' },
+  'Professional/Managed Services':   { elt: 'Eva Krauss',        fpa: 'Jason Luginbuhl' },
+  'Regulatory Analysis & Design':    { elt: 'Eva Krauss',        fpa: 'Aaron Grassi' },
+  'Revenue Operations':              { elt: 'Alice Katwan',      fpa: 'Claire Warner' },
+  'Sales - Direct':                  { elt: 'Alice Katwan',      fpa: 'Claire Warner' },
+  'Sales Engineering':               { elt: 'Alice Katwan',      fpa: 'Claire Warner' },
+  'Talent':                          { elt: 'Colleen Schlagel',  fpa: 'Jacob Barden' },
+  'Transformation':                  { elt: 'Eva Krauss',        fpa: 'Jason Luginbuhl' },
+};
+
+function _reqDeptChange(dept) {
+  var mapping = _DEPT_MAP[dept];
+  if (!mapping) return;
+  // Always update — these are fixed mappings, not free-text choices
+  var fpaEl = document.getElementById('req-fpa');
+  if (fpaEl) { fpaEl.value = mapping.fpa; fpaEl.style.background = 'var(--brand-light)'; setTimeout(()=>fpaEl.style.background='',1200); }
+  var leaderEl = document.getElementById('req-dept-leader');
+  if (leaderEl) { leaderEl.value = mapping.elt; leaderEl.style.background = 'var(--brand-light)'; setTimeout(()=>leaderEl.style.background='',1200); }
 }
 
 function _reqAddLocation() {
