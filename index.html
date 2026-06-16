@@ -2499,6 +2499,7 @@ async function renderDashboard() {
     sb.from('applications').select('*,candidates(first_name,last_name,source),roles(title)').not('stage','in','(hired,rejected,withdrawn)').gte('created_at', weekAgoISO),
     sb.from('profiles').select('id,full_name,email'),
     sb.from('applications').select('id,stage,role_id,candidate_id,candidates(first_name,last_name,email,source),roles(title,id)').not('stage','in','(hired,rejected,withdrawn)').eq('candidates.source','Internal Pool'),
+    sb.from('role_jd_approvals').select('id,role_id,status,comments,reviewed_by_name,reviewed_by_email,reviewed_at').eq('status','changes_requested').order('reviewed_at',{ascending:false}),
   ]);
 
   function safeVal(i) { return results[i].status === 'fulfilled' ? results[i].value : {}; }
@@ -2506,6 +2507,7 @@ async function renderDashboard() {
   var myRoles = safeVal(0).data || [];
   var allActiveApps = safeVal(1).data || [];
   var filledRoles = safeVal(2).data || [];
+  var jdChangesAll = safeVal(7).data || [];
   var allComms = safeVal(3).data || [];
   var recentAppsWeek = safeVal(4).data || [];
   var _dashProfiles = {};
@@ -2558,6 +2560,25 @@ async function renderDashboard() {
 
   // Alerts
   var alerts = [];
+
+  // JD changes requested — highest priority, shown first
+  var myRoleIdSet = new Set(myRoles.map(function(r){ return r.id; }));
+  jdChangesAll.filter(function(jc){ return myRoleIdSet.has(jc.role_id); }).forEach(function(jc) {
+    var role = myRoles.find(function(r){ return r.id === jc.role_id; });
+    var hmName = jc.reviewed_by_name || 'Hiring Manager';
+    var hmEmail = jc.reviewed_by_email || '';
+    alerts.push({
+      type: 'jd_changes',
+      roleId: jc.role_id,
+      priority: 'high',
+      hmEmail: hmEmail,
+      hmName: hmName,
+      comments: jc.comments,
+      html: '✏️ <strong>JD changes requested</strong> — ' + (role ? role.title : 'Unknown role') + (hmName ? ' by ' + hmName : '') +
+        (jc.comments ? ': <em>"' + jc.comments.replace(/"/g,'&quot;').substring(0,120) + (jc.comments.length>120?'…':'') + '"</em>' : ' (no comment left)')
+    });
+  });
+
   needingAttentionCands.forEach(function(cid) {
     var app = activeCandIds[cid];
     var cand = app.candidates;
@@ -2756,10 +2777,16 @@ async function renderDashboard() {
     alertsHtml += '<button onclick="renderDashboard()" style="background:none;border:1.5px solid var(--red);color:var(--red-text);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0" title="Refresh dashboard">↺ Refresh</button></div>';
     alertsHtml += '<div class="card-body">';
     alerts.forEach(function(a) {
-      var onclick = a.type === 'candidate'
-        ? 'openCandidateFullPage(\'' + a.appId + '\')'
-        : 'viewRoleDetail(\'' + a.roleId + '\')';
-      alertsHtml += '<div onclick="' + onclick + '" style="padding:6px 0;font-size:12px;color:var(--red-text);border-bottom:1px solid #fecaca;cursor:pointer;display:flex;align-items:center;gap:6px" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'1\'">' + a.html + ' <span style="font-size:10px;opacity:.7">→ click to open</span></div>';
+      if (a.type === 'jd_changes') {
+        var replyBtn = a.hmEmail
+          ? ' <a href="mailto:' + a.hmEmail + '?subject=JD+Update+—+Re+your+feedback&body=Hi+' + encodeURIComponent(a.hmName) + ',%0A%0AThanks+for+your+feedback.+I%27ll+review+the+JD+and+get+back+to+you+shortly.%0A%0ABest,%0A' + encodeURIComponent(currentUser?.full_name||'') + '" onclick="event.stopPropagation()" style="margin-left:8px;font-size:11px;padding:2px 8px;border-radius:99px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.4);text-decoration:none;font-weight:600;flex-shrink:0">✉ Reply to HM</a>' : '';
+        alertsHtml += '<div onclick="viewRoleDetail(\'' + a.roleId + '\')" style="padding:8px 0;font-size:12px;color:#fbbf24;border-bottom:1px solid rgba(251,191,36,.2);cursor:pointer;display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'1\'">' + a.html + replyBtn + ' <span style="font-size:10px;opacity:.7;flex-shrink:0">→ open role</span></div>';
+      } else {
+        var onclick = a.type === 'candidate'
+          ? 'openCandidateFullPage(\'' + a.appId + '\')'
+          : 'viewRoleDetail(\'' + a.roleId + '\')';
+        alertsHtml += '<div onclick="' + onclick + '" style="padding:6px 0;font-size:12px;color:var(--red-text);border-bottom:1px solid #fecaca;cursor:pointer;display:flex;align-items:center;gap:6px" onmouseover="this.style.opacity=\'0.8\'" onmouseout="this.style.opacity=\'1\'">' + a.html + ' <span style="font-size:10px;opacity:.7">→ click to open</span></div>';
+      }
     });
     alertsHtml += '</div></div>';
   }
@@ -5059,12 +5086,25 @@ function _rdS1Html(d) {
             <div style="display:flex;flex-wrap:wrap;gap:4px">${roleJd.competencies.map(c=>`<span style="background:var(--brand-light);color:var(--brand-dark);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500">${c}</span>`).join('')}</div>
           </div>`:''}
           <!-- Approval block -->
+          ${apStatus==='changes_requested'&&jdApprovals[0]?`
+          <div style="margin-top:10px;padding:14px 16px;background:rgba(251,191,36,.08);border:1.5px solid rgba(251,191,36,.5);border-radius:var(--r)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+              <span style="font-size:13px;font-weight:700;color:#fbbf24">✏️ Changes Requested</span>
+              ${jdApprovals[0].reviewed_by_name?`<span style="font-size:12px;color:var(--text-3)">by ${jdApprovals[0].reviewed_by_name}</span>`:''}
+              ${jdApprovals[0].reviewed_at?`<span style="font-size:11px;color:var(--text-3);margin-left:auto">${fmtDate(jdApprovals[0].reviewed_at)}</span>`:''}
+            </div>
+            ${jdApprovals[0].comments?`<div style="font-size:13px;color:var(--text);line-height:1.5;padding:10px 12px;background:rgba(251,191,36,.06);border-radius:6px;border-left:3px solid #fbbf24;margin-bottom:10px">"${jdApprovals[0].comments}"</div>`:`<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;font-style:italic">No comment left — contact the hiring manager directly.</div>`}
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">✏️ Edit JD</button>
+              ${jdApprovals[0].reviewed_by_email?`<a href="mailto:${jdApprovals[0].reviewed_by_email}?subject=JD+Update+—+${encodeURIComponent(roleJd.title||'')}&body=Hi+${encodeURIComponent(jdApprovals[0].reviewed_by_name||'')},%0A%0AThanks+for+your+feedback.+I%27ve+updated+the+JD+and+will+send+you+a+fresh+link+to+review.%0A%0ABest,%0A${encodeURIComponent(currentUser?.full_name||'')}" class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px;text-decoration:none">✉️ Reply to HM</a>`:''}
+              <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">📧 Resend Updated JD</button>
+            </div>
+          </div>`:`
           <div style="margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:var(--r);display:flex;align-items:center;gap:10px">
             <span style="font-size:12px;font-weight:600;color:var(--text-2)">HM Approval:</span>
             ${apBadge}
-            ${jdApprovals.length&&jdApprovals[0].comments?`<span style="font-size:11px;color:var(--text-3);margin-left:4px">${jdApprovals[0].comments}</span>`:''}
             ${jdApprovals.length&&jdApprovals[0].reviewed_at?`<span style="font-size:11px;color:var(--text-3);margin-left:auto">${fmtDate(jdApprovals[0].reviewed_at)}</span>`:''}
-          </div>
+          </div>`}
         `:`
           <div style="text-align:center;padding:20px 0">
             <div style="font-size:32px;margin-bottom:8px">📚</div>
@@ -13446,6 +13486,7 @@ async function _showJdApprovalPage(token) {
   }
 
   const jd = data.jd || {};
+  window._jdApPageData = data; // store for use in _apSubmit
   const fmtSection = (label, text) => text ? `
     <div style="margin-bottom:20px">
       <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">${label}</div>
@@ -13499,10 +13540,27 @@ async function _apSubmit(token, action) {
     const res = await sb.rpc('process_jd_approval', { p_token: token, p_action: action, p_comments: comments });
     if (res.data?.error) throw new Error(res.data.error);
     const el = document.getElementById('eval-screen') || document.body;
-    el.innerHTML = _apPageShell(action === 'approved'
-      ? `<div style="text-align:center;padding:40px 0"><div style="font-size:48px;margin-bottom:16px">✅</div><div style="font-size:22px;font-weight:800;color:#34d399;margin-bottom:8px">JD Approved</div><div style="font-size:14px;color:rgba(255,255,255,.5)">Thank you — the recruiter has been notified.</div>${comments?`<div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.05);border-radius:10px;font-size:13px;color:rgba(255,255,255,.6);text-align:left"><strong>Your comments:</strong><br>${comments}</div>`:''}</div>`
-      : `<div style="text-align:center;padding:40px 0"><div style="font-size:48px;margin-bottom:16px">📝</div><div style="font-size:22px;font-weight:800;margin-bottom:8px">Changes Requested</div><div style="font-size:14px;color:rgba(255,255,255,.5)">Your feedback has been recorded. The recruiter will follow up with you.</div>${comments?`<div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.05);border-radius:10px;font-size:13px;color:rgba(255,255,255,.6);text-align:left"><strong>Your comments:</strong><br>${comments}</div>`:''}</div>`
-    );
+
+    if (action === 'approved') {
+      el.innerHTML = _apPageShell(`<div style="text-align:center;padding:40px 0"><div style="font-size:48px;margin-bottom:16px">✅</div><div style="font-size:22px;font-weight:800;color:#34d399;margin-bottom:8px">JD Approved</div><div style="font-size:14px;color:rgba(255,255,255,.5)">Thank you — the recruiter has been notified.</div>${comments?`<div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.05);border-radius:10px;font-size:13px;color:rgba(255,255,255,.6);text-align:left"><strong>Your comments:</strong><br>${comments}</div>`:''}</div>`);
+    } else {
+      // changes_requested — try to get recruiter email from RPC result or stored page data
+      const recruiterEmail = res.data?.recruiter_email || window._jdApPageData?.recruiter_email || null;
+      const recruiterName = res.data?.recruiter_name || window._jdApPageData?.recruiter_name || 'the recruiter';
+      const jdTitle = window._jdApPageData?.jd?.title || 'the JD';
+
+      const emailBtn = recruiterEmail
+        ? `<a href="mailto:${recruiterEmail}?subject=${encodeURIComponent('JD Feedback — '+jdTitle)}&body=${encodeURIComponent('Hi '+recruiterName+',\n\nI\'ve reviewed the JD and requested some changes via Hiro.'+(comments?'\n\nMy specific feedback:\n'+comments:'')+'\n\nPlease let me know if you have any questions.\n\nThanks')}" style="display:inline-block;margin-top:16px;padding:11px 22px;background:#fbbf24;color:#000;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none">✉️ Email ${recruiterName}</a>`
+        : `<div style="margin-top:16px;font-size:13px;color:rgba(255,255,255,.4)">The recruiter will see your feedback in Hiro and follow up with you.</div>`;
+
+      el.innerHTML = _apPageShell(`<div style="text-align:center;padding:40px 0">
+        <div style="font-size:48px;margin-bottom:16px">📝</div>
+        <div style="font-size:22px;font-weight:800;margin-bottom:8px">Changes Requested</div>
+        <div style="font-size:14px;color:rgba(255,255,255,.5)">Your feedback has been recorded.</div>
+        ${comments?`<div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.05);border-radius:10px;font-size:13px;color:rgba(255,255,255,.6);text-align:left"><strong>Your comments:</strong><br>${comments}</div>`:''}
+        ${emailBtn}
+      </div>`);
+    }
   } catch(e) {
     if (fb) fb.textContent = 'Error: ' + (e.message || 'Something went wrong. Please try again.');
     btns.forEach(b => b.disabled = false);
