@@ -5717,9 +5717,12 @@ async function _requestOfferApproval(appId, roleId, candName) {
     }
   } catch(e) { console.warn('offer_requests:', e.message); }
 
-  // Build approval request email body — always include Hiro link
-  var subject = encodeURIComponent('Offer Approval Required — ' + candName + ' · ' + roleTitle);
-  var body = encodeURIComponent(
+  // Mark as pending approval in DB
+  try { await sb.from('applications').update({offer_status:'pending'}).eq('id',appId); } catch(e){}
+
+  // Build email fields
+  var emailSubject = 'Offer Approval Required — ' + candName + ' · ' + roleTitle;
+  var emailBody =
     'Hi,\n\n' +
     'I am requesting your approval for the following offer:\n\n' +
     'Candidate:   ' + candName + '\n' +
@@ -5731,18 +5734,21 @@ async function _requestOfferApproval(appId, roleId, candName) {
     (approvalLink
       ? 'Click the link below to review the full offer and approve or reject directly in Hiro:\n\n' +
         approvalLink + '\n\nNo login required — you can approve directly on that page.\n'
-      : 'Please log into Hiro to review and approve this offer.\n') +
+      : 'Please ask the approver to log into Hiro to review this offer.\n') +
     '──────────────────────────────────────\n\n' +
     'Once approved, I will extend the offer to the candidate.\n\n' +
-    'Thank you,\n' + (currentUser?.full_name || 'TA Team')
-  );
+    'Thank you,\n' + (currentUser?.full_name || 'TA Team');
 
-  // Open email draft
-  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
-
-  // Mark as pending approval in DB
-  try { await sb.from('applications').update({offer_status:'pending'}).eq('id',appId); } catch(e){}
-  toast('Approval email opened with Hiro review link ✓');
+  // Populate and show offer approval email modal
+  var toEl = document.getElementById('oa-email-to');
+  var subEl = document.getElementById('oa-email-subject');
+  var linkEl = document.getElementById('oa-email-link');
+  var bodyEl = document.getElementById('oa-email-body');
+  if (toEl) toEl.value = '';
+  if (subEl) subEl.value = emailSubject;
+  if (linkEl) linkEl.value = approvalLink || '(link unavailable — check Supabase offer_requests table)';
+  if (bodyEl) bodyEl.value = emailBody;
+  openModal('modal-offer-approval-email');
 }
 
 async function _setOfferStatus(appId, roleId, newStatus) {
@@ -7038,6 +7044,26 @@ function _apOpenOutlook() {
     +'&subject='+encodeURIComponent(subject)
     +'&body='+encodeURIComponent(body);
   window.open(url,'_blank');
+}
+
+function _oaOpenOutlook() {
+  const to=document.getElementById('oa-email-to')?.value.trim()||'';
+  const subject=document.getElementById('oa-email-subject')?.value||'';
+  const body=document.getElementById('oa-email-body')?.value||'';
+  const url='https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)
+    +'&subject='+encodeURIComponent(subject)
+    +'&body='+encodeURIComponent(body);
+  window.open(url,'_blank');
+}
+
+function _oaCopy(fieldId) {
+  const el=document.getElementById(fieldId);
+  if(!el)return;
+  navigator.clipboard?.writeText(el.value).catch(()=>{
+    el.select();document.execCommand('copy');
+  });
+  const c=document.getElementById('oa-copy-confirm');
+  if(c){c.textContent='Copied ✓';setTimeout(()=>{c.textContent='';},2000);}
 }
 
 async function _undoJdApproval(roleId) {
@@ -19746,6 +19772,57 @@ async function renderSchedulingHub() {
 
 initApp();
 </script>
+
+<!-- OFFER APPROVAL EMAIL MODAL -->
+<div class="modal-overlay" id="modal-offer-approval-email">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title">📧 Send Offer for Approval</div>
+      <button class="modal-close" onclick="closeModal('modal-offer-approval-email')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px">
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:16px">Enter the approver's email, copy the link, then open in Outlook to send.</div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">To</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="oa-email-to" placeholder="approver@sovos.com" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px">
+          <button class="btn btn-outline btn-sm" onclick="_oaCopy('oa-email-to')">Copy</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Subject</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="oa-email-subject" readonly style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px">
+          <button class="btn btn-outline btn-sm" onclick="_oaCopy('oa-email-subject')">Copy</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Approval Link</div>
+          <button class="btn btn-outline btn-sm" onclick="_oaCopy('oa-email-link')">Copy Link</button>
+        </div>
+        <input id="oa-email-link" readonly style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--brand);font-size:12px;box-sizing:border-box">
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Email Body</div>
+          <button class="btn btn-primary btn-sm" onclick="_oaCopy('oa-email-body')">📋 Copy Body</button>
+        </div>
+        <textarea id="oa-email-body" readonly rows="9" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px;resize:none;font-family:inherit;line-height:1.5;box-sizing:border-box"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeModal('modal-offer-approval-email')">Close</button>
+        <button class="btn btn-primary" onclick="_oaOpenOutlook()">Open Outlook Web ↗</button>
+      </div>
+      <div id="oa-copy-confirm" style="text-align:center;font-size:12px;color:var(--green-text);margin-top:8px;min-height:18px"></div>
+    </div>
+  </div>
+</div>
 
 <!-- JD APPROVAL EMAIL MODAL -->
 <div class="modal-overlay" id="modal-jd-approval-email">
