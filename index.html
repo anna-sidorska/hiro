@@ -2162,6 +2162,14 @@ function showApp() {
   document.getElementById('sb-user-name').textContent = currentUser.full_name;
   document.getElementById('sb-user-role').textContent  = currentUser.role;
   renderSidebarNav();
+  // Check if opened via req_approval link — route directly to the approval view
+  const _reqApParam = new URLSearchParams(window.location.search).get('req_approval');
+  if (_reqApParam) {
+    nav('hr_portal', document.getElementById('nav-hr_portal'));
+    if(currentUser.role !== 'manager') loadSidebarCounts();
+    _showReqApprovalModal(_reqApParam);
+    return;
+  }
   const defaultPage = currentUser.role === 'manager' ? 'hm_roles' : 'home';
   nav(defaultPage, document.getElementById(`nav-${defaultPage}`));
   if(currentUser.role !== 'manager') loadSidebarCounts();
@@ -7024,9 +7032,10 @@ async function _markJdHmApproved(roleId,jdId) {
   const version=((_rdData.jdApprovals||[]).length)+1;
   const token=crypto.randomUUID();
 
-  // Delete any existing pending approval first (clean slate)
-  const existing=(_rdData.jdApprovals||[]).find(a=>a.status==='pending');
-  if(existing){ try{ await sb.from('role_jd_approvals').delete().eq('id',existing.id); }catch(e){} }
+  // Delete ALL non-final records (pending + changes_requested) — clean slate before resubmit
+  // This ensures dashboard alert clears immediately when recruiter resends after changes requested
+  try { await sb.from('role_jd_approvals').delete().eq('role_id', roleId).in('status', ['pending', 'changes_requested']); } catch(e) {}
+  _rdData.jdApprovals = (_rdData.jdApprovals||[]).filter(a => a.status !== 'pending' && a.status !== 'changes_requested');
 
   // Insert new pending record with token
   const {data:ap,error}=await sb.from('role_jd_approvals').insert({
@@ -9073,6 +9082,153 @@ async function _refreshAdvert(roleId) {
 }
 
 // ── APPROVAL WORKFLOW ─────────────────────────────────────────
+// ── REQUISITION APPROVAL MODAL (opened via ?req_approval=ROLE_ID link) ──────
+async function _showReqApprovalModal(roleId) {
+  // Remove any existing instance
+  const old = document.getElementById('req-approval-modal');
+  if (old) old.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'req-approval-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 16px';
+  overlay.innerHTML = `<div style="background:#0e1b30;border:1px solid rgba(255,255,255,.1);border-radius:16px;width:100%;max-width:620px;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.7)">
+    <div style="background:linear-gradient(135deg,#1e3a5f,#0f2347);padding:24px 28px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5);margin-bottom:4px">Sovos Talent Acquisition</div>
+        <div style="font-size:20px;font-weight:800;color:#fff">Requisition Approval</div>
+      </div>
+      <button onclick="document.getElementById('req-approval-modal').remove()" style="background:rgba(255,255,255,.1);border:none;color:#fff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px">✕</button>
+    </div>
+    <div id="req-ap-body" style="padding:24px 28px">
+      <div style="text-align:center;padding:32px"><div style="width:36px;height:36px;border:3px solid #00c4ee;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto"></div><div style="margin-top:12px;color:rgba(255,255,255,.5)">Loading requisition...</div></div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  // Fetch role data
+  const {data:role, error} = await sb.from('roles')
+    .select('*,profiles(full_name,email)')
+    .eq('id', roleId).maybeSingle();
+
+  const body = document.getElementById('req-ap-body');
+  if (error || !role) {
+    body.innerHTML = '<div style="color:#f87171;padding:20px;text-align:center">Requisition not found or you do not have access.</div>';
+    return;
+  }
+  if (role.req_status === 'approved') {
+    body.innerHTML = '<div style="text-align:center;padding:32px"><div style="font-size:48px;margin-bottom:12px">✅</div><div style="font-size:18px;font-weight:700;color:#34d399">This requisition has already been approved.</div></div>';
+    return;
+  }
+  if (role.req_status === 'rejected') {
+    body.innerHTML = `<div style="text-align:center;padding:32px"><div style="font-size:48px;margin-bottom:12px">❌</div><div style="font-size:18px;font-weight:700;color:#f87171">This requisition was rejected.</div>${role.rejection_reason?`<div style="color:rgba(255,255,255,.5);margin-top:8px;font-size:13px">${role.rejection_reason}</div>`:''}</div>`;
+    return;
+  }
+
+  // Read approval chain & location salary data
+  const chain = Array.isArray(role.approval_chain) ? role.approval_chain : [];
+  const locs  = Array.isArray(role.location_salary_targets) ? role.location_salary_targets : [];
+  const fmt = v => v ? Number(v).toLocaleString() : null;
+  const row = (label, value) => value ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);gap:12px"><span style="color:rgba(255,255,255,.45);font-size:13px;flex-shrink:0">${label}</span><span style="font-weight:600;font-size:13px;color:#eef4ff;text-align:right">${value}</span></div>` : '';
+
+  body.innerHTML = `
+    <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px;margin-bottom:16px">
+      ${row('Tracking #', role.tracking_number||'—')}
+      ${row('Job Title', role.title||'—')}
+      ${row('Department', role.department||'—')}
+      ${row('Job Function', role.job_function||null)}
+      ${row('Region', role.careers_region||role.region||null)}
+      ${row('Submitted by', role.opened_by_name||role.profiles?.full_name||null)}
+      ${row('Hiring Manager', role.hiring_manager_name||null)}
+      ${row('Dept Leader', role.department_leader||null)}
+      ${row('FP&A Partner', role.fp_and_a_partner||null)}
+      ${row('Head of TA', role.head_of_ta||null)}
+      ${row('Head of HR', role.head_of_hr||null)}
+      ${row('HR Manager', role.hr_manager||null)}
+      ${row('Is Budgeted', role.is_budgeted===true?'Yes':role.is_budgeted===false?'No':null)}
+      ${row('One-Time Project', role.is_one_time_project===true?'Yes':role.is_one_time_project===false?'No':null)}
+      ${role.replacing_name ? row('Replacing', role.replacing_name + (role.replacing_last_day?' · Last day: '+role.replacing_last_day:'')) : ''}
+    </div>
+
+    ${locs.length ? `<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Location & Salary Targets</div>
+      ${locs.map(l=>`<div style="display:flex;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;color:#eef4ff">
+        <span style="flex:1;min-width:120px">${l.location||'—'}</span>
+        <span style="color:rgba(255,255,255,.5)">${l.currency||''}</span>
+        <span>${fmt(l.salary_min)||'—'} – ${fmt(l.salary_max)||'—'}</span>
+        ${l.bonus_pct?`<span style="color:rgba(255,255,255,.4)">Bonus: ${l.bonus_pct}%</span>`:''}
+        ${l.tracking_number?`<span style="color:rgba(255,255,255,.3)">#${l.tracking_number}</span>`:''}
+      </div>`).join('')}
+    </div>` : ''}
+
+    ${role.justification ? `<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Business Justification</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.75);line-height:1.6">${role.justification}</div>
+    </div>` : ''}
+
+    ${chain.length ? `<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px;margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Approval Chain</div>
+      ${chain.map((a,i)=>`<div style="font-size:13px;color:#eef4ff;padding:5px 0">${i+1}. ${a.approver_name||''}${a.approver_email?' — '+a.approver_email:''}</div>`).join('')}
+    </div>` : ''}
+
+    <div style="margin-bottom:16px">
+      <label style="font-size:13px;font-weight:600;color:rgba(255,255,255,.65);display:block;margin-bottom:8px">Comments (optional)</label>
+      <textarea id="req-ap-comments" rows="3" placeholder="Add any notes or reason for your decision..." style="width:100%;padding:11px 14px;border:1.5px solid rgba(255,255,255,.12);border-radius:10px;font-size:14px;font-family:inherit;background:rgba(255,255,255,.05);color:#eef4ff;outline:none;resize:vertical"></textarea>
+    </div>
+    <div id="req-ap-error" style="display:none;color:#f87171;font-size:13px;margin-bottom:12px;padding:10px 14px;background:rgba(248,113,113,.1);border-radius:8px;border-left:3px solid #f87171"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button onclick="_submitReqApproval('${roleId}','approved')" style="flex:1;min-width:120px;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">✅ Approve</button>
+      <button onclick="_submitReqApproval('${roleId}','changes_requested')" style="flex:1;min-width:120px;padding:14px;background:transparent;color:#fbbf24;border:2px solid #fbbf24;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">✏️ Request Changes</button>
+      <button onclick="_submitReqApproval('${roleId}','rejected')" style="flex:1;min-width:120px;padding:14px;background:transparent;color:#f87171;border:2px solid #f87171;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">❌ Reject</button>
+    </div>`;
+}
+
+async function _submitReqApproval(roleId, action) {
+  const comments = document.getElementById('req-ap-comments')?.value.trim() || null;
+  const errEl = document.getElementById('req-ap-error');
+  if ((action === 'rejected' || action === 'changes_requested') && !comments) {
+    errEl.textContent = 'Please add a comment explaining your decision.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const newStatus = action === 'approved' ? 'approved' : action === 'rejected' ? 'rejected' : 'draft';
+  const update = {req_status: newStatus};
+  if (action === 'approved') update.approved_at = new Date().toISOString();
+  if (action === 'rejected') update.rejected_at = new Date().toISOString();
+  if (comments) update.rejection_reason = comments;
+
+  const {error} = await sb.from('roles').update(update).eq('id', roleId);
+  if (error) { errEl.textContent = 'Error: ' + error.message; errEl.style.display = 'block'; return; }
+
+  // Log to approval history
+  try {
+    await sb.from('role_approvals').insert({
+      role_id: roleId,
+      approver_name: currentUser?.full_name || '',
+      approver_email: currentUser?.email || '',
+      action, notes: comments,
+      decided_at: new Date().toISOString()
+    });
+  } catch(e) {}
+  await auditLog(action, 'role', roleId, {action, notes: comments});
+
+  // Show success inside modal
+  const body = document.getElementById('req-ap-body');
+  if (body) {
+    const icons = {approved:'✅', rejected:'❌', changes_requested:'✏️'};
+    const labels = {approved:'Requisition approved', rejected:'Requisition rejected', changes_requested:'Changes requested'};
+    const colors = {approved:'#34d399', rejected:'#f87171', changes_requested:'#fbbf24'};
+    body.innerHTML = `<div style="text-align:center;padding:32px">
+      <div style="font-size:48px;margin-bottom:12px">${icons[action]}</div>
+      <div style="font-size:18px;font-weight:700;color:${colors[action]}">${labels[action]}</div>
+      ${comments?`<div style="color:rgba(255,255,255,.5);margin-top:8px;font-size:13px">"${comments}"</div>`:''}
+      <button onclick="document.getElementById('req-approval-modal').remove();renderHrPortal()" style="margin-top:20px;padding:10px 24px;background:#1e3a5f;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600">Close</button>
+    </div>`;
+  }
+  toast(action==='approved'?'✅ Requisition approved':action==='rejected'?'❌ Requisition rejected':'✏️ Changes requested');
+}
+
 // Called from HR Portal — approver actions a pending requisition
 async function _approveRequisition(roleId, action) {
   // action: 'approved' | 'rejected' | 'requested_changes'
@@ -9575,19 +9731,17 @@ async function submitRequisition() {
       var reqTracking = payload.tracking_number;
       var reqDept = payload.department;
       var toEmails = chainApprovers.map(a=>a.approver_email).filter(Boolean).join('; ');
-      var hiroLink = window.location.origin + window.location.pathname;
+      var hiroLink = window.location.origin + window.location.pathname + '?req_approval=' + role.id;
       var emailSubj = 'Requisition Approval Required — ' + reqTracking + ' · ' + reqTitle;
       var emailBod =
         'Hi,\n\n' +
-        'A new requisition requires your approval:\n\n' +
-        'Role:        ' + reqTitle + '\n' +
-        (reqDept ? 'Department:  ' + reqDept + '\n' : '') +
-        'Tracking #:  ' + reqTracking + '\n' +
-        'Submitted by: ' + (currentUser?.full_name || 'TA Team') + '\n\n' +
-        '──────────────────────────────────────\n' +
-        'Please log into Hiro to review and approve:\n\n' +
-        hiroLink + '\n\nGo to HR Portal → All Roles → find the requisition and click Approve or Reject.\n' +
-        '──────────────────────────────────────\n\n' +
+        'A new requisition has been submitted and requires your approval:\n\n' +
+        'Role:          ' + reqTitle + '\n' +
+        (reqDept ? 'Department:    ' + reqDept + '\n' : '') +
+        'Tracking #:    ' + reqTracking + '\n' +
+        'Submitted by:  ' + (currentUser?.full_name || 'TA Team') + '\n\n' +
+        'Please click the link below to review the full requisition details and approve or reject directly — you will need to log into Hiro if you are not already signed in.\n\n' +
+        '👉 Review & Approve: ' + hiroLink + '\n\n' +
         'Thank you,\n' + (currentUser?.full_name || 'TA Team');
       var toEl = document.getElementById('oa-email-to');
       var subEl = document.getElementById('oa-email-subject');
