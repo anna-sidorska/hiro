@@ -13723,6 +13723,10 @@ async function _apSubmit(token, action) {
   try {
     const res = await sb.rpc('process_jd_approval', { p_token: token, p_action: action, p_comments: comments });
     if (res.data?.error) throw new Error(res.data.error);
+    // Write comments directly — RPC may not store them in the comments column
+    if (comments) {
+      try { await sb.from('role_jd_approvals').update({ comments: comments }).eq('approval_token', token); } catch(e) {}
+    }
     const el = document.getElementById('eval-screen') || document.body;
 
     if (action === 'approved') {
