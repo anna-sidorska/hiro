@@ -7030,10 +7030,10 @@ function _apCopy(fieldId) {
 }
 
 function _apOpenOutlook() {
-  const to=window._jdApEmailTo||'';
-  const subject=window._jdApEmailSubject||'';
-  const body=window._jdApEmailBody||'';
-  // Try OWA deep link — works for Office 365 accounts
+  // Always read from the input field so user edits are respected
+  const to=document.getElementById('jd-ap-email-to')?.value.trim()||window._jdApEmailTo||'';
+  const subject=document.getElementById('jd-ap-email-subject')?.value||window._jdApEmailSubject||'';
+  const body=document.getElementById('jd-ap-email-body')?.value||window._jdApEmailBody||'';
   const url='https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)
     +'&subject='+encodeURIComponent(subject)
     +'&body='+encodeURIComponent(body);
@@ -19664,7 +19664,7 @@ initApp();
       <div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">To</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <input id="jd-ap-email-to" readonly style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px">
+          <input id="jd-ap-email-to" placeholder="manager@sovos.com" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px">
           <button class="btn btn-outline btn-sm" onclick="_apCopy('jd-ap-email-to')">Copy</button>
         </div>
       </div>
