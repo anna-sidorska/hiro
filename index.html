@@ -5113,7 +5113,7 @@ function _rdS1Html(d) {
                   ? `<div style="font-size:13px;color:var(--text);line-height:1.5;padding:10px 12px;background:rgba(251,191,36,.06);border-radius:6px;border-left:3px solid #fbbf24;margin-bottom:10px">"${jdApprovals[0].comments}"</div>`
                   : `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;font-style:italic">No comment left — contact the hiring manager directly.</div>`}
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}')">✏️ Edit JD</button>
+                  <button class="btn btn-outline btn-sm" style="border-color:#fbbf24;color:#fbbf24;font-size:12px" onclick="openJdEditor('${roleJd.id}',null,'${roleId}',true)">✏️ Edit JD</button>
                   ${_replyBtn}
                   <button class="btn btn-primary btn-sm" style="font-size:12px" onclick="_markJdHmApproved('${roleId}','${roleJd.id}')">📧 Resend Updated JD</button>
                 </div>
@@ -12782,8 +12782,9 @@ function parseJdHtml(html, filename='') {
   return out;
 }
 
-async function openJdEditor(jdId=null, prefill=null, roleId=null) {
+async function openJdEditor(jdId=null, prefill=null, roleId=null, roleOnly=false) {
   _jdEditId=jdId; _jdComps={stage1:[],stage2:[],stage3:[]}; _jdActiveStage=1; _jdRoleId=roleId||null;
+  window._jdRoleOnlyEdit = roleOnly; // if true: pre-fill from jdId but save as new role-specific record
   document.getElementById('jd-modal-title').textContent=jdId?'Edit Job Description':(prefill?'Import from Word — Review & Save':'New Job Description');
   ['jd-title','jd-region','jd-summary','jd-responsibilities','jd-requirements'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('jd-dept').value='';
@@ -12852,10 +12853,20 @@ async function openJdEditor(jdId=null, prefill=null, roleId=null) {
       } else {
         _jdComps = { stage1: [], stage2: [], stage3: [] };
       }
-      _jdRoleId=jd.role_id||roleId||null;
+      _jdRoleId=roleOnly ? (roleId||null) : (jd.role_id||roleId||null);
       if(rolesSel && _jdRoleId) rolesSel.value=_jdRoleId;
       switchJdStageTab(1);
       renderJdCompetencyTags();
+
+      // Role-only mode: will save as new record — clear edit ID and show banner
+      if (roleOnly) {
+        _jdEditId = null; // force INSERT on save
+        document.getElementById('jd-modal-title').textContent = 'Edit JD for This Role';
+        const roleBanner = document.createElement('div');
+        roleBanner.style.cssText = 'background:rgba(251,191,36,.08);border:1.5px solid rgba(251,191,36,.4);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;font-size:12px;color:#fbbf24';
+        roleBanner.innerHTML = '<strong>✏️ Role-specific edit</strong> — Your changes will be saved as a new JD for this role only. The version in the JD library will not be affected.';
+        body.insertBefore(roleBanner, body.firstChild);
+      }
     }
     body.style.opacity='1';
   }
@@ -13008,6 +13019,7 @@ async function saveJd(andPack=false) {
     } else { toast('Save error: '+saveErr.message,'err'); }
     return;
   }
+  window._jdRoleOnlyEdit = false; // clear flag
   if (!_jdEditId) savedId = savedData?.id;
   toast('JD saved ✓'); closeModal('modal-jd-editor');
   if(andPack && savedId) { setTimeout(()=>openInterviewPack(savedId),350); return; }
