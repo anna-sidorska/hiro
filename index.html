@@ -4793,7 +4793,7 @@ function _rdS0Html(d) {
     <input class="s1ap-min" type="number" value="${l.salary_min||l.min||''}" placeholder="Base Min" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
     <input class="s1ap-max" type="number" value="${l.salary_max||l.max||''}" placeholder="Base Max" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
     <input class="s1ap-bonus" type="number" value="${l.bonus_pct||''}" placeholder="Bonus %" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
-    <input class="s1ap-comm" type="number" value="${l.commission_pct||''}" placeholder="Comm %" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
+    <input class="s1ap-comm" type="number" value="${l.commission_pct||''}" placeholder="Commission" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">
     <button class="btn btn-ghost btn-sm" style="color:var(--red-text);padding:4px 8px" onclick="this.closest('.s1ap-loc-row').remove()">✕</button>
   </div>`).join('');
 
@@ -4850,9 +4850,9 @@ function _rdS0Html(d) {
             <div style="border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;background:var(--surface-2)">${_chainHtml}</div>
           </div>
           <div style="grid-column:1/-1">
-            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Locations &amp; Salary Targets (Base / Bonus % / Comm %)</label>
+            <label style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;display:block">Locations &amp; Salary Targets (Base / Bonus % / Commission)</label>
             <div style="display:grid;grid-template-columns:2fr 80px 1fr 1fr 70px 70px 32px;gap:6px;margin-bottom:4px">
-              ${['Location','Curr','Base Min','Base Max','Bonus %','Comm %',''].map(h=>`<div style="font-size:10px;font-weight:600;color:var(--text-3)">${h}</div>`).join('')}
+              ${['Location','Curr','Base Min','Base Max','Bonus %','Commission',''].map(h=>`<div style="font-size:10px;font-weight:600;color:var(--text-3)">${h}</div>`).join('')}
             </div>
             <div id="s1ap-locs-wrap">${_locRows}</div>
             <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:12px" onclick="_s0AddLocRow()">+ Add Location</button>
@@ -5161,7 +5161,7 @@ function _s0AddLocRow() {
     '<input class="s1ap-min" type="number" placeholder="Base Min" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
     '<input class="s1ap-max" type="number" placeholder="Base Max" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
     '<input class="s1ap-bonus" type="number" placeholder="Bonus %" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
-    '<input class="s1ap-comm" type="number" placeholder="Comm %" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
+    '<input class="s1ap-comm" type="number" placeholder="Commission" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:12px">' +
     '<button class="btn btn-ghost btn-sm" style="color:var(--red-text);padding:4px 8px" onclick="this.closest(\'.s1ap-loc-row\').remove()">✕</button>';
   wrap.appendChild(row);
 }
@@ -9476,7 +9476,7 @@ function _reqAddLocation() {
   if (idx === 0) {
     const headers = document.createElement('div');
     headers.style.cssText = 'display:grid;grid-template-columns:2fr 90px 1fr 1fr 80px 80px 32px;gap:6px;margin-bottom:3px';
-    headers.innerHTML = ['Location','Currency','Base Min','Base Max','Bonus %','Comm %',''].map(h=>`<div style="font-size:10px;font-weight:600;color:var(--text-3);padding:0 2px">${h}</div>`).join('');
+    headers.innerHTML = ['Location','Currency','Base Min','Base Max','Bonus %','Commission',''].map(h=>`<div style="font-size:10px;font-weight:600;color:var(--text-3);padding:0 2px">${h}</div>`).join('');
     list.appendChild(headers);
   }
   const row = document.createElement('div');
@@ -9494,7 +9494,7 @@ function _reqAddLocation() {
     <input type="number" placeholder="Base Min" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Base salary minimum">
     <input type="number" placeholder="Base Max" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Base salary maximum">
     <input type="number" placeholder="Bonus %" min="0" max="100" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Target bonus % of base">
-    <input type="number" placeholder="Comm %" min="0" max="100" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Target commission % of base">
+    <input type="number" placeholder="Commission" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Target commission (annual)">
     <button type="button" onclick="this.closest('div').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer;font-size:14px" title="Remove">✕</button>`;
   list.appendChild(row);
 }
