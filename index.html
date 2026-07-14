@@ -874,7 +874,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
 <!-- ── HR REQUISITION MODAL ─────────────────────────────────── -->
 <div class="modal-overlay" id="modal-hr-req" style="align-items:flex-start;padding:20px 0;overflow-y:auto">
-  <div class="modal" style="max-width:720px;width:100%;margin:auto;max-height:none">
+  <div class="modal" style="max-width:920px;width:100%;margin:auto;max-height:none">
     <div class="modal-header" style="position:sticky;top:0;z-index:10;background:var(--surface)">
       <div>
         <div class="modal-title">Open Requisition</div>
@@ -9475,12 +9475,12 @@ function _reqAddLocation() {
   // Show column headers on first row
   if (idx === 0) {
     const headers = document.createElement('div');
-    headers.style.cssText = 'display:grid;grid-template-columns:2fr 90px 1fr 1fr 80px 80px 32px;gap:6px;margin-bottom:3px';
+    headers.style.cssText = 'display:grid;grid-template-columns:2fr 80px 1fr 1fr 70px 1fr 32px;gap:6px;margin-bottom:3px';
     headers.innerHTML = ['Location','Currency','Base Min','Base Max','Bonus %','Commission',''].map(h=>`<div style="font-size:10px;font-weight:600;color:var(--text-3);padding:0 2px">${h}</div>`).join('');
     list.appendChild(headers);
   }
   const row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 90px 1fr 1fr 80px 80px 32px;gap:6px;align-items:center;margin-bottom:6px';
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 80px 1fr 1fr 70px 1fr 32px;gap:6px;align-items:center;margin-bottom:6px';
   var locOpts = _LOC_OPTIONS.map(o => o.startsWith('──')
     ? `<option disabled style="color:var(--text-3);font-size:11px">${o}</option>`
     : `<option value="${o}">${o}</option>`).join('');
