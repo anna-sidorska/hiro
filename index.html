@@ -1737,7 +1737,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
 
 <script>
 // ── PUBLIC PAGE FLAG (eval/booking links — set before EVERYTHING) ──
-const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply') || new URLSearchParams(window.location.search).get('internal') || new URLSearchParams(window.location.search).get('hm_survey') || new URLSearchParams(window.location.search).get('probation_review') || new URLSearchParams(window.location.search).get('offer_approval'));
+const _HIRO_IS_PUBLIC = !!(new URLSearchParams(window.location.search).get('eval') || new URLSearchParams(window.location.search).get('book') || new URLSearchParams(window.location.search).get('apply') || new URLSearchParams(window.location.search).get('internal') || new URLSearchParams(window.location.search).get('hm_survey') || new URLSearchParams(window.location.search).get('probation_review') || new URLSearchParams(window.location.search).get('offer_approval') || new URLSearchParams(window.location.search).get('req_approval'));
 
 // ── SUPABASE ──────────────────────────────────
 const SUPABASE_URL = 'https://zgecauwahfszpeungbfb.supabase.co';
@@ -9153,12 +9153,16 @@ async function _showReqApprovalModal(roleId) {
 
     ${locs.length ? `<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Location & Salary Targets</div>
-      ${locs.map(l=>`<div style="display:flex;gap:8px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;color:#eef4ff">
-        <span style="flex:1;min-width:120px">${l.location||'—'}</span>
-        <span style="color:rgba(255,255,255,.5)">${l.currency||''}</span>
-        <span>${fmt(l.salary_min)||'—'} – ${fmt(l.salary_max)||'—'}</span>
-        ${l.bonus_pct?`<span style="color:rgba(255,255,255,.4)">Bonus: ${l.bonus_pct}%</span>`:''}
-        ${l.tracking_number?`<span style="color:rgba(255,255,255,.3)">#${l.tracking_number}</span>`:''}
+      ${locs.map(l=>`<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+          <span style="font-size:13px;font-weight:600;color:#eef4ff">${l.location||'—'}</span>
+          <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">${l.currency||'USD'}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:12px">
+          <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Base Salary</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_min)||'—'} – ${fmt(l.salary_max)||'—'}</span></div>
+          ${l.bonus_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Bonus Target</span><span style="font-weight:600;color:#eef4ff">${l.bonus_pct}% of base</span></div>`:''}
+          ${l.commission_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Target</span><span style="font-weight:600;color:#eef4ff">${l.commission_pct}% of base</span></div>`:''}
+        </div>
       </div>`).join('')}
     </div>` : ''}
 
@@ -15063,6 +15067,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (probationToken) { _initProbationReviewPage(probationToken); }
   const offerApprovalId = urlParams.get('offer_approval');
   if (offerApprovalId) { _initOfferApprovalPage(offerApprovalId); }
+  const reqApprovalId = urlParams.get('req_approval');
+  if (reqApprovalId) { _initReqApprovalPage(reqApprovalId); }
 });
 
 
@@ -15259,6 +15265,188 @@ async function _initOfferApprovalPage(offerId) {
   document.getElementById('oa-reject-reason').addEventListener('input', () => {
     document.getElementById('oa-reject-submit').style.display = 'block';
   });
+}
+
+// ── REQUISITION APPROVAL PUBLIC PAGE (no login — email verified against chain) ──
+async function _initReqApprovalPage(roleId) {
+  document.body.innerHTML = `
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{background:#0a1628;font-family:'DM Sans',-apple-system,sans-serif;min-height:100vh;padding:16px}
+      .ra-wrap{max-width:600px;margin:0 auto;padding:20px 0}
+      .ra-header{background:linear-gradient(135deg,#1e3a5f,#0f2347);padding:28px 24px;border-radius:14px;margin-bottom:20px;color:#fff;text-align:center}
+      .ra-header h1{font-size:22px;font-weight:800;margin-bottom:6px}
+      .ra-header p{font-size:13px;opacity:.75}
+      .ra-card{background:#0e1b30;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px;margin-bottom:16px}
+      .ra-row{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07);gap:12px}
+      .ra-row:last-child{border-bottom:none}
+      .ra-label{color:rgba(255,255,255,.5);font-size:13px;flex-shrink:0}
+      .ra-value{font-weight:600;font-size:13px;color:#eef4ff;text-align:right}
+      .ra-field label{font-size:13px;font-weight:600;color:rgba(255,255,255,.7);display:block;margin-bottom:8px}
+      .ra-field input,.ra-field textarea{width:100%;padding:11px 14px;border:1.5px solid rgba(255,255,255,.12);border-radius:10px;font-size:14px;font-family:inherit;background:rgba(255,255,255,.05);color:#eef4ff;outline:none;transition:border-color .2s}
+      .ra-field input:focus,.ra-field textarea:focus{border-color:#00c4ee}
+      .ra-error{color:#f87171;font-size:13px;padding:10px 14px;background:rgba(248,113,113,.1);border-radius:8px;border-left:3px solid #f87171;margin-bottom:12px}
+      .ra-btn-approve{flex:1;min-width:120px;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s}
+      .ra-btn-approve:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(22,163,74,.35)}
+      .ra-btn-changes{flex:1;min-width:120px;padding:13px;background:transparent;color:#fbbf24;border:2px solid #fbbf24;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer}
+      .ra-btn-reject{flex:1;min-width:120px;padding:13px;background:transparent;color:#f87171;border:2px solid #f87171;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer}
+      @media(max-width:480px){.ra-wrap{padding:12px 0}.ra-header{padding:20px 16px}.ra-card{padding:14px}}
+      @keyframes spin{to{transform:rotate(360deg)}}
+    </style>
+    <div class="ra-wrap"><div id="req-ap-page-body">
+      <div style="text-align:center;padding:60px 20px">
+        <div style="width:40px;height:40px;border:3px solid #00c4ee;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto"></div>
+        <div style="margin-top:14px;color:rgba(255,255,255,.5);font-size:14px">Loading requisition...</div>
+      </div>
+    </div></div>`;
+
+  var {data:role, error} = await sb.from('roles').select('*').eq('id', roleId).maybeSingle();
+  var body = document.getElementById('req-ap-page-body');
+  if (error || !role) { body.innerHTML = '<div style="text-align:center;padding:60px"><div style="font-size:40px;margin-bottom:12px">🔍</div><div style="color:#f87171;font-size:16px;font-weight:600">Requisition not found or link has expired.</div></div>'; return; }
+  if (role.req_status === 'approved') { body.innerHTML = '<div style="text-align:center;padding:60px"><div style="font-size:56px;margin-bottom:16px">✅</div><div style="font-size:20px;font-weight:700;color:#34d399">This requisition has already been approved.</div></div>'; return; }
+  if (role.req_status === 'rejected') { body.innerHTML = `<div style="text-align:center;padding:60px"><div style="font-size:56px;margin-bottom:16px">❌</div><div style="font-size:20px;font-weight:700;color:#f87171">This requisition was rejected.</div>${role.rejection_reason?`<div style="color:rgba(255,255,255,.5);margin-top:8px">${role.rejection_reason}</div>`:''}</div>`; return; }
+
+  var chain = Array.isArray(role.approval_chain) ? role.approval_chain : [];
+  var locs = Array.isArray(role.location_salary_targets) ? role.location_salary_targets : [];
+  var fmt = v => v ? Number(v).toLocaleString() : null;
+  var row = (label, value) => value ? `<div class="ra-row"><span class="ra-label">${label}</span><span class="ra-value">${value}</span></div>` : '';
+
+  var locsHtml = locs.length ? `<div class="ra-card">
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Location &amp; Salary Targets</div>
+    ${locs.map(l=>`<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+        <span style="font-size:13px;font-weight:600;color:#eef4ff">${l.location||'—'}</span>
+        <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">${l.currency||'USD'}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:12px">
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Base Salary</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_min)||'—'} – ${fmt(l.salary_max)||'—'}</span></div>
+        ${l.bonus_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Bonus Target</span><span style="font-weight:600;color:#eef4ff">${l.bonus_pct}% of base</span></div>`:''}
+        ${l.commission_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Target</span><span style="font-weight:600;color:#eef4ff">${l.commission_pct}% of base</span></div>`:''}
+      </div>
+    </div>`).join('')}
+  </div>` : '';
+
+  body.innerHTML = `
+    <div class="ra-header">
+      <div style="font-size:12px;opacity:.6;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">Sovos Talent Acquisition</div>
+      <h1>Requisition Approval</h1>
+      <p>${role.title||'—'}${role.department?' · '+role.department:''}</p>
+    </div>
+
+    <div class="ra-card">
+      ${row('Tracking #', role.tracking_number||null)}
+      ${row('Job Title', role.title||'—')}
+      ${row('Department', role.department||null)}
+      ${row('Job Function', role.job_function||null)}
+      ${row('Region', role.careers_region||role.region||null)}
+      ${row('Submitted by', role.opened_by_name||null)}
+      ${row('Hiring Manager', role.hiring_manager_name||null)}
+      ${row('Dept Leader', role.department_leader||null)}
+      ${row('FP&A Partner', role.fp_and_a_partner||null)}
+      ${row('Head of TA', role.head_of_ta||null)}
+      ${row('Head of HR', role.head_of_hr||null)}
+      ${row('HR Manager', role.hr_manager||null)}
+      ${row('Is Budgeted', role.is_budgeted===true?'Yes':role.is_budgeted===false?'No':null)}
+      ${row('One-Time Project', role.is_one_time_project===true?'Yes':role.is_one_time_project===false?'No':null)}
+      ${role.replacing_name ? row('Replacing', role.replacing_name+(role.replacing_last_day?' · Last day: '+role.replacing_last_day:'')) : ''}
+    </div>
+
+    ${locsHtml}
+
+    ${role.justification ? `<div class="ra-card">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Business Justification</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.75);line-height:1.6">${role.justification}</div>
+    </div>` : ''}
+
+    ${chain.length ? `<div class="ra-card">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Approval Chain</div>
+      ${chain.map((a,i)=>`<div style="font-size:13px;color:#eef4ff;padding:5px 0">${i+1}. ${a.approver_name||''}${a.approver_email?' — '+a.approver_email:''}</div>`).join('')}
+    </div>` : ''}
+
+    <div class="ra-card" id="ra-email-gate">
+      <div style="font-size:14px;font-weight:700;color:#eef4ff;margin-bottom:4px">Confirm your identity to respond</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:14px">Enter the email address you received this request at.</div>
+      <div class="ra-field" style="margin-bottom:12px">
+        <input id="ra-email-input" type="email" placeholder="your@sovos.com" autocomplete="email">
+      </div>
+      <div id="ra-email-error" style="display:none" class="ra-error"></div>
+      <button onclick="_verifyReqApprovalEmail('${roleId}')" style="width:100%;padding:12px;background:#00c4ee;color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Continue →</button>
+    </div>
+
+    <div id="ra-action-section" style="display:none">
+      <div class="ra-card">
+        <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.65);margin-bottom:8px">Comments (optional)</div>
+        <textarea id="ra-comments" rows="3" placeholder="Add any notes or reason for your decision..." style="width:100%;padding:11px 14px;border:1.5px solid rgba(255,255,255,.12);border-radius:10px;font-size:14px;font-family:inherit;background:rgba(255,255,255,.05);color:#eef4ff;outline:none;resize:vertical"></textarea>
+      </div>
+      <div id="ra-action-error" style="display:none" class="ra-error"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="ra-btn-approve" onclick="_submitReqApprovalPublic('${roleId}','approved')">✅ Approve</button>
+        <button class="ra-btn-changes" onclick="_submitReqApprovalPublic('${roleId}','changes_requested')">✏️ Request Changes</button>
+        <button class="ra-btn-reject" onclick="_submitReqApprovalPublic('${roleId}','rejected')">❌ Reject</button>
+      </div>
+    </div>`;
+
+  document.getElementById('ra-email-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') _verifyReqApprovalEmail(roleId);
+  });
+}
+
+var _ra_verified_approver = null;
+
+function _verifyReqApprovalEmail(roleId) {
+  var email = (document.getElementById('ra-email-input')?.value||'').trim().toLowerCase();
+  var errEl = document.getElementById('ra-email-error');
+  errEl.style.display = 'none';
+  if (!email) { errEl.textContent = 'Please enter your email address.'; errEl.style.display = 'block'; return; }
+  sb.from('roles').select('approval_chain').eq('id', roleId).maybeSingle().then(({data:role}) => {
+    var chain = Array.isArray(role?.approval_chain) ? role.approval_chain : [];
+    var match = chain.find(a => (a.approver_email||'').toLowerCase() === email);
+    if (!match && chain.length > 0) {
+      errEl.textContent = 'This email is not on the approval chain for this requisition. Please use the email this request was sent to.';
+      errEl.style.display = 'block';
+      return;
+    }
+    _ra_verified_approver = {name: match?.approver_name || email.split('@')[0], email};
+    document.getElementById('ra-email-gate').style.display = 'none';
+    document.getElementById('ra-action-section').style.display = 'block';
+  });
+}
+
+async function _submitReqApprovalPublic(roleId, action) {
+  if (!_ra_verified_approver) return;
+  var comments = (document.getElementById('ra-comments')?.value||'').trim() || null;
+  var errEl = document.getElementById('ra-action-error');
+  errEl.style.display = 'none';
+  if ((action === 'rejected' || action === 'changes_requested') && !comments) {
+    errEl.textContent = 'Please add a comment explaining your decision.';
+    errEl.style.display = 'block';
+    return;
+  }
+  var newStatus = action === 'approved' ? 'approved' : action === 'rejected' ? 'rejected' : 'draft';
+  var update = {req_status: newStatus};
+  if (action === 'approved') update.approved_at = new Date().toISOString();
+  if (action === 'rejected') update.rejected_at = new Date().toISOString();
+  if (comments) update.rejection_reason = comments;
+  var {error} = await sb.from('roles').update(update).eq('id', roleId);
+  if (error) { errEl.textContent = 'Error saving: ' + error.message; errEl.style.display = 'block'; return; }
+  try {
+    await sb.from('role_approvals').insert({
+      role_id: roleId,
+      approver_name: _ra_verified_approver.name,
+      approver_email: _ra_verified_approver.email,
+      action, notes: comments,
+      decided_at: new Date().toISOString()
+    });
+  } catch(e) {}
+  var icons = {approved:'✅', rejected:'❌', changes_requested:'✏️'};
+  var labels = {approved:'Requisition approved — thank you!', rejected:'Requisition rejected', changes_requested:'Changes requested'};
+  var colors = {approved:'#34d399', rejected:'#f87171', changes_requested:'#fbbf24'};
+  document.getElementById('req-ap-page-body').innerHTML = `<div style="text-align:center;padding:60px 20px">
+    <div style="font-size:56px;margin-bottom:16px">${icons[action]}</div>
+    <div style="font-size:20px;font-weight:700;color:${colors[action]}">${labels[action]}</div>
+    ${comments?`<div style="color:rgba(255,255,255,.5);margin-top:10px;font-size:14px;max-width:400px;margin-left:auto;margin-right:auto">"${comments}"</div>`:''}
+    <div style="color:rgba(255,255,255,.4);margin-top:14px;font-size:13px">You can close this page.</div>
+  </div>`;
 }
 
 async function _submitOfferApproval(offerId, action) {
