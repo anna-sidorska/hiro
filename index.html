@@ -4946,9 +4946,9 @@ function _rdS1Html(d) {
         </div>
       </div>
       <div class="card-body">
-                ${(slotsWebhook || _outlookAccount) ? `
         <div style="margin-bottom:14px;padding:10px 14px;background:var(--brand-light);border:1.5px solid #bfdbfe;border-radius:var(--r)">
-          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:8px">⚡ Smart Scheduler → Check HM Calendars</div>
+          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:8px">⚡ Smart Scheduler → Find Available Slots</div>
+          ${(slotsWebhook || _outlookAccount) ? `
           <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
             <div>
               <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">From</label>
@@ -4961,10 +4961,14 @@ function _rdS1Html(d) {
             <button class="btn btn-primary btn-sm" id="find-slots-btn" onclick="_rdFindMeetingSlots('${roleId}')">Find Slots</button>
           </div>
           <div id="slots-result" style="margin-top:8px"></div>
-        </div>` : `
-        <div style="margin-bottom:12px;padding:7px 12px;background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--r);font-size:11px;color:var(--text-3)">
-          ⚡ <a href="#" onclick="openSettingsModal('integrations');return false" style="color:var(--brand)">Connect Outlook</a> to check HM calendar availability automatically
-        </div>`}
+          ` : `
+          <div style="font-size:12px;color:var(--brand);padding:4px 0">
+            To find available slots automatically, connect Outlook or paste your Power Automate webhook URL in
+            <a href="#" onclick="openSettingsModal('integrations');return false" style="color:var(--brand);font-weight:600">Settings → Integrations</a>.
+            <br><span style="color:var(--text-3);font-size:11px">From your "Hiro - Find Meeting Slots" PA flow, copy the HTTP trigger URL and paste it there.</span>
+          </div>
+          `}
+        </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
           <div>
