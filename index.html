@@ -5647,7 +5647,7 @@ function _rdS4Html(d) {
     <!-- Smart Scheduler for interviews -->
     ${(_outlookAccount || localStorage.getItem('hiro_pa_slots_webhook'))?`
     <div id="s4-scheduler" style="margin-bottom:14px;padding:14px 16px;background:var(--brand-light);border:1.5px solid #bfdbfe;border-radius:var(--r)">
-      <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:10px">⚡ Smart Scheduler → Interview Availability</div>
+      <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:10px">⚡ Smart Scheduler → Find Slots & Send Self-Schedule to Candidate</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-2);display:block;margin-bottom:3px">From</label>
@@ -5709,7 +5709,10 @@ function _rdS4Html(d) {
             <td style="padding:10px 12px;font-size:12px">${c?.location||'—'}</td>
             <td style="padding:10px 12px;font-size:12px">${c?.notice_period_days?c.notice_period_days+'d':'—'}</td>
             <td style="padding:10px 12px">${hmCol}</td>
-            <td style="padding:10px 12px;text-align:right"><button class="btn btn-ghost btn-sm" style="font-size:11px">Open →</button></td>
+            <td style="padding:10px 12px;text-align:right;white-space:nowrap">
+              ${(_outlookAccount || localStorage.getItem('hiro_pa_slots_webhook')) ? `<button class="btn btn-outline btn-sm" style="font-size:11px;margin-right:4px" onclick="event.stopPropagation();(function(){var e=document.getElementById('s4-candidate-email');if(e){e.value='${a.candidates?.email||''}';e.closest('#s4-scheduler')?.scrollIntoView({behavior:'smooth',block:'center'});}})()">📨</button>` : ''}
+              <button class="btn btn-ghost btn-sm" style="font-size:11px">Open →</button>
+            </td>
           </tr>`;
         }).join('')}</tbody>
       </table>`:`<div class="card-body"><div class="text-muted">No candidates in interview stages yet — advance candidates from Pipeline (Stage 3)</div></div>`}
@@ -6310,7 +6313,7 @@ async function _rdFindMeetingSlots(roleId) {
       result.innerHTML = '<div style="font-size:12px;color:var(--amber)">No mutual free slots found in that range. Try extending the date window, or check calendars manually.</div>';
       return;
     }
-    result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">✓ Both free — click to pre-fill:</div>' +
+    result.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">✓ All attendees free — click a slot to book immediately:</div>' +
       suggestions.slice(0,8).map(s => {
         const start = new Date(s.meetingTimeSlot?.start?.dateTime + (s.meetingTimeSlot?.start?.timeZone === 'UTC' ? 'Z' : ''));
         const label = start.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' + start.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
@@ -6318,7 +6321,7 @@ async function _rdFindMeetingSlots(roleId) {
         const dateVal = start.getFullYear()+'-'+pad(start.getMonth()+1)+'-'+pad(start.getDate());
         const timeVal = pad(start.getHours())+':'+pad(start.getMinutes());
         const conf = s.confidence ? Math.round(s.confidence)+'%' : '';
-        return `<button class="btn btn-outline btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="document.getElementById('mtg-date').value='${dateVal}';document.getElementById('mtg-time').value='${timeVal}';toast('Slot pre-filled ✓')">${label}${conf?' <span style=\'font-size:10px;opacity:.6\'>(${conf})</span>':''}</button>`;
+        return `<button class="btn btn-primary btn-sm" style="margin:2px 4px 2px 0;font-size:12px" onclick="_rdPickAndBook('${roleId}','${dateVal}','${timeVal}')">📅 ${label}${conf?' <span style=\'font-size:10px;opacity:.7\'>(${conf})</span>':''}</button>`;
       }).join('');
   } catch(e) {
     result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error finding slots') + '</div>';
@@ -6327,6 +6330,13 @@ async function _rdFindMeetingSlots(roleId) {
   }
 }
 
+
+// One-click intake booking: set date/time then immediately save
+function _rdPickAndBook(roleId, dateVal, timeVal) {
+  var d = document.getElementById('mtg-date'); if(d) d.value = dateVal;
+  var t = document.getElementById('mtg-time'); if(t) t.value = timeVal;
+  _rdSaveMeeting(roleId);
+}
 
 // Stored in memory during session: slots found for self-schedule
 window._s4LastSlots = null;
@@ -6376,7 +6386,7 @@ async function _s4FindSlots(roleId) {
       '</div>' +
       (candidateEmail
         ? `<button class="btn btn-primary btn-sm" onclick="_s4SendSelfSchedule('${roleId}')">📨 Send Self-Schedule Link to ${candidateEmail}</button>`
-        : '<div style="font-size:11px;color:var(--text-3)">Enter candidate email above to send a self-schedule link.</div>'
+        : '<div style="font-size:11px;color:var(--text-3)">Click 📨 on a candidate above to pre-fill their email, then re-run Find Slots.</div>'
       );
   } catch(e) {
     if (result) result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error finding slots') + '</div>';
@@ -17913,6 +17923,7 @@ async function loadCfpCommunications(candidateId, candidateEmail, candidateName,
     '</div></div>' +
     '<div style="display:flex;gap:8px;margin-bottom:12px">' +
     '<button class="btn btn-outline btn-sm" onclick="openIcsFormFromCfp(\'' + candidateId + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + (roleTitle||'').replace(/'/g,"\\'") + '\')">📅 Schedule Interview</button>' +
+    ((_outlookAccount || localStorage.getItem('hiro_pa_slots_webhook')) && roleId ? '<button class="btn btn-primary btn-sm" style="background:var(--brand)" onclick="_cfpOpenSelfSchedule(\'' + appId + '\',\'' + candidateId + '\',\'' + (candidateEmail||'') + '\',\'' + (roleId||'') + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\')">⚡ Self-Schedule</button>' : '') +
     (roleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + candidateId + '\',\'' + (roleId||'') + '\',\'' + (jdId||'') + '\')">🔗 Send Eval Link</button>' : '') +
     '<button class="btn btn-outline" onclick="_cfpDownloadEml(\'' + candidateEmail + '\')" title="Downloads a .eml file — double-click it in Downloads to open in Outlook with full formatting">📨 Download .eml</button>' +
     '<button class="btn btn-primary" onclick="sendCfpEmail(\'' + candidateId + '\',\'' + candidateEmail + '\',\'' + (candidateName||'').replace(/'/g,"\\'") + '\',\'' + appId + '\')">' + (_outlookAccount ? '📧 Send via Outlook' : 'Send Email') + '</button>' +
