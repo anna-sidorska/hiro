@@ -17179,26 +17179,25 @@ async function loadCfpInterviews() {
     '</div>' +
     '<div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Interviewer email(s)</label>' +
     '<input id="ss-interviewer" type="text" placeholder="interviewer@sovos.com" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;box-sizing:border-box;background:var(--surface);color:var(--text)"></div>' +
-    (canFindSlots ?
-      // Smart find-slots mode
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
-        '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Search from</label>' +
-        '<input id="ss-from" type="date" value="' + fromD + '" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"></div>' +
-        '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Search to</label>' +
-        '<input id="ss-to" type="date" value="' + toD + '" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"></div>' +
-      '</div>' +
-      '<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="_cfpFindAndBookTab()">⚡ Find Slots & Create Link</button>'
-    :
-      // Manual mode — no calendar connected
-      '<div style="font-size:11px;color:var(--amber);margin-bottom:8px;padding:6px 10px;background:var(--amber-bg);border-radius:var(--r)">Connect Outlook or set up a Find Slots webhook in Settings to auto-find free slots. Or add slots manually:</div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
-      '<input id="ss-date" type="date" min="' + fromD + '" style="flex:1;min-width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
-      '<input id="ss-time" type="time" value="10:00" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
-      '<button class="btn btn-outline btn-sm" onclick="_cfpAddSlot()">+ Add</button>' +
-      '</div>' +
-      '<div id="ss-slot-list" style="margin-bottom:10px"></div>' +
-      '<button class="btn btn-primary btn-sm" onclick="_cfpSendSelfSchedule()">📨 Send Link & Open Outlook</button>'
-    ) +
+    // Always show smart find-slots mode
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
+      '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Search from</label>' +
+      '<input id="ss-from" type="date" value="' + fromD + '" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"></div>' +
+      '<div><label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:3px">Search to</label>' +
+      '<input id="ss-to" type="date" value="' + toD + '" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)"></div>' +
+    '</div>' +
+    (!canFindSlots ? '<div style="font-size:11px;color:var(--brand);margin-bottom:8px;padding:6px 10px;background:var(--brand-light);border:1px solid #bfdbfe;border-radius:var(--r)">⚡ To auto-find free slots, connect Outlook or paste your "Hiro - Find Meeting Slots" webhook URL in <a href="#" onclick="openSettingsModal(\'integrations\');return false" style="color:var(--brand);font-weight:600">Settings → Integrations</a>.</div>' : '') +
+    '<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:10px" onclick="_cfpFindAndBookTab()">⚡ Find Slots & Create Self-Schedule Link</button>' +
+    // Manual slots as secondary option
+    '<details style="margin-bottom:8px"><summary style="font-size:11px;color:var(--text-3);cursor:pointer;user-select:none">Or add specific slots manually</summary>' +
+    '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">' +
+    '<input id="ss-date" type="date" min="' + fromD + '" style="flex:1;min-width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+    '<input id="ss-time" type="time" value="10:00" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
+    '<button class="btn btn-outline btn-sm" onclick="_cfpAddSlot()">+ Add</button>' +
+    '</div>' +
+    '<div id="ss-slot-list" style="margin-top:6px;margin-bottom:6px"></div>' +
+    '<button class="btn btn-outline btn-sm" style="width:100%" onclick="_cfpSendSelfSchedule()">📨 Send Manual Slots & Open Outlook</button>' +
+    '</details>' +
     '<div id="ss-result" style="margin-top:8px;font-size:12px"></div>' +
     '</div>';
 
@@ -17209,7 +17208,11 @@ async function loadCfpInterviews() {
 // Find slots from the Interviews tab (same logic as old panel but reads tab form IDs)
 async function _cfpFindAndBookTab() {
   var webhook = localStorage.getItem('hiro_pa_slots_webhook');
-  if (!_outlookAccount && !webhook) { toast('Connect Outlook or set up Find Slots webhook in Settings','err'); return; }
+  if (!_outlookAccount && !webhook) {
+    var result = document.getElementById('ss-result');
+    if (result) result.innerHTML = '<div style="padding:8px 10px;background:var(--brand-light);border:1px solid #bfdbfe;border-radius:var(--r);font-size:12px;color:var(--brand)">To auto-find slots, connect Outlook or paste your "Hiro - Find Meeting Slots" PA webhook URL in <a href="#" onclick="openSettingsModal(\'integrations\');return false" style="font-weight:600;color:var(--brand)">Settings → Integrations</a>.</div>';
+    return;
+  }
   var attendees = (document.getElementById('ss-interviewer') || {}).value?.trim();
   if (!attendees) { toast('Enter interviewer email first','err'); return; }
   var from     = (document.getElementById('ss-from') || {}).value;
