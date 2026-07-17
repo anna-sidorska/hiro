@@ -15294,8 +15294,13 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
         .eq('id', booking.id)
         .eq('calendar_invite_sent', false)
         .select('id');
-      claimed = claimRes.data && claimRes.data.length > 0;
-    } catch(e) { claimed = false; }
+      if (claimRes.error) {
+        // Column may not exist yet — fail open and send the invite anyway
+        claimed = true;
+      } else {
+        claimed = claimRes.data && claimRes.data.length > 0;
+      }
+    } catch(e) { claimed = true; } // fail open — still fire the webhook
     if (!claimed) {
       return { ok: true, method: 'already_sent' };
     }
@@ -17372,7 +17377,7 @@ async function _cfpFindAndBook(appId, roleId) {
     });
     // Create booking link in Supabase
     var uid = (await sb.auth.getUser()).data.user?.id;
-    var ins = await sb.from('booking_links').insert({ role_id: roleId||null, candidate_email: candEmail, interviewer_emails: attendees, slots: slots, duration_mins: duration, status: 'pending', created_by: uid }).select('id').maybeSingle();
+    var ins = await _insertBookingLink({ role_id: roleId||null, candidate_email: candEmail, interviewer_emails: attendees, slots: slots, duration_mins: duration, status: 'pending', created_by: uid });
     if (ins.error) throw new Error(ins.error.message);
     var bookUrl = window.location.origin + window.location.pathname + '?book=' + ins.data.id;
     var sSubj = encodeURIComponent('Interview Scheduling – Sovos');
