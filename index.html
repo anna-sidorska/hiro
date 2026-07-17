@@ -2266,6 +2266,9 @@ function renderSidebarNav() {
       navHtml += '<button class="sb-item" id="nav-hr_portal" onclick="nav(\'hr_portal\',this)">' + icon.hr_portal + ' HR Portal</button>';
       navHtml += '<button class="sb-item" id="nav-agencies" onclick="nav(\'agencies\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Agencies</button>';
     }
+    if (_r === 'admin' || _r === 'hr' || _r === 'recruiter' || _r === 'manager') {
+      navHtml += '<button class="sb-item" id="nav-business_portal" onclick="nav(\'business_portal\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8h.01M6 12h.01M10 8h8M10 12h5"/></svg> Business Portal</button>';
+    }
     if (_r === 'coordinator') {
       navHtml += '<button class="sb-item" id="nav-scheduling_hub" onclick="nav(\'scheduling_hub\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Scheduling Hub</button>';
     }
@@ -2335,7 +2338,7 @@ function refreshCurrentPage() {
     tasks: renderTasks, reports: renderReports, email_templates: renderEmailTemplates,
     jd_library: renderJdLibrary, hm_roles: renderHmRoles, hm_interviews: renderHmInterviews,
     team: renderTeam, communications: renderCommunications, integrations: renderIntegrations,
-    gdpr: renderGdpr, hr_portal: renderHrPortal, team_users: renderTeamUsers,
+    gdpr: renderGdpr, hr_portal: renderHrPortal, team_users: renderTeamUsers, business_portal: renderBusinessPortal,
     offer_outcomes: renderOfferOutcomes,
     management_view: renderManagement, scheduling_hub: renderSchedulingHub,
     recruiter_stats: renderRecruiterStats, roles_tracker: renderRolesTracker,
@@ -2365,7 +2368,7 @@ function nav(page, el) {
     email_templates:'Email Templates', jd_library:'JD Library',
     hm_roles:'My Roles', hm_interviews:'My Interviews', team:'Team',
     communications:'Communications', integrations:'Integrations', gdpr:'GDPR',
-    hr_portal:'HR Portal', offer_outcomes:'Offer Outcomes', post_offer:'Post-Offer Engagement', probation:'Probation Tracker', fpa_report:'FP&A Report', recruiter_dashboard:'Recruiter Performance', agencies:'Agency Tracker', hm_satisfaction:'HM Satisfaction',
+    hr_portal:'HR Portal', business_portal:'Business Portal', offer_outcomes:'Offer Outcomes', post_offer:'Post-Offer Engagement', probation:'Probation Tracker', fpa_report:'FP&A Report', recruiter_dashboard:'Recruiter Performance', agencies:'Agency Tracker', hm_satisfaction:'HM Satisfaction',
     home:'Home', team_users:'Team & Users', management_view:'Overview', scheduling_hub:'Scheduling Hub', recruiter_stats:'Recruiter Stats', roles_tracker:'Roles Tracker', hiring_dashboard:'Hiring Dashboard',
   };
   document.getElementById('page-title').textContent = titles[page]||page;
@@ -2395,6 +2398,7 @@ function nav(page, el) {
     integrations: renderIntegrations,
     gdpr: renderGdpr,
     hr_portal: renderHrPortal,
+    business_portal: renderBusinessPortal,
     offer_outcomes: renderOfferOutcomes,
     post_offer: renderPostOffer,
     probation: renderProbationDashboard,
@@ -8788,7 +8792,15 @@ async function renderFpaReport() {
   _pushHistory('fpa_report','FP&A Report',renderFpaReport);
   document.getElementById('page-title').textContent = 'FP&A Report';
   document.getElementById('page-sub').textContent = 'Headcount & cost tracking for Finance';
-  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-outline btn-sm" onclick="_exportFpacsv()">Export CSV</button>';
+
+  // FP&A partner filter
+  var _fpaFilter = window._fpaPartnerFilter || '';
+  var _fpaPartners = ['Claire Warner','Aaron Grassi','Jason Luginbuhl','Jacob Barden','Mathew Aultman'];
+  var filterSelect = `<select onchange="window._fpaPartnerFilter=this.value;renderFpaReport()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text);margin-right:8px;cursor:pointer">
+    <option value="">All FP&A Partners</option>
+    ${_fpaPartners.map(p=>`<option value="${p}" ${_fpaFilter===p?'selected':''}>${p}</option>`).join('')}
+  </select>`;
+  document.getElementById('topbar-actions').innerHTML = filterSelect + '<button class="btn btn-outline btn-sm" onclick="_exportFpacsv()">Export CSV</button>';
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
   var [rolesRes, appsRes, offersRes] = await Promise.all([
@@ -8797,9 +8809,15 @@ async function renderFpaReport() {
     sb.from('applications').select('offer_salary,offer_currency,role_id,stage,candidates(location)').eq('stage','offer'),
   ]);
 
-  var roles = rolesRes.data || [];
+  var allRoles = rolesRes.data || [];
+  var roles = _fpaFilter ? allRoles.filter(r => r.fp_and_a_partner === _fpaFilter) : allRoles;
   var apps = appsRes.data || [];
   var offers = offersRes.data || [];
+  // If filtered, restrict offers to matched roles
+  if (_fpaFilter) {
+    var filteredRoleIds = new Set(roles.map(r=>r.id));
+    offers = offers.filter(o => filteredRoleIds.has(o.role_id));
+  }
 
   var openRoles = roles.filter(r=>r.status==='open');
   var totalHC = openRoles.reduce((s,r)=>s+(r.headcount||1),0);
@@ -8861,6 +8879,7 @@ async function renderFpaReport() {
   }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px">No active offers</td></tr>';
 
   document.getElementById('content').innerHTML = `
+    ${_fpaFilter ? `<div style="background:linear-gradient(135deg,var(--brand),#3b82f6);color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><span>👤</span> Viewing FP&A portfolio for <strong>${_fpaFilter}</strong> <button onclick="window._fpaPartnerFilter='';renderFpaReport()" style="margin-left:auto;background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:99px;cursor:pointer;font-size:11px">Clear filter</button></div>` : ''}
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
       <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${totalHC}</div><div class="kpi-label">Open Headcount</div></div>
       <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${budgetedRoles.length}</div><div class="kpi-label">Budgeted Roles</div></div>
@@ -8903,6 +8922,211 @@ async function _exportFpacsv() {
   var blob = new Blob([rows.join('\n')], {type:'text/csv'});
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'hiro-fpa-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
   toast('CSV exported ✓');
+}
+
+// ── BUSINESS PORTAL ──────────────────────────────────────────
+// Role-based view for HMs, ELT, Head of HR, HR Generalists, FP&A
+async function renderBusinessPortal() {
+  _pushHistory('business_portal','Business Portal',renderBusinessPortal);
+  document.getElementById('page-title').textContent = 'Business Portal';
+  document.getElementById('page-sub').textContent = 'Role health, pipeline status & hiring intelligence';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  var _r = currentUser?.role || '';
+  var _isManager = _r === 'manager';
+
+  // ELT/dept mapping (same as req form)
+  var _DEPT_ELT = {
+    'Business Development':'Chris Lynch','Client Support':'Gregg Spratto',
+    'Corporate Marketing/Enablement':'Chris Lynch','Customer Success/Renewals':'Alice Katwan',
+    'eCommerce':'Ryan Buma','Executive Office/Strategy':'Kevin Akeroyd',
+    'Finance/Accounting/Business Apps':'David Woodworth','IT Operations/InfoSec':'Gregg Spratto',
+    'Legal':'Justin Pentz','Partners/Alliances':'Chris Clinton',
+    'Product Development':'Gregg Spratto','Product Management':'Gregg Spratto',
+    'Professional/Managed Services':'Eva Krauss','Regulatory Analysis & Design':'Eva Krauss',
+    'Revenue Operations':'Alice Katwan','Sales - Direct':'Alice Katwan',
+    'Sales Engineering':'Alice Katwan','Talent':'Colleen Schlagel','Transformation':'Eva Krauss'
+  };
+  var _ELT_LEADERS = [...new Set(Object.values(_DEPT_ELT))].sort();
+  var _FPA_PARTNERS = ['Claire Warner','Aaron Grassi','Jason Luginbuhl','Jacob Barden','Mathew Aultman'];
+
+  // Filters
+  var _bpElt  = window._bpElt  || '';
+  var _bpDept = window._bpDept || '';
+  var _bpFpa  = window._bpFpa  || '';
+
+  // Fetch data in parallel
+  var [rolesRes, appsRes, profilesRes, nhpRes] = await Promise.all([
+    sb.from('roles').select('*, profiles!hiring_manager_id(full_name, email)').eq('status','open').order('created_at',{ascending:false}),
+    sb.from('applications').select('stage,role_id,created_at,updated_at,offer_salary'),
+    sb.from('profiles').select('id,full_name,email,role').in('role',['recruiter','admin']),
+    sb.from('new_hire_progress').select('role_id,start_date,candidate_id'),
+  ]);
+
+  var allRoles = rolesRes.data || [];
+  var allApps  = appsRes.data || [];
+  var profiles = profilesRes.data || [];
+  var nhps     = nhpRes.data || [];
+
+  // Build predicted TTF from historical hired data (by dept)
+  var hiredApps = allApps.filter(a=>a.stage==='hired'&&a.updated_at&&a.created_at);
+  var historicalTTF = {}; // dept → [days]
+  hiredApps.forEach(a=>{
+    var role = allRoles.find(r=>r.id===a.role_id);
+    if (!role) return;
+    var dept = role.department||'Unknown';
+    var days = Math.round((new Date(a.updated_at)-new Date(a.created_at))/86400000);
+    if (days>0 && days<500) { historicalTTF[dept]=historicalTTF[dept]||[]; historicalTTF[dept].push(days); }
+  });
+  var predictedTTF = {}; // dept → avg days
+  Object.entries(historicalTTF).forEach(([d,arr])=>{ predictedTTF[d]=Math.round(arr.reduce((s,v)=>s+v,0)/arr.length); });
+
+  // Apply role-based auto-filter for managers
+  var visibleRoles = allRoles;
+  if (_isManager) {
+    var hmName = currentUser?.user_metadata?.full_name || currentUser?.email;
+    visibleRoles = allRoles.filter(r => {
+      var hmFull = r.profiles?.full_name || '';
+      var hmEmail = r.profiles?.email || '';
+      return hmFull === hmName || hmEmail === currentUser?.email || r.hm_name === hmName;
+    });
+  }
+
+  // Apply manual filters (admin/hr/recruiter)
+  if (!_isManager) {
+    if (_bpElt)  visibleRoles = visibleRoles.filter(r=>_DEPT_ELT[r.department||'']=== _bpElt);
+    if (_bpDept) visibleRoles = visibleRoles.filter(r=>r.department===_bpDept);
+    if (_bpFpa)  visibleRoles = visibleRoles.filter(r=>r.fp_and_a_partner===_bpFpa);
+  }
+
+  // Build per-role pipeline counts
+  var stageCounts = {}; // roleId → {stage:count}
+  allApps.forEach(a=>{
+    if (!stageCounts[a.role_id]) stageCounts[a.role_id]={};
+    stageCounts[a.role_id][a.stage]=(stageCounts[a.role_id][a.stage]||0)+1;
+  });
+
+  // Pending starters per role
+  var pendingStarters = {}; // roleId → count
+  nhps.forEach(n=>{ pendingStarters[n.role_id]=(pendingStarters[n.role_id]||0)+1; });
+
+  // Recruiter lookup
+  var recruiterMap = {}; // id → name
+  profiles.forEach(p=>{ recruiterMap[p.id]=p.full_name||p.email; });
+
+  var today = new Date();
+  var todayStr = today.toISOString().slice(0,10);
+
+  var ACTIVE_STAGES = ['applied','screening','phone_screen','interview','assessment','offer'];
+  var STAGE_LABELS  = {applied:'Applied',screening:'Screening',phone_screen:'Phone',interview:'Interview',assessment:'Assessment',offer:'Offer'};
+
+  // RAG SLA helper
+  var ragStatus = function(daysOpen, target) {
+    if (!target) target = 60;
+    if (daysOpen <= target * 0.9) return {color:'#16a34a',bg:'#f0fdf4',label:'On Track'};
+    if (daysOpen <= target * 1.2) return {color:'#d97706',bg:'#fffbeb',label:'At Risk'};
+    return {color:'#dc2626',bg:'#fef2f2',label:'Overdue'};
+  };
+
+  // Mini funnel helper
+  var miniFunnel = function(roleId) {
+    var sc = stageCounts[roleId] || {};
+    var active = ACTIVE_STAGES.filter(s=>sc[s]>0);
+    if (!active.length) return '<span style="font-size:11px;color:var(--text-3)">No pipeline</span>';
+    return active.map(s=>`<span title="${STAGE_LABELS[s]}" style="display:inline-flex;align-items:center;gap:2px;background:var(--surface-2);border-radius:4px;padding:2px 5px;font-size:10px;font-weight:600;margin-right:2px"><span style="color:var(--brand)">${sc[s]}</span><span style="color:var(--text-3)">${STAGE_LABELS[s]}</span></span>`).join('');
+  };
+
+  // KPIs for visible roles
+  var totalOpen = visibleRoles.length;
+  var avgDaysOpen = visibleRoles.length ? Math.round(visibleRoles.reduce((s,r)=>s+Math.round((today-new Date(r.created_at))/86400000),0)/visibleRoles.length) : 0;
+  var rolesInOffer = visibleRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
+  var rolesPendingStart = visibleRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
+  var overdueRoles = visibleRoles.filter(r=>{
+    var d = Math.round((today-new Date(r.created_at))/86400000);
+    return d > (r.tth_target_days||60)*1.2;
+  }).length;
+
+  // Filter bar (non-managers only)
+  var filterBar = _isManager ? '' : `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <span style="font-size:12px;color:var(--text-3);font-weight:600">Filter:</span>
+    <select onchange="window._bpElt=this.value;renderBusinessPortal()" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
+      <option value="">All ELT Leaders</option>${_ELT_LEADERS.map(e=>`<option value="${e}" ${_bpElt===e?'selected':''}>${e}</option>`).join('')}
+    </select>
+    <select onchange="window._bpDept=this.value;renderBusinessPortal()" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
+      <option value="">All Departments</option>${[...new Set(allRoles.map(r=>r.department).filter(Boolean))].sort().map(d=>`<option value="${d}" ${_bpDept===d?'selected':''}>${d}</option>`).join('')}
+    </select>
+    <select onchange="window._bpFpa=this.value;renderBusinessPortal()" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
+      <option value="">All FP&A Partners</option>${_FPA_PARTNERS.map(p=>`<option value="${p}" ${_bpFpa===p?'selected':''}>${p}</option>`).join('')}
+    </select>
+    ${(_bpElt||_bpDept||_bpFpa)?`<button onclick="window._bpElt='';window._bpDept='';window._bpFpa='';renderBusinessPortal()" class="btn btn-outline btn-sm">✕ Clear</button>`:''}
+    <span style="margin-left:auto;font-size:12px;color:var(--text-3)">${visibleRoles.length} role${visibleRoles.length!==1?'s':''}</span>
+  </div>`;
+
+  // Role rows
+  var rows = visibleRoles.map(function(r) {
+    var daysOpen = Math.round((today - new Date(r.created_at)) / 86400000);
+    var rag = ragStatus(daysOpen, r.tth_target_days);
+    var sc = stageCounts[r.id] || {};
+    var activeTotal = ACTIVE_STAGES.reduce((s,st)=>s+(sc[st]||0),0);
+    var offerCount = sc.offer||0;
+    var pendStart = pendingStarters[r.id]||0;
+    var recruiterName = r.assigned_recruiter_id ? (recruiterMap[r.assigned_recruiter_id]||'Assigned') : '<span style="color:var(--text-3);font-style:italic">Unassigned</span>';
+    var hmName = r.profiles?.full_name || r.hm_name || '—';
+    var dept = r.department || '—';
+    var pred = predictedTTF[r.department] ? predictedTTF[r.department]+'d' : '—';
+    var eltLeader = _DEPT_ELT[r.department||''] || '—';
+    var tthTarget = r.tth_target_days || 60;
+
+    return `<tr onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+      <td style="min-width:180px">
+        <div style="font-weight:600;color:var(--brand);cursor:pointer" onclick="viewRoleDetail('${r.id}')">${r.title}</div>
+        <div style="font-size:11px;color:var(--text-3)">${dept}</div>
+      </td>
+      <td style="font-size:12px">${hmName}</td>
+      <td style="text-align:center">
+        <div style="font-size:16px;font-weight:700;color:${daysOpen>tthTarget?'#dc2626':'var(--text-1)'}">${daysOpen}</div>
+        <div style="font-size:9px;color:var(--text-3)">of ${tthTarget}d target</div>
+      </td>
+      <td style="text-align:center">
+        <span style="background:${rag.bg};color:${rag.color};font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap">${rag.label}</span>
+      </td>
+      <td>${miniFunnel(r.id)}<div style="font-size:10px;color:var(--text-3);margin-top:2px">${activeTotal} active</div></td>
+      <td style="font-size:12px">${recruiterName}</td>
+      <td style="text-align:center">${offerCount>0?`<span style="background:#fffbeb;color:#d97706;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${offerCount}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+      <td style="text-align:center">${pendStart>0?`<span style="background:#f0fdf4;color:#16a34a;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${pendStart}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+      <td style="text-align:center;font-size:12px;color:${pred!=='—'&&parseInt(pred)<daysOpen?'#dc2626':'var(--text-2)'}">
+        <span title="Avg TTF for ${dept} roles based on historical data" style="cursor:help">${pred}</span>
+      </td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-3)">${_isManager?'No open roles assigned to you yet.':'No open roles match the current filters.'}</td></tr>`;
+
+  document.getElementById('content').innerHTML = `
+    ${filterBar}
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+      <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${totalOpen}</div><div class="kpi-label">Open Roles</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:var(--text-2)">${avgDaysOpen}d</div><div class="kpi-label">Avg Days Open</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${overdueRoles}</div><div class="kpi-label">Overdue SLA</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#d97706">${rolesInOffer}</div><div class="kpi-label">Roles w/ Offer</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${rolesPendingStart}</div><div class="kpi-label">Pending Starters</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Role Health</div>
+        <div style="font-size:11px;color:var(--text-3)">SLA target: default 60d · <span style="background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">On Track</span> &lt;90% · <span style="background:#fffbeb;color:#d97706;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">At Risk</span> 90–120% · <span style="background:#fef2f2;color:#dc2626;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">Overdue</span> &gt;120%</div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="min-width:900px">
+          <thead><tr>
+            <th>Role / Dept</th><th>Hiring Manager</th><th style="text-align:center">Days Open</th>
+            <th style="text-align:center">SLA</th><th>Pipeline</th><th>Recruiter</th>
+            <th style="text-align:center">Offers</th><th style="text-align:center">Starters</th>
+            <th style="text-align:center" title="Predicted time to fill based on historical dept data">Pred. TTF</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ── RECRUITER PERFORMANCE DASHBOARD ──────────────────────────
