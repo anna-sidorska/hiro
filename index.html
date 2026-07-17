@@ -16310,12 +16310,13 @@ async function renderHrPortal() {
   // Tab navigation within HR Portal
   var _hrTab = window._hrPortalTab || 'requisitions';
   var tabBar = `<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px">
-    ${[['requisitions','📋 Requisitions'],['post_offer','👤 Post-Offer Engagement'],['probation','✅ Probation']].map(([id,label])=>`
+    ${[['requisitions','📋 Requisitions'],['post_offer','👤 Post-Offer Engagement'],['probation','✅ Probation'],['cohort','📅 New Starters']].map(([id,label])=>`
     <button onclick="window._hrPortalTab='${id}';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${_hrTab===id?'700':'500'};color:${_hrTab===id?'var(--brand)':'var(--text-3)'};border-bottom:${_hrTab===id?'2px solid var(--brand)':'2px solid transparent'};margin-bottom:-2px">${label}</button>`).join('')}
   </div>`;
 
   if (_hrTab === 'post_offer') { document.getElementById('content').innerHTML = tabBar + '<div id="hr-tab-content"><div class="loading"><div class="spinner"></div></div></div>'; await _renderPostOfferInPortal(); return; }
   if (_hrTab === 'probation') { document.getElementById('content').innerHTML = tabBar + '<div id="hr-tab-content"><div class="loading"><div class="spinner"></div></div></div>'; await _renderProbationInPortal(); return; }
+  if (_hrTab === 'cohort') { document.getElementById('content').innerHTML = tabBar + '<div id="hr-tab-content"><div class="loading"><div class="spinner"></div></div></div>'; await _renderCohortTrackerInPortal(); return; }
 
   document.getElementById('content').innerHTML = tabBar + '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
@@ -16371,7 +16372,7 @@ async function renderHrPortal() {
   }).join('');
 
   var _hrTabBar = document.querySelector('[onclick*="_hrPortalTab"]')?.closest('div') || null;
-  var _tabHtml = _hrTabBar ? _hrTabBar.outerHTML : `<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px"><button onclick="window._hrPortalTab='requisitions';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--brand);border-bottom:2px solid var(--brand);margin-bottom:-2px">📋 Requisitions</button><button onclick="window._hrPortalTab='post_offer';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-2px">👤 Post-Offer Engagement</button><button onclick="window._hrPortalTab='probation';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-2px">✅ Probation</button></div>`;
+  var _tabHtml = _hrTabBar ? _hrTabBar.outerHTML : `<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px"><button onclick="window._hrPortalTab='requisitions';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--brand);border-bottom:2px solid var(--brand);margin-bottom:-2px">📋 Requisitions</button><button onclick="window._hrPortalTab='post_offer';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-2px">👤 Post-Offer Engagement</button><button onclick="window._hrPortalTab='probation';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-2px">✅ Probation</button><button onclick="window._hrPortalTab='cohort';renderHrPortal()" style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:2px solid transparent;margin-bottom:-2px">📅 New Starters</button></div>`;
 
   document.getElementById('content').innerHTML = _tabHtml +
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">' +
@@ -16432,6 +16433,213 @@ async function _renderProbationInPortal() {
   container.innerHTML = `<div class="card"><div class="card-header"><div class="card-title">All Probation Reviews</div></div>
     <table><thead><tr><th>Candidate</th><th>Role</th><th>Review</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-3)">No probation reviews yet</td></tr>'}</tbody></table></div>`;
+}
+
+// ── COHORT TRACKER ──────────────────────────────────────────────────────────
+// Cohorts run on the 1st and 3rd Monday of every month (F24 = 24 per FY)
+function _getCohortDatesForYear(fyStartDate, fyEndDate) {
+  var dates = [];
+  var d = new Date(fyStartDate);
+  d.setDate(1);
+  while (d <= new Date(fyEndDate)) {
+    var y = d.getFullYear(), m = d.getMonth();
+    // 1st Monday of month
+    var first = new Date(y, m, 1);
+    var daysUntilMon = (8 - first.getDay()) % 7 || 7;
+    var mon1 = new Date(y, m, daysUntilMon === 7 ? 1 : 1 + daysUntilMon);
+    if (mon1.getDay() !== 1) { var off = (8-first.getDay())%7; mon1 = new Date(y,m,1+off); }
+    // safer: find 1st Monday
+    var t = new Date(y, m, 1);
+    while (t.getDay() !== 1) t.setDate(t.getDate()+1);
+    var firstMon = new Date(t);
+    var thirdMon = new Date(t); thirdMon.setDate(t.getDate()+14);
+    var fmt = function(dt) { return dt.toISOString().slice(0,10); };
+    if (new Date(fmt(firstMon)) >= new Date(fyStartDate) && new Date(fmt(firstMon)) <= new Date(fyEndDate)) dates.push(fmt(firstMon));
+    if (new Date(fmt(thirdMon)) >= new Date(fyStartDate) && new Date(fmt(thirdMon)) <= new Date(fyEndDate)) dates.push(fmt(thirdMon));
+    d.setMonth(d.getMonth()+1);
+  }
+  return dates;
+}
+
+function _assignCohort(startDate, cohortDates) {
+  // Return the cohort date closest to but not after start_date, within same month
+  if (!startDate) return null;
+  var sd = startDate.slice(0,10);
+  var sdDate = new Date(sd);
+  var sdMonth = sdDate.getMonth(), sdYear = sdDate.getFullYear();
+  var candidates = cohortDates.filter(function(c) {
+    var cd = new Date(c);
+    return cd.getMonth()===sdMonth && cd.getFullYear()===sdYear;
+  });
+  if (!candidates.length) return null;
+  // Pick the one on or before start_date, else the first one
+  var before = candidates.filter(function(c) { return c <= sd; });
+  return before.length ? before[before.length-1] : candidates[0];
+}
+
+async function _renderCohortTrackerInPortal() {
+  var container = document.getElementById('hr-tab-content');
+  if (!container) return;
+
+  // Determine fiscal year bounds — Sovos FY runs Feb–Jan
+  var today = new Date();
+  var fyYear = today.getMonth() >= 1 ? today.getFullYear() : today.getFullYear()-1; // Feb=month 1
+  var fyStart = fyYear + '-02-01';
+  var fyEnd = (fyYear+1) + '-01-31';
+  var fyLabel = 'FY' + String(fyYear+1).slice(2); // e.g. FY27
+
+  var cohortDates = _getCohortDatesForYear(fyStart, fyEnd);
+  var todayStr = today.toISOString().slice(0,10);
+
+  // Fetch new hires
+  var {data:hires, error} = await sb.from('new_hire_progress')
+    .select('*, candidates(first_name,last_name,location), roles(title,department)')
+    .gte('start_date', fyStart)
+    .lte('start_date', fyEnd)
+    .order('start_date', {ascending:true});
+
+  if (error) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load cohort data</div><div class="empty-sub">' + error.message + '</div></div>';
+    return;
+  }
+
+  // Group hires by assigned cohort date
+  var byDate = {};
+  cohortDates.forEach(function(d) { byDate[d] = []; });
+  (hires||[]).forEach(function(h) {
+    var cohort = (h.cohort_date && cohortDates.includes(h.cohort_date))
+      ? h.cohort_date
+      : _assignCohort(h.start_date, cohortDates);
+    if (cohort) byDate[cohort] = byDate[cohort] || [];
+    if (cohort) byDate[cohort].push(h);
+    else { (byDate['unassigned'] = byDate['unassigned']||[]).push(h); }
+  });
+
+  // Stats
+  var totalHires = (hires||[]).length;
+  var upcomingDates = cohortDates.filter(function(d){ return d >= todayStr; });
+  var nextCohort = upcomingDates[0] || null;
+  var nextCount = nextCohort ? (byDate[nextCohort]||[]).length : 0;
+  var pastDates = cohortDates.filter(function(d){ return d < todayStr; });
+  var completedCohorts = pastDates.filter(function(d){ return (byDate[d]||[]).length > 0; }).length;
+
+  // Month names
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var fmtCohortDate = function(d) {
+    var dt = new Date(d+'T12:00:00');
+    return MONTHS[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear();
+  };
+  var isWeek1 = function(d) {
+    var dt = new Date(d+'T12:00:00');
+    var t2 = new Date(dt.getFullYear(), dt.getMonth(), 1);
+    while(t2.getDay()!==1) t2.setDate(t2.getDate()+1);
+    return dt.getDate() === t2.getDate();
+  };
+
+  // Render cohort cards
+  var cohortCards = cohortDates.map(function(d) {
+    var members = byDate[d] || [];
+    var isPast = d < todayStr;
+    var isNext = d === nextCohort;
+    var isCurrent = d === todayStr;
+    var week = isWeek1(d) ? 'Cohort 1' : 'Cohort 2';
+    var dt = new Date(d+'T12:00:00');
+    var monthLabel = MONTHS[dt.getMonth()] + ' ' + dt.getFullYear();
+
+    var borderColor = isCurrent||isNext ? 'var(--brand)' : isPast ? 'var(--border)' : 'var(--border)';
+    var headerBg = isCurrent||isNext ? 'linear-gradient(135deg,var(--brand),#3b82f6)' : isPast ? 'var(--surface-2)' : 'var(--surface)';
+    var headerColor = isCurrent||isNext ? '#fff' : 'var(--text-1)';
+
+    var memberRows = members.length ? members.map(function(h) {
+      var name = h.candidates ? h.candidates.first_name+' '+h.candidates.last_name : 'Unknown';
+      var role = h.roles ? h.roles.title : '—';
+      var dept = h.roles ? h.roles.department||'' : '';
+      var loc = h.country || (h.candidates && h.candidates.location) || '—';
+      return `<tr>
+        <td style="font-weight:600;font-size:13px">${name}</td>
+        <td style="font-size:12px;color:var(--text-2)">${role}</td>
+        <td style="font-size:12px;color:var(--text-3)">${dept}</td>
+        <td style="font-size:12px"><span style="background:#eff6ff;color:#1d4ed8;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600">${loc}</span></td>
+        <td style="font-size:11px;color:var(--text-3)">${h.start_date||'—'}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-3);font-size:12px">No new starters assigned to this cohort yet</td></tr>`;
+
+    return `<div class="card" style="margin-bottom:12px;border:1.5px solid ${borderColor};overflow:hidden">
+      <div style="background:${headerBg};padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:${isCurrent||isNext?'rgba(255,255,255,.7)':'var(--text-3)'};text-transform:uppercase;letter-spacing:.05em">${monthLabel} · ${week}</div>
+          <div style="font-size:16px;font-weight:700;color:${headerColor};margin-top:2px">${fmtCohortDate(d)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          ${isNext?'<span style="background:rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px">Next cohort</span>':''}
+          ${isCurrent?'<span style="background:rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px">Today!</span>':''}
+          ${isPast&&!isCurrent?'<span style="background:var(--surface);color:var(--text-3);font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px">Past</span>':''}
+          <span style="background:${members.length?'#f0fdf4':'var(--surface)'};color:${members.length?'#16a34a':'var(--text-3)'};font-size:14px;font-weight:700;padding:4px 12px;border-radius:99px;min-width:32px;text-align:center">${members.length}</span>
+        </div>
+      </div>
+      ${members.length||!isPast?`<div style="overflow-x:auto"><table style="width:100%"><thead><tr style="background:var(--surface-2)"><th style="padding:8px 14px;font-size:11px;text-align:left">Name</th><th style="padding:8px 14px;font-size:11px;text-align:left">Role</th><th style="padding:8px 14px;font-size:11px;text-align:left">Department</th><th style="padding:8px 14px;font-size:11px;text-align:left">Location</th><th style="padding:8px 14px;font-size:11px;text-align:left">Start Date</th></tr></thead><tbody>${memberRows}</tbody></table></div>`:''}
+    </div>`;
+  }).join('');
+
+  // Year overview mini-calendar
+  var miniCal = cohortDates.map(function(d) {
+    var members = (byDate[d]||[]).length;
+    var isPast = d < todayStr;
+    var isNext = d === nextCohort;
+    var dt = new Date(d+'T12:00:00');
+    var label = MONTHS[dt.getMonth()]+' '+dt.getDate();
+    return `<div style="text-align:center;padding:8px 6px;border-radius:8px;background:${isNext?'var(--brand)':isPast&&members?'#f0fdf4':isPast?'var(--surface-2)':'var(--surface)'};border:1px solid ${isNext?'var(--brand)':members&&!isPast?'#86efac':'var(--border)'};min-width:56px">
+      <div style="font-size:10px;color:${isNext?'rgba(255,255,255,.8)':'var(--text-3)'};font-weight:600">${label}</div>
+      <div style="font-size:16px;font-weight:700;color:${isNext?'#fff':members?'#16a34a':'var(--text-3)'};margin:2px 0">${members}</div>
+      <div style="font-size:9px;color:${isNext?'rgba(255,255,255,.7)':'var(--text-3)'}">${members===1?'starter':members?'starters':'empty'}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${cohortDates.length}</div><div class="kpi-label">${fyLabel} Cohorts</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:var(--green)">${totalHires}</div><div class="kpi-label">Total Starters</div></div>
+      <div class="card kpi"><div class="kpi-val" style="color:var(--amber)">${nextCount}</div><div class="kpi-label">Next Cohort</div></div>
+      <div class="card kpi"><div class="kpi-val">${completedCohorts}</div><div class="kpi-label">Cohorts Run</div></div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><div class="card-title">📅 ${fyLabel} Cohort Calendar</div><div style="font-size:12px;color:var(--text-3)">1st &amp; 3rd Monday of each month · ${fyStart.slice(0,7)} → ${fyEnd.slice(0,7)}</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 18px">${miniCal}</div>
+    </div>
+    <div id="cohort-cards-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:700">Cohort Details</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="window._cohortShowAll=!window._cohortShowAll;_renderCohortTrackerInPortal()" class="btn btn-outline btn-sm">${'Show ' + (window._cohortShowAll?'upcoming only':'all cohorts')}</button>
+        </div>
+      </div>
+      ${window._cohortShowAll ? cohortCards : cohortDates.filter(function(d){ return d >= todayStr || (byDate[d]||[]).length>0; }).map(function(d) {
+        var members = byDate[d] || [];
+        var isPast = d < todayStr;
+        var isNext = d === nextCohort;
+        var week = isWeek1(d) ? 'Cohort 1' : 'Cohort 2';
+        var dt = new Date(d+'T12:00:00');
+        var monthLabel = MONTHS[dt.getMonth()] + ' ' + dt.getFullYear();
+        var borderColor = isNext ? 'var(--brand)' : isPast ? 'var(--border)' : 'var(--border)';
+        var headerBg = isNext ? 'linear-gradient(135deg,var(--brand),#3b82f6)' : isPast ? 'var(--surface-2)' : 'var(--surface)';
+        var headerColor = isNext ? '#fff' : 'var(--text-1)';
+        var memberRows = members.length ? members.map(function(h) {
+          var name = h.candidates ? h.candidates.first_name+' '+h.candidates.last_name : 'Unknown';
+          var role = h.roles ? h.roles.title : '—';
+          var dept = h.roles ? h.roles.department||'' : '';
+          var loc = h.country || (h.candidates && h.candidates.location) || '—';
+          return `<tr><td style="font-weight:600;font-size:13px">${name}</td><td style="font-size:12px;color:var(--text-2)">${role}</td><td style="font-size:12px;color:var(--text-3)">${dept}</td><td style="font-size:12px"><span style="background:#eff6ff;color:#1d4ed8;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600">${loc}</span></td><td style="font-size:11px;color:var(--text-3)">${h.start_date||'—'}</td></tr>`;
+        }).join('') : `<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-3);font-size:12px">No new starters assigned yet</td></tr>`;
+        return `<div class="card" style="margin-bottom:12px;border:1.5px solid ${borderColor};overflow:hidden">
+          <div style="background:${headerBg};padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+            <div><div style="font-size:11px;font-weight:600;color:${isNext?'rgba(255,255,255,.7)':'var(--text-3)'};text-transform:uppercase;letter-spacing:.05em">${monthLabel} · ${week}</div><div style="font-size:16px;font-weight:700;color:${headerColor};margin-top:2px">${fmtCohortDate(d)}</div></div>
+            <div style="display:flex;align-items:center;gap:10px">${isNext?'<span style="background:rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px">Next cohort</span>':''}${isPast?'<span style="background:var(--surface);color:var(--text-3);font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px">Past</span>':''}
+            <span style="background:${members.length?'#f0fdf4':'var(--surface)'};color:${members.length?'#16a34a':'var(--text-3)'};font-size:14px;font-weight:700;padding:4px 12px;border-radius:99px">${members.length}</span></div>
+          </div>
+          <div style="overflow-x:auto"><table style="width:100%"><thead><tr style="background:var(--surface-2)"><th style="padding:8px 14px;font-size:11px;text-align:left">Name</th><th style="padding:8px 14px;font-size:11px;text-align:left">Role</th><th style="padding:8px 14px;font-size:11px;text-align:left">Department</th><th style="padding:8px 14px;font-size:11px;text-align:left">Location</th><th style="padding:8px 14px;font-size:11px;text-align:left">Start Date</th></tr></thead><tbody>${memberRows}</tbody></table></div>
+        </div>`;
+      }).join('')}
+    </div>`;
 }
 
 async function approveRole(roleId) {
