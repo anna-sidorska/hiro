@@ -15305,7 +15305,8 @@ async function _createInterviewCalendarInvite(booking, { useGraph = true } = {})
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           candidate_email:   booking.candidate_email,
-          interviewer_email: '',
+          interviewer_email: Array.isArray(booking.interviewer_emails) ? booking.interviewer_emails.join(',') : (booking.interviewer_emails || ''),
+          recruiter_email:   booking.recruiter_email || '',
           start_datetime:    toIso(start),
           end_datetime:      toIso(end),
           duration_mins:     booking.duration_mins || 60,
