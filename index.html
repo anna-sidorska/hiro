@@ -2278,7 +2278,7 @@ function renderSidebarNav() {
     navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
     if (_r === 'admin' || _r === 'recruiter' || _r === 'hr') {
       navHtml += '<button class="sb-item" id="nav-hiring_dashboard" onclick="nav(\'hiring_dashboard\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polyline points="14,8 16,10 20,6"/></svg> Hiring Dashboard</button>';
-      navHtml += '<button class="sb-item" id="nav-fpa_report" onclick="nav(\'fpa_report\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> FP&amp;A Report</button>';
+      navHtml += '<button class="sb-item" id="nav-fpa_report" onclick="window._bpTab=\'fpa\';nav(\'business_portal\',document.getElementById(\'nav-business_portal\'))"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> FP&amp;A Report</button>';
       navHtml += '<button class="sb-item" id="nav-recruiter_dashboard" onclick="nav(\'recruiter_dashboard\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Recruiter Stats</button>';
       navHtml += '<button class="sb-item" id="nav-offer_outcomes" onclick="nav(\'offer_outcomes\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Offer Outcomes</button>';
       navHtml += '<button class="sb-item" id="nav-hm_satisfaction" onclick="nav(\'hm_satisfaction\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> HM Feedback</button>';
@@ -9037,7 +9037,7 @@ async function renderBusinessPortal() {
 
   // ── Tab bar ───────────────────────────────────
   var tabBar = `<div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:0">
-    ${[['role_health','📊 Role Health'],['fpa','💰 FP&A View'],['dept','📋 Dept Summary']].map(([id,label])=>`<button onclick="window._bpTab='${id}';renderBusinessPortal()" style="padding:9px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${_bpTab===id?'700':'600'};color:${_bpTab===id?'var(--brand)':'var(--text-3)'};border-bottom:${_bpTab===id?'2px solid var(--brand)':'2px solid transparent'};margin-bottom:-2px;transition:color .15s">${label}</button>`).join('')}
+    ${[['role_health','📊 Role Health'],['fpa','💰 FP&A View'],['hr','👥 HR View'],['dept','📋 Dept Summary']].map(([id,label])=>`<button onclick="window._bpTab='${id}';renderBusinessPortal()" style="padding:9px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${_bpTab===id?'700':'600'};color:${_bpTab===id?'var(--brand)':'var(--text-3)'};border-bottom:${_bpTab===id?'2px solid var(--brand)':'2px solid transparent'};margin-bottom:-2px;transition:color .15s">${label}</button>`).join('')}
   </div>`;
 
   // ── Shared filter bar (non-managers) ─────────
@@ -9174,6 +9174,91 @@ async function renderBusinessPortal() {
           <thead><tr><th>Role</th><th>Department</th><th>FP&A Partner</th><th>Location</th><th>Offer Value</th><th>Budget Target</th><th>Budget Status</th></tr></thead>
           <tbody>${offerRows}</tbody>
         </table></div>
+      </div>`;
+
+  // ══ TAB: HR VIEW ══════════════════════════════
+  } else if (_bpTab === 'hr') {
+    // Build unique lists of HR people from the data
+    var allHrMgrs  = [...new Set(allRoles.filter(r=>r.status==='open'&&r.hr_manager).map(r=>r.hr_manager))].sort();
+    var allHeadHrs = [...new Set(allRoles.filter(r=>r.status==='open'&&r.head_of_hr).map(r=>r.head_of_hr))].sort();
+    var allHrPeople = [...new Set([...allHrMgrs,...allHeadHrs])].sort();
+
+    // Auto-detect if current user is an HR person
+    var _bpHrPerson = window._bpHrPerson || '';
+    if (!_bpHrPerson && _r === 'hr') {
+      var _myName = currentUser?.user_metadata?.full_name || '';
+      if (allHrPeople.includes(_myName)) _bpHrPerson = _myName;
+    }
+
+    // Filter roles by selected HR person (match either hr_manager or head_of_hr)
+    var hrScopedRoles = openRoles;
+    if (_bpHrPerson) {
+      hrScopedRoles = openRoles.filter(r => r.hr_manager === _bpHrPerson || r.head_of_hr === _bpHrPerson);
+    }
+
+    // HR filter bar
+    var hrFilterBar = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+      <span style="font-size:12px;color:var(--text-3);font-weight:600">Viewing:</span>
+      <select onchange="window._bpHrPerson=this.value;renderBusinessPortal()" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer;min-width:200px">
+        <option value="">All HR Partners</option>
+        ${allHeadHrs.length?'<optgroup label="Head of HR">'+allHeadHrs.map(n=>`<option value="${n}" ${_bpHrPerson===n?'selected':''}>${n}</option>`).join('')+'</optgroup>':''}
+        ${allHrMgrs.length?'<optgroup label="HR Manager / Generalist">'+allHrMgrs.map(n=>`<option value="${n}" ${_bpHrPerson===n?'selected':''}>${n}</option>`).join('')+'</optgroup>':''}
+      </select>
+      ${_bpHrPerson?`<button onclick="window._bpHrPerson='';renderBusinessPortal()" class="btn btn-outline btn-sm">✕ Clear</button>`:''}
+      <span style="margin-left:auto;font-size:12px;color:var(--text-3)">${hrScopedRoles.length} role${hrScopedRoles.length!==1?'s':''}</span>
+    </div>`;
+
+    // KPIs
+    var hrTotalOpen = hrScopedRoles.length;
+    var hrAvgDays = hrScopedRoles.length ? Math.round(hrScopedRoles.reduce((s,r)=>s+Math.round((today-new Date(r.created_at))/86400000),0)/hrScopedRoles.length) : 0;
+    var hrOverdue = hrScopedRoles.filter(r=>{ var d=Math.round((today-new Date(r.created_at))/86400000); return d>(r.tth_target_days||60)*1.2; }).length;
+    var hrInOffer = hrScopedRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
+    var hrStarters = hrScopedRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
+
+    var hrRows = hrScopedRoles.map(function(r) {
+      var daysOpen = Math.round((today - new Date(r.created_at)) / 86400000);
+      var rag = ragStatus(daysOpen, r.tth_target_days);
+      var sc = stageCounts[r.id] || {};
+      var offerCount = sc.offer||0;
+      var pendStart = pendingStarters[r.id]||0;
+      var recruiterName = r.assigned_recruiter_id ? (recruiterMap[r.assigned_recruiter_id]||'—') : '<span style="color:var(--text-3);font-style:italic">Unassigned</span>';
+      var hmName = r.profiles?.full_name || r.hm_name || '—';
+      var dept = r.department || '—';
+      var hrMgrBadge = r.hr_manager ? `<span title="HR Manager/Generalist" style="background:rgba(99,102,241,.1);color:#6366f1;font-size:10px;padding:1px 6px;border-radius:99px;font-weight:600">${r.hr_manager}</span>` : '';
+      var headHrBadge = r.head_of_hr ? `<span title="Head of HR" style="background:rgba(168,85,247,.1);color:#a855f7;font-size:10px;padding:1px 6px;border-radius:99px;font-weight:600">${r.head_of_hr}</span>` : '';
+      return `<tr onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+        <td style="min-width:170px"><div style="font-weight:600;color:var(--brand);cursor:pointer" onclick="viewRoleDetail('${r.id}')">${r.title}</div><div style="font-size:11px;color:var(--text-3)">${dept}</div></td>
+        <td style="font-size:12px">${hmName}</td>
+        <td style="font-size:12px">${r.location||'—'}</td>
+        <td style="text-align:center"><div style="font-size:15px;font-weight:700;color:${daysOpen>(r.tth_target_days||60)?'#dc2626':'var(--text-1)'}">${daysOpen}</div><div style="font-size:9px;color:var(--text-3)">of ${r.tth_target_days||60}d</div></td>
+        <td style="text-align:center"><span style="background:${rag.bg};color:${rag.color};font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px">${rag.label}</span></td>
+        <td>${miniFunnel(r.id)}</td>
+        <td style="font-size:12px">${recruiterName}</td>
+        <td style="text-align:center">${offerCount>0?`<span style="background:#fffbeb;color:#d97706;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${offerCount}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+        <td style="text-align:center">${pendStart>0?`<span style="background:#f0fdf4;color:#16a34a;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${pendStart}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+        <td style="font-size:11px">${headHrBadge} ${hrMgrBadge}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-3)">No open roles match.</td></tr>`;
+
+    document.getElementById('content').innerHTML = tabBar + hrFilterBar + `
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+        <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${hrTotalOpen}</div><div class="kpi-label">Open Roles</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:var(--text-2)">${hrAvgDays}d</div><div class="kpi-label">Avg Days Open</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${hrOverdue}</div><div class="kpi-label">Overdue SLA</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#d97706">${hrInOffer}</div><div class="kpi-label">Roles w/ Offer</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${hrStarters}</div><div class="kpi-label">Pending Starters</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">HR Partner Portfolio</div>
+          <div style="font-size:11px;color:var(--text-3)"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:600">Name</span> HR Mgr/Generalist &nbsp; <span style="background:rgba(168,85,247,.1);color:#a855f7;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:600">Name</span> Head of HR</div>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="min-width:860px">
+            <thead><tr><th>Role / Dept</th><th>Hiring Manager</th><th>Location</th><th style="text-align:center">Days Open</th><th style="text-align:center">SLA</th><th>Pipeline</th><th>Recruiter</th><th style="text-align:center">Offers</th><th style="text-align:center">Starters</th><th>HR Partner</th></tr></thead>
+            <tbody>${hrRows}</tbody>
+          </table>
+        </div>
       </div>`;
 
   // ══ TAB: DEPT SUMMARY ═════════════════════════
