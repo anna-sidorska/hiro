@@ -2434,6 +2434,7 @@ function renderHome() {
     {id:'internal_pool',label:'Internal Pool',sub:'Sovos talent first',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',grad:'linear-gradient(135deg,#be185d,#f472b6)'},
     {id:'jd_library',label:'JD Library',sub:'Job descriptions & templates',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',grad:'linear-gradient(135deg,#2563eb,#60a5fa)'},
     {id:'hr_portal',label:'HR Portal',sub:'Requisitions & approvals',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',grad:'linear-gradient(135deg,#0f766e,#14b8a6)'},
+    {id:'business_portal',label:'Business Portal',sub:'Role health, FP&A & headcount',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><line x1="6" y1="8" x2="6" y2="13"/><line x1="10" y1="10" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="13"/><line x1="18" y1="11" x2="18" y2="13"/></svg>',grad:'linear-gradient(135deg,#1e40af,#3b82f6)',roles:['admin','hr','recruiter','manager']},
     {id:'ai_assistant',label:'AI Assistant',sub:'Coming soon',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/></svg>',grad:'linear-gradient(135deg,#374151,#6b7280)',disabled:true},
   ];
   document.getElementById('content').innerHTML=`
@@ -2444,7 +2445,7 @@ function renderHome() {
         <div style="font-size:14px;color:var(--text-3)">Built by Sovos TA. For Sovos TA.</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-        ${tiles.map(t=>t.disabled?`
+        ${tiles.filter(t => !t.roles || (currentUser && t.roles.includes(currentUser.role))).map(t=>t.disabled?`
           <div style="background:var(--surface-2);border-radius:14px;padding:24px;opacity:.45;cursor:not-allowed;border:1px solid var(--border)">
             <div style="width:48px;height:48px;border-radius:12px;background:${t.grad};display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:#fff">${t.icon}</div>
             <div style="font-size:15px;font-weight:700;margin-bottom:4px">${t.label}</div>
@@ -8925,18 +8926,19 @@ async function _exportFpacsv() {
 }
 
 // ── BUSINESS PORTAL ──────────────────────────────────────────
-// Role-based view for HMs, ELT, Head of HR, HR Generalists, FP&A
+// Tabbed portal: Role Health | FP&A | Dept Summary
 async function renderBusinessPortal() {
   _pushHistory('business_portal','Business Portal',renderBusinessPortal);
   document.getElementById('page-title').textContent = 'Business Portal';
-  document.getElementById('page-sub').textContent = 'Role health, pipeline status & hiring intelligence';
+  document.getElementById('page-sub').textContent = 'Role health, FP&A & headcount intelligence';
   document.getElementById('topbar-actions').innerHTML = '';
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
   var _r = currentUser?.role || '';
   var _isManager = _r === 'manager';
+  var _bpTab = window._bpTab || 'role_health';
 
-  // ELT/dept mapping (same as req form)
+  // ELT/dept mapping
   var _DEPT_ELT = {
     'Business Development':'Chris Lynch','Client Support':'Gregg Spratto',
     'Corporate Marketing/Enablement':'Chris Lynch','Customer Success/Renewals':'Alice Katwan',
@@ -8951,15 +8953,15 @@ async function renderBusinessPortal() {
   var _ELT_LEADERS = [...new Set(Object.values(_DEPT_ELT))].sort();
   var _FPA_PARTNERS = ['Claire Warner','Aaron Grassi','Jason Luginbuhl','Jacob Barden','Mathew Aultman'];
 
-  // Filters
+  // Shared filter state
   var _bpElt  = window._bpElt  || '';
   var _bpDept = window._bpDept || '';
   var _bpFpa  = window._bpFpa  || '';
 
-  // Fetch data in parallel
+  // Fetch all data in parallel (extended for FP&A and Dept tabs)
   var [rolesRes, appsRes, profilesRes, nhpRes] = await Promise.all([
-    sb.from('roles').select('*, profiles!hiring_manager_id(full_name, email)').eq('status','open').order('created_at',{ascending:false}),
-    sb.from('applications').select('stage,role_id,created_at,updated_at,offer_salary'),
+    sb.from('roles').select('*, profiles!hiring_manager_id(full_name, email)').not('status','eq','cancelled').order('created_at',{ascending:false}),
+    sb.from('applications').select('stage,role_id,created_at,updated_at,offer_salary,offer_currency,candidates(location)'),
     sb.from('profiles').select('id,full_name,email,role').in('role',['recruiter','admin']),
     sb.from('new_hire_progress').select('role_id,start_date,candidate_id'),
   ]);
@@ -8968,10 +8970,11 @@ async function renderBusinessPortal() {
   var allApps  = appsRes.data || [];
   var profiles = profilesRes.data || [];
   var nhps     = nhpRes.data || [];
+  var openRoles = allRoles.filter(r=>r.status==='open');
 
   // Build predicted TTF from historical hired data (by dept)
   var hiredApps = allApps.filter(a=>a.stage==='hired'&&a.updated_at&&a.created_at);
-  var historicalTTF = {}; // dept → [days]
+  var historicalTTF = {};
   hiredApps.forEach(a=>{
     var role = allRoles.find(r=>r.id===a.role_id);
     if (!role) return;
@@ -8979,49 +8982,43 @@ async function renderBusinessPortal() {
     var days = Math.round((new Date(a.updated_at)-new Date(a.created_at))/86400000);
     if (days>0 && days<500) { historicalTTF[dept]=historicalTTF[dept]||[]; historicalTTF[dept].push(days); }
   });
-  var predictedTTF = {}; // dept → avg days
+  var predictedTTF = {};
   Object.entries(historicalTTF).forEach(([d,arr])=>{ predictedTTF[d]=Math.round(arr.reduce((s,v)=>s+v,0)/arr.length); });
 
-  // Apply role-based auto-filter for managers
-  var visibleRoles = allRoles;
+  // Apply role-based auto-filter for managers (role health tab)
+  var visibleRoles = openRoles;
   if (_isManager) {
-    var hmName = currentUser?.user_metadata?.full_name || currentUser?.email;
-    visibleRoles = allRoles.filter(r => {
+    var _hmName = currentUser?.user_metadata?.full_name || currentUser?.email;
+    visibleRoles = openRoles.filter(r => {
       var hmFull = r.profiles?.full_name || '';
       var hmEmail = r.profiles?.email || '';
-      return hmFull === hmName || hmEmail === currentUser?.email || r.hm_name === hmName;
+      return hmFull === _hmName || hmEmail === currentUser?.email || r.hm_name === _hmName;
     });
-  }
-
-  // Apply manual filters (admin/hr/recruiter)
-  if (!_isManager) {
+  } else {
     if (_bpElt)  visibleRoles = visibleRoles.filter(r=>_DEPT_ELT[r.department||'']=== _bpElt);
     if (_bpDept) visibleRoles = visibleRoles.filter(r=>r.department===_bpDept);
     if (_bpFpa)  visibleRoles = visibleRoles.filter(r=>r.fp_and_a_partner===_bpFpa);
   }
 
-  // Build per-role pipeline counts
-  var stageCounts = {}; // roleId → {stage:count}
+  // Per-role pipeline counts
+  var stageCounts = {};
   allApps.forEach(a=>{
     if (!stageCounts[a.role_id]) stageCounts[a.role_id]={};
     stageCounts[a.role_id][a.stage]=(stageCounts[a.role_id][a.stage]||0)+1;
   });
 
   // Pending starters per role
-  var pendingStarters = {}; // roleId → count
+  var pendingStarters = {};
   nhps.forEach(n=>{ pendingStarters[n.role_id]=(pendingStarters[n.role_id]||0)+1; });
 
   // Recruiter lookup
-  var recruiterMap = {}; // id → name
+  var recruiterMap = {};
   profiles.forEach(p=>{ recruiterMap[p.id]=p.full_name||p.email; });
 
   var today = new Date();
-  var todayStr = today.toISOString().slice(0,10);
-
   var ACTIVE_STAGES = ['applied','screening','phone_screen','interview','assessment','offer'];
   var STAGE_LABELS  = {applied:'Applied',screening:'Screening',phone_screen:'Phone',interview:'Interview',assessment:'Assessment',offer:'Offer'};
 
-  // RAG SLA helper
   var ragStatus = function(daysOpen, target) {
     if (!target) target = 60;
     if (daysOpen <= target * 0.9) return {color:'#16a34a',bg:'#f0fdf4',label:'On Track'};
@@ -9029,7 +9026,6 @@ async function renderBusinessPortal() {
     return {color:'#dc2626',bg:'#fef2f2',label:'Overdue'};
   };
 
-  // Mini funnel helper
   var miniFunnel = function(roleId) {
     var sc = stageCounts[roleId] || {};
     var active = ACTIVE_STAGES.filter(s=>sc[s]>0);
@@ -9037,24 +9033,21 @@ async function renderBusinessPortal() {
     return active.map(s=>`<span title="${STAGE_LABELS[s]}" style="display:inline-flex;align-items:center;gap:2px;background:var(--surface-2);border-radius:4px;padding:2px 5px;font-size:10px;font-weight:600;margin-right:2px"><span style="color:var(--brand)">${sc[s]}</span><span style="color:var(--text-3)">${STAGE_LABELS[s]}</span></span>`).join('');
   };
 
-  // KPIs for visible roles
-  var totalOpen = visibleRoles.length;
-  var avgDaysOpen = visibleRoles.length ? Math.round(visibleRoles.reduce((s,r)=>s+Math.round((today-new Date(r.created_at))/86400000),0)/visibleRoles.length) : 0;
-  var rolesInOffer = visibleRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
-  var rolesPendingStart = visibleRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
-  var overdueRoles = visibleRoles.filter(r=>{
-    var d = Math.round((today-new Date(r.created_at))/86400000);
-    return d > (r.tth_target_days||60)*1.2;
-  }).length;
+  var fmtK = n => n>=1000 ? '$'+Math.round(n/1000)+'k' : n?'$'+n:'—';
 
-  // Filter bar (non-managers only)
+  // ── Tab bar ───────────────────────────────────
+  var tabBar = `<div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:0">
+    ${[['role_health','📊 Role Health'],['fpa','💰 FP&A View'],['dept','📋 Dept Summary']].map(([id,label])=>`<button onclick="window._bpTab='${id}';renderBusinessPortal()" style="padding:9px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${_bpTab===id?'700':'600'};color:${_bpTab===id?'var(--brand)':'var(--text-3)'};border-bottom:${_bpTab===id?'2px solid var(--brand)':'2px solid transparent'};margin-bottom:-2px;transition:color .15s">${label}</button>`).join('')}
+  </div>`;
+
+  // ── Shared filter bar (non-managers) ─────────
   var filterBar = _isManager ? '' : `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
     <span style="font-size:12px;color:var(--text-3);font-weight:600">Filter:</span>
     <select onchange="window._bpElt=this.value;renderBusinessPortal()" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
       <option value="">All ELT Leaders</option>${_ELT_LEADERS.map(e=>`<option value="${e}" ${_bpElt===e?'selected':''}>${e}</option>`).join('')}
     </select>
     <select onchange="window._bpDept=this.value;renderBusinessPortal()" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
-      <option value="">All Departments</option>${[...new Set(allRoles.map(r=>r.department).filter(Boolean))].sort().map(d=>`<option value="${d}" ${_bpDept===d?'selected':''}>${d}</option>`).join('')}
+      <option value="">All Departments</option>${[...new Set(openRoles.map(r=>r.department).filter(Boolean))].sort().map(d=>`<option value="${d}" ${_bpDept===d?'selected':''}>${d}</option>`).join('')}
     </select>
     <select onchange="window._bpFpa=this.value;renderBusinessPortal()" style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer">
       <option value="">All FP&A Partners</option>${_FPA_PARTNERS.map(p=>`<option value="${p}" ${_bpFpa===p?'selected':''}>${p}</option>`).join('')}
@@ -9063,70 +9056,182 @@ async function renderBusinessPortal() {
     <span style="margin-left:auto;font-size:12px;color:var(--text-3)">${visibleRoles.length} role${visibleRoles.length!==1?'s':''}</span>
   </div>`;
 
-  // Role rows
-  var rows = visibleRoles.map(function(r) {
-    var daysOpen = Math.round((today - new Date(r.created_at)) / 86400000);
-    var rag = ragStatus(daysOpen, r.tth_target_days);
-    var sc = stageCounts[r.id] || {};
-    var activeTotal = ACTIVE_STAGES.reduce((s,st)=>s+(sc[st]||0),0);
-    var offerCount = sc.offer||0;
-    var pendStart = pendingStarters[r.id]||0;
-    var recruiterName = r.assigned_recruiter_id ? (recruiterMap[r.assigned_recruiter_id]||'Assigned') : '<span style="color:var(--text-3);font-style:italic">Unassigned</span>';
-    var hmName = r.profiles?.full_name || r.hm_name || '—';
-    var dept = r.department || '—';
-    var pred = predictedTTF[r.department] ? predictedTTF[r.department]+'d' : '—';
-    var eltLeader = _DEPT_ELT[r.department||''] || '—';
-    var tthTarget = r.tth_target_days || 60;
+  // ══ TAB: ROLE HEALTH ══════════════════════════
+  if (_bpTab === 'role_health') {
+    var totalOpen = visibleRoles.length;
+    var avgDaysOpen = visibleRoles.length ? Math.round(visibleRoles.reduce((s,r)=>s+Math.round((today-new Date(r.created_at))/86400000),0)/visibleRoles.length) : 0;
+    var rolesInOffer = visibleRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
+    var rolesPendingStart = visibleRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
+    var overdueRoles = visibleRoles.filter(r=>{ var d=Math.round((today-new Date(r.created_at))/86400000); return d>(r.tth_target_days||60)*1.2; }).length;
 
-    return `<tr onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
-      <td style="min-width:180px">
-        <div style="font-weight:600;color:var(--brand);cursor:pointer" onclick="viewRoleDetail('${r.id}')">${r.title}</div>
-        <div style="font-size:11px;color:var(--text-3)">${dept}</div>
-      </td>
-      <td style="font-size:12px">${hmName}</td>
-      <td style="text-align:center">
-        <div style="font-size:16px;font-weight:700;color:${daysOpen>tthTarget?'#dc2626':'var(--text-1)'}">${daysOpen}</div>
-        <div style="font-size:9px;color:var(--text-3)">of ${tthTarget}d target</div>
-      </td>
-      <td style="text-align:center">
-        <span style="background:${rag.bg};color:${rag.color};font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap">${rag.label}</span>
-      </td>
-      <td>${miniFunnel(r.id)}<div style="font-size:10px;color:var(--text-3);margin-top:2px">${activeTotal} active</div></td>
-      <td style="font-size:12px">${recruiterName}</td>
-      <td style="text-align:center">${offerCount>0?`<span style="background:#fffbeb;color:#d97706;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${offerCount}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
-      <td style="text-align:center">${pendStart>0?`<span style="background:#f0fdf4;color:#16a34a;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${pendStart}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
-      <td style="text-align:center;font-size:12px;color:${pred!=='—'&&parseInt(pred)<daysOpen?'#dc2626':'var(--text-2)'}">
-        <span title="Avg TTF for ${dept} roles based on historical data" style="cursor:help">${pred}</span>
-      </td>
-    </tr>`;
-  }).join('') || `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-3)">${_isManager?'No open roles assigned to you yet.':'No open roles match the current filters.'}</td></tr>`;
+    var rows = visibleRoles.map(function(r) {
+      var daysOpen = Math.round((today - new Date(r.created_at)) / 86400000);
+      var rag = ragStatus(daysOpen, r.tth_target_days);
+      var sc = stageCounts[r.id] || {};
+      var activeTotal = ACTIVE_STAGES.reduce((s,st)=>s+(sc[st]||0),0);
+      var offerCount = sc.offer||0;
+      var pendStart = pendingStarters[r.id]||0;
+      var recruiterName = r.assigned_recruiter_id ? (recruiterMap[r.assigned_recruiter_id]||'Assigned') : '<span style="color:var(--text-3);font-style:italic">Unassigned</span>';
+      var hmName = r.profiles?.full_name || r.hm_name || '—';
+      var dept = r.department || '—';
+      var pred = predictedTTF[r.department] ? predictedTTF[r.department]+'d' : '—';
+      var tthTarget = r.tth_target_days || 60;
+      return `<tr onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+        <td style="min-width:180px"><div style="font-weight:600;color:var(--brand);cursor:pointer" onclick="viewRoleDetail('${r.id}')">${r.title}</div><div style="font-size:11px;color:var(--text-3)">${dept}</div></td>
+        <td style="font-size:12px">${hmName}</td>
+        <td style="text-align:center"><div style="font-size:16px;font-weight:700;color:${daysOpen>tthTarget?'#dc2626':'var(--text-1)'}">${daysOpen}</div><div style="font-size:9px;color:var(--text-3)">of ${tthTarget}d</div></td>
+        <td style="text-align:center"><span style="background:${rag.bg};color:${rag.color};font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap">${rag.label}</span></td>
+        <td>${miniFunnel(r.id)}<div style="font-size:10px;color:var(--text-3);margin-top:2px">${activeTotal} active</div></td>
+        <td style="font-size:12px">${recruiterName}</td>
+        <td style="text-align:center">${offerCount>0?`<span style="background:#fffbeb;color:#d97706;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${offerCount}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+        <td style="text-align:center">${pendStart>0?`<span style="background:#f0fdf4;color:#16a34a;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${pendStart}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+        <td style="text-align:center;font-size:12px;color:${pred!=='—'&&parseInt(pred)<daysOpen?'#dc2626':'var(--text-2)'}"><span title="Avg TTF for ${dept} based on historical data" style="cursor:help">${pred}</span></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-3)">${_isManager?'No open roles assigned to you yet.':'No open roles match the current filters.'}</td></tr>`;
 
-  document.getElementById('content').innerHTML = `
-    ${filterBar}
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
-      <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${totalOpen}</div><div class="kpi-label">Open Roles</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:var(--text-2)">${avgDaysOpen}d</div><div class="kpi-label">Avg Days Open</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${overdueRoles}</div><div class="kpi-label">Overdue SLA</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:#d97706">${rolesInOffer}</div><div class="kpi-label">Roles w/ Offer</div></div>
-      <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${rolesPendingStart}</div><div class="kpi-label">Pending Starters</div></div>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Role Health</div>
-        <div style="font-size:11px;color:var(--text-3)">SLA target: default 60d · <span style="background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">On Track</span> &lt;90% · <span style="background:#fffbeb;color:#d97706;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">At Risk</span> 90–120% · <span style="background:#fef2f2;color:#dc2626;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">Overdue</span> &gt;120%</div>
+    document.getElementById('content').innerHTML = tabBar + filterBar + `
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+        <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${totalOpen}</div><div class="kpi-label">Open Roles</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:var(--text-2)">${avgDaysOpen}d</div><div class="kpi-label">Avg Days Open</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${overdueRoles}</div><div class="kpi-label">Overdue SLA</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#d97706">${rolesInOffer}</div><div class="kpi-label">Roles w/ Offer</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${rolesPendingStart}</div><div class="kpi-label">Pending Starters</div></div>
       </div>
-      <div style="overflow-x:auto">
-        <table style="min-width:900px">
-          <thead><tr>
-            <th>Role / Dept</th><th>Hiring Manager</th><th style="text-align:center">Days Open</th>
-            <th style="text-align:center">SLA</th><th>Pipeline</th><th>Recruiter</th>
-            <th style="text-align:center">Offers</th><th style="text-align:center">Starters</th>
-            <th style="text-align:center" title="Predicted time to fill based on historical dept data">Pred. TTF</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Role Health</div>
+          <div style="font-size:11px;color:var(--text-3)">Default SLA 60d · <span style="background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">On Track</span> &lt;90% · <span style="background:#fffbeb;color:#d97706;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">At Risk</span> 90–120% · <span style="background:#fef2f2;color:#dc2626;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700">Overdue</span> &gt;120%</div>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="min-width:900px">
+            <thead><tr><th>Role / Dept</th><th>Hiring Manager</th><th style="text-align:center">Days Open</th><th style="text-align:center">SLA</th><th>Pipeline</th><th>Recruiter</th><th style="text-align:center">Offers</th><th style="text-align:center">Starters</th><th style="text-align:center" title="Predicted TTF">Pred. TTF</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+  // ══ TAB: FP&A VIEW ═══════════════════════════
+  } else if (_bpTab === 'fpa') {
+    var fpaRoles = _bpFpa ? openRoles.filter(r=>r.fp_and_a_partner===_bpFpa) : (_bpDept ? openRoles.filter(r=>r.department===_bpDept) : (_bpElt ? openRoles.filter(r=>_DEPT_ELT[r.department||'']=== _bpElt) : openRoles));
+    var fpaRoleIds = new Set(fpaRoles.map(r=>r.id));
+    var activeOffers = allApps.filter(a=>a.stage==='offer' && fpaRoleIds.has(a.role_id));
+    var totalHC = fpaRoles.reduce((s,r)=>s+(r.headcount||1),0);
+    var budgetedCount = fpaRoles.filter(r=>r.is_budgeted===true).length;
+    var unbudgetedCount = fpaRoles.filter(r=>r.is_budgeted===false).length;
+    var totalSalMax = fpaRoles.reduce((s,r)=>s+(r.salary_max||r.salary_min||0),0);
+    var totalOfferVal = activeOffers.reduce((s,o)=>s+(o.offer_salary||0),0);
+
+    // By-dept headcount for FP&A
+    var fpaDeptMap = {};
+    fpaRoles.forEach(r=>{
+      var d=r.department||'Unknown';
+      var fpaP=r.fp_and_a_partner||'Unassigned';
+      if (!fpaDeptMap[d]) fpaDeptMap[d]={open:0,hc:0,budgeted:0,salMin:0,salMax:0,fpa:fpaP};
+      fpaDeptMap[d].open++; fpaDeptMap[d].hc+=(r.headcount||1);
+      if (r.is_budgeted) fpaDeptMap[d].budgeted++;
+      fpaDeptMap[d].salMin+=(r.salary_min||0); fpaDeptMap[d].salMax+=(r.salary_max||0);
+    });
+    var fpaDeptRows = Object.entries(fpaDeptMap).sort((a,b)=>b[1].hc-a[1].hc).map(([dept,d])=>{
+      var avgTth = historicalTTF[dept] ? Math.round(historicalTTF[dept].reduce((s,v)=>s+v,0)/historicalTTF[dept].length) : null;
+      var eltL = _DEPT_ELT[dept]||'—';
+      return `<tr><td style="font-weight:600">${dept}</td><td style="font-size:12px;color:var(--text-3)">${eltL}</td><td style="font-size:12px">${d.fpa}</td><td style="text-align:center">${d.open}</td><td style="text-align:center;font-weight:700">${d.hc}</td><td style="text-align:center">${d.budgeted}/${d.open}</td><td style="font-size:12px">${d.salMin?fmtK(d.salMin):''} ${d.salMax?'– '+fmtK(d.salMax):''}</td><td style="font-size:12px;text-align:center">${avgTth?avgTth+'d avg':'—'}</td></tr>`;
+    }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:20px">No open roles</td></tr>';
+
+    var offerRows = activeOffers.map(o=>{
+      var role=allRoles.find(r=>r.id===o.role_id);
+      return `<tr><td style="font-weight:600">${role?.title||'—'}</td><td>${role?.department||'—'}</td><td style="font-size:12px">${role?.fp_and_a_partner||'—'}</td><td>${(o.candidates?.location)||'—'}</td><td style="font-weight:700">${o.offer_salary?(o.offer_currency||'USD')+' '+Number(o.offer_salary).toLocaleString():'Pending'}</td><td>${role?.salary_max?fmtK(role.salary_max):'—'}</td><td>${o.offer_salary&&role?.salary_max?`<span style="color:${o.offer_salary<=role.salary_max?'#16a34a':'#dc2626'}">${o.offer_salary<=role.salary_max?'Within':'Over'} budget</span>`:'—'}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:20px">No active offers</td></tr>';
+
+    document.getElementById('content').innerHTML = tabBar + filterBar + `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${totalHC}</div><div class="kpi-label">Open Headcount</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${budgetedCount}</div><div class="kpi-label">Budgeted</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${unbudgetedCount}</div><div class="kpi-label">Unbudgeted</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#d97706">${activeOffers.length}</div><div class="kpi-label">In Offer Stage</div></div>
       </div>
-    </div>`;
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="card kpi" style="flex-direction:column;align-items:flex-start;padding:16px 20px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Total Salary Commitment</div>
+          <div style="font-size:24px;font-weight:800;color:var(--brand)">${totalSalMax?'$'+Math.round(totalSalMax/1000)+'k ann.':'—'}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">Max salary targets of open roles</div>
+        </div>
+        <div class="card kpi" style="flex-direction:column;align-items:flex-start;padding:16px 20px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;margin-bottom:4px">Active Offer Value</div>
+          <div style="font-size:24px;font-weight:800;color:#d97706">${totalOfferVal?'$'+Math.round(totalOfferVal/1000)+'k':'—'}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">Total salary of candidates in offer</div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><div class="card-title">Headcount by Department</div></div>
+        <div style="overflow-x:auto"><table style="min-width:700px">
+          <thead><tr><th>Department</th><th>ELT Leader</th><th>FP&A Partner</th><th style="text-align:center">Open Roles</th><th style="text-align:center">Headcount</th><th style="text-align:center">Budgeted</th><th>Salary Range</th><th style="text-align:center">Avg TTF</th></tr></thead>
+          <tbody>${fpaDeptRows}</tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Active Offer Pipeline</div></div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Role</th><th>Department</th><th>FP&A Partner</th><th>Location</th><th>Offer Value</th><th>Budget Target</th><th>Budget Status</th></tr></thead>
+          <tbody>${offerRows}</tbody>
+        </table></div>
+      </div>`;
+
+  // ══ TAB: DEPT SUMMARY ═════════════════════════
+  } else if (_bpTab === 'dept') {
+    var deptScopedRoles = _isManager ? visibleRoles : openRoles;
+    if (!_isManager) {
+      if (_bpElt)  deptScopedRoles = deptScopedRoles.filter(r=>_DEPT_ELT[r.department||'']=== _bpElt);
+      if (_bpDept) deptScopedRoles = deptScopedRoles.filter(r=>r.department===_bpDept);
+      if (_bpFpa)  deptScopedRoles = deptScopedRoles.filter(r=>r.fp_and_a_partner===_bpFpa);
+    }
+    var deptMap = {};
+    deptScopedRoles.forEach(r=>{
+      var d=r.department||'Unknown';
+      if (!deptMap[d]) deptMap[d]={open:0,overdue:0,inOffer:0,starters:0,totalDays:0,fpa:r.fp_and_a_partner||'—',elt:_DEPT_ELT[d]||'—'};
+      var days=Math.round((today-new Date(r.created_at))/86400000);
+      deptMap[d].open++;
+      deptMap[d].totalDays+=days;
+      if (days>(r.tth_target_days||60)*1.2) deptMap[d].overdue++;
+      if ((stageCounts[r.id]?.offer||0)>0) deptMap[d].inOffer++;
+      if ((pendingStarters[r.id]||0)>0) deptMap[d].starters++;
+    });
+
+    var deptRows = Object.entries(deptMap).sort((a,b)=>b[1].open-a[1].open).map(([dept,d])=>{
+      var avgD = d.open ? Math.round(d.totalDays/d.open) : 0;
+      var predT = predictedTTF[dept];
+      return `<tr onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+        <td style="font-weight:700">${dept}</td>
+        <td style="font-size:12px;color:var(--text-3)">${d.elt}</td>
+        <td style="font-size:12px">${d.fpa}</td>
+        <td style="text-align:center;font-weight:700;color:var(--brand)">${d.open}</td>
+        <td style="text-align:center">${avgD}d</td>
+        <td style="text-align:center">${d.overdue>0?`<span style="background:#fef2f2;color:#dc2626;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${d.overdue}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+        <td style="text-align:center">${d.inOffer>0?`<span style="background:#fffbeb;color:#d97706;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${d.inOffer}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+        <td style="text-align:center">${d.starters>0?`<span style="background:#f0fdf4;color:#16a34a;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px">${d.starters}</span>`:'<span style="color:var(--text-3)">—</span>'}</td>
+        <td style="text-align:center;font-size:12px;color:var(--text-2)">${predT?predT+'d':'—'}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-3)">No data for current filters.</td></tr>`;
+
+    var grandTotal = deptScopedRoles.length;
+    var grandOverdue = deptScopedRoles.filter(r=>{var d=Math.round((today-new Date(r.created_at))/86400000);return d>(r.tth_target_days||60)*1.2;}).length;
+    var grandOffer = deptScopedRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
+    var grandStarters = deptScopedRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
+
+    document.getElementById('content').innerHTML = tabBar + filterBar + `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+        <div class="card kpi"><div class="kpi-val" style="color:var(--brand)">${grandTotal}</div><div class="kpi-label">Total Open</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#dc2626">${grandOverdue}</div><div class="kpi-label">Overdue SLA</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#d97706">${grandOffer}</div><div class="kpi-label">Roles w/ Offer</div></div>
+        <div class="card kpi"><div class="kpi-val" style="color:#16a34a">${grandStarters}</div><div class="kpi-label">Pending Starters</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Department Summary</div><div style="font-size:11px;color:var(--text-3)">${Object.keys(deptMap).length} departments · ${grandTotal} open roles</div></div>
+        <div style="overflow-x:auto"><table style="min-width:780px">
+          <thead><tr><th>Department</th><th>ELT Leader</th><th>FP&A Partner</th><th style="text-align:center">Open</th><th style="text-align:center">Avg Days</th><th style="text-align:center">Overdue</th><th style="text-align:center">In Offer</th><th style="text-align:center">Starters</th><th style="text-align:center">Pred. TTF</th></tr></thead>
+          <tbody>${deptRows}</tbody>
+        </table></div>
+      </div>`;
+  }
 }
 
 // ── RECRUITER PERFORMANCE DASHBOARD ──────────────────────────
