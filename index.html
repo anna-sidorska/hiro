@@ -114,6 +114,22 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,sans-serif;background:
 .kpi-val{font-size:36px;font-weight:800;letter-spacing:-1.5px;line-height:1.1}
 .kpi-label{font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
 .kpi-icon{position:absolute;top:14px;right:14px;font-size:28px;opacity:.12}
+/* ── DASHBOARD TWO-COLUMN LAYOUT ── */
+.dash-layout{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start}
+.dash-side{display:flex;flex-direction:column;gap:14px}
+.dash-kpi-row-v{display:flex;flex-direction:column;gap:0}
+.dash-kpi-item{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border)}
+.dash-kpi-item:last-child{border-bottom:none}
+.dash-kpi-item.clickable{cursor:pointer;transition:background .15s}
+.dash-kpi-item.clickable:hover{background:var(--surface-2)}
+.dash-kpi-num{font-size:22px;font-weight:800;letter-spacing:-0.5px;line-height:1}
+.dash-kpi-lbl{font-size:11px;color:var(--text-3);font-weight:500}
+.dash-role-row{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);cursor:pointer;transition:all .2s;margin-bottom:8px;position:relative;overflow:hidden}
+.dash-role-row:hover{box-shadow:var(--shadow-md);border-color:rgba(0,196,238,.25);transform:translateY(-1px)}
+.dash-role-accent{position:absolute;left:0;top:0;bottom:0;width:3px}
+.dash-section-hdr{font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.dash-section-hdr span{font-size:11px;font-weight:600;color:var(--text-3);background:var(--surface-3);padding:1px 8px;border-radius:99px;border:1px solid var(--border)}
+@media(max-width:960px){.dash-layout{grid-template-columns:1fr}}
 
 /* ── TAGS ── */
 .tag{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.2px}
@@ -2710,30 +2726,41 @@ async function renderDashboard() {
     var newAppsCount = newAppsByRole[role.id] || 0;
     var health = getPipelineHealth(role, apps);
     var suggestion = getAiSuggestion(role, apps);
-    var newAppsHtml = newAppsCount > 0
-      ? '<strong style="color:var(--brand)">' + newAppsCount + ' new</strong> this week'
-      : '<span class="text-muted">0 new this week</span>';
-    var _healthTopColor = health.includes('🟢') ? 'var(--green)' : health.includes('🟡') ? 'var(--amber)' : 'var(--red)';
-    var html = '<div class="card" style="margin-bottom:16px;cursor:pointer;position:relative;overflow:hidden;border-left:3px solid ' + _healthTopColor + ';transition:all .2s ease" onclick="viewRoleDetail(\'' + role.id + '\')" onmouseover="this.style.boxShadow=\'var(--shadow-lg)\';this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.boxShadow=\'\';this.style.transform=\'\'">';
-    html += '<div class="card-body" style="padding:16px 20px">';
-    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">';
-    html += '<div><div style="font-size:15px;font-weight:700;margin-bottom:2px">' + role.title + '</div>';
-    html += '<div style="font-size:12px;color:var(--text-3)">' + (role.department||'') + (role.region ? ' · '+role.region : '') + '</div>';
-    var _recruiter = _dashProfiles[role.assigned_recruiter_id];
-    html += '<div style="font-size:11px;margin-top:2px;color:var(--brand)">👤 ' + (_recruiter ? (_recruiter.full_name||_recruiter.email) : 'Unassigned') + '</div></div>';
-    html += '<span style="font-size:12px;font-weight:700;color:' + daysColor + '">' + daysOpen + 'd open</span>';
+    var healthColor = health.includes('🟢') ? 'var(--green)' : health.includes('🟡') ? 'var(--amber)' : 'var(--red)';
+    var healthLabel = health.includes('🟢') ? 'Healthy' : health.includes('🟡') ? 'Slow' : 'Stalled';
+    var healthTagClass = health.includes('🟢') ? 'tag-green' : health.includes('🟡') ? 'tag-amber' : 'tag-red';
+    var showSuggestion = suggestion && !suggestion.includes('on track') && !suggestion.includes('keep momentum');
+
+    // Compact proportional pipeline bar
+    var stageMap = {applied:0,screening:0,interview_1:0,offer:0};
+    var stageColors = ['#6366f1','#3b82f6','#0ea5e9','#10b981'];
+    var stageKeys = ['applied','screening','interview_1','offer'];
+    apps.forEach(function(a){
+      if (stageMap[a.stage]!==undefined) stageMap[a.stage]++;
+      else if (['interview_2','final_interview','shortlisted'].includes(a.stage)) stageMap['interview_1']++;
+    });
+    var pipeHtml = '<div style="display:flex;width:72px;height:5px;border-radius:3px;overflow:hidden;background:var(--surface-3)">';
+    stageKeys.forEach(function(k,i){ if (stageMap[k]) pipeHtml += '<div style="flex:'+stageMap[k]+';background:'+stageColors[i]+'"></div>'; });
+    pipeHtml += '</div>';
+
+    var html = '<div class="dash-role-row" onclick="viewRoleDetail(''+role.id+'')">';
+    html += '<div class="dash-role-accent" style="background:'+healthColor+'"></div>';
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:11px 16px 11px 20px">';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+role.title+'</div>';
+    if (role.department||role.region) html += '<div style="font-size:11px;color:var(--text-3);margin-top:1px">'+(role.department||'')+(role.region?' · '+role.region:'')+'</div>';
     html += '</div>';
-    html += buildPipelineBar(apps);
-    html += '<div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;font-size:12px">';
-    html += '<span>' + newAppsHtml + '</span>';
-    html += '<span>' + health + '</span>';
-    html += '<span style="color:var(--text-2);font-size:11px">' + apps.length + ' active candidate' + (apps.length!==1?'s':'') + '</span>';
+    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0">';
+    html += pipeHtml;
+    html += '<div style="font-size:10px;color:var(--text-3)">'+apps.length+' in pipeline</div>';
     html += '</div>';
-    html += '<div class="suggestion-callout">✦ ' + suggestion + '</div>';
-    html += '<div style="display:flex;gap:8px;justify-content:flex-end">';
-    html += '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewRoleDetail(\'' + role.id + '\')">View Role</button>';
-    html += '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();viewRoleDetail(\'' + role.id + '\')">View Pipeline \u2192</button>';
-    html += '</div></div></div>';
+    if (newAppsCount > 0) html += '<span style="background:rgba(0,196,238,.1);color:var(--brand);font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap;flex-shrink:0">+'+newAppsCount+' new</span>';
+    html += '<span class="tag '+healthTagClass+'" style="flex-shrink:0">'+healthLabel+'</span>';
+    html += '<span style="font-size:12px;font-weight:700;color:'+daysColor+';flex-shrink:0;min-width:28px;text-align:right">'+daysOpen+'d</span>';
+    html += '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewRoleDetail(''+role.id+'')" style="flex-shrink:0">View →</button>';
+    html += '</div>';
+    if (showSuggestion) html += '<div style="padding:5px 20px 7px;font-size:11px;color:var(--text-3);border-top:1px solid var(--border);background:var(--surface-2)">✶ '+suggestion+'</div>';
+    html += '</div>';
     return html;
   }
 
@@ -2745,12 +2772,20 @@ async function renderDashboard() {
   var greet = greetHour < 12 ? 'Good morning' : greetHour < 17 ? 'Good afternoon' : 'Good evening';
   var firstName = (currentUser ? currentUser.full_name || '' : '').split(' ')[0];
 
-  var kpiRow = '<div style="display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap">';
-  kpiRow += buildKpiCard(myRoles.length, userRole === 'admin' ? 'Total open roles' : 'Open roles assigned to me', 'var(--brand)', "nav('roles', document.getElementById('nav-roles'))", '📋');
-  kpiRow += buildKpiCard(myActiveApps.length, 'Active candidates in pipeline', '', null, '👥');
-  kpiRow += buildKpiCard(tthDays !== null ? tthDays + 'd' : '—', 'Avg TTH this quarter', tthDays !== null && tthDays > 60 ? 'var(--amber)' : 'var(--green)', null, '⏱');
-  kpiRow += buildKpiCard(needingAttentionCands.length, 'Candidates needing attention', needingAttentionCands.length > 0 ? 'var(--red)' : '', null, '⚠️');
-  kpiRow += '</div>';
+  // KPI sidebar card (vertical list)
+  var kpiSideHtml = '<div class="card" style="overflow:hidden">';
+  kpiSideHtml += '<div class="card-header" style="padding:12px 18px"><span class="card-title" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3)">At a Glance</span></div>';
+  kpiSideHtml += '<div class="dash-kpi-row-v">';
+  kpiSideHtml += '<div class="dash-kpi-item clickable" onclick="nav('roles',document.getElementById('nav-roles'))">';
+  kpiSideHtml += '<div><div class="dash-kpi-num" style="color:var(--brand)">' + myRoles.length + '</div><div class="dash-kpi-lbl">' + (userRole === 'admin' ? 'Total open roles' : 'Open roles assigned') + '</div></div>';
+  kpiSideHtml += '<span style="font-size:10px;color:var(--text-3)">View →</span></div>';
+  kpiSideHtml += '<div class="dash-kpi-item">';
+  kpiSideHtml += '<div><div class="dash-kpi-num">' + myActiveApps.length + '</div><div class="dash-kpi-lbl">Active candidates</div></div></div>';
+  kpiSideHtml += '<div class="dash-kpi-item">';
+  kpiSideHtml += '<div><div class="dash-kpi-num" style="color:' + (tthDays !== null && tthDays > 60 ? 'var(--amber)' : 'var(--green)') + '">' + (tthDays !== null ? tthDays + 'd' : '—') + '</div><div class="dash-kpi-lbl">Avg TTH this quarter</div></div></div>';
+  kpiSideHtml += '<div class="dash-kpi-item"' + (needingAttentionCands.length > 0 ? ' style="background:var(--red-bg)"' : '') + '>';
+  kpiSideHtml += '<div><div class="dash-kpi-num" style="color:' + (needingAttentionCands.length > 0 ? 'var(--red)' : 'var(--green)') + '">' + needingAttentionCands.length + '</div><div class="dash-kpi-lbl">Need attention</div></div></div>';
+  kpiSideHtml += '</div></div>';
 
   // Commission KPI (target: 15 hires, 44 days avg TTH)
   var COMMISSION_HIRE_TARGET = 15;
@@ -2758,26 +2793,25 @@ async function renderDashboard() {
   var hiresThisQ = filledRoles.length;
   var hiresProgress = Math.min(100, Math.round((hiresThisQ / COMMISSION_HIRE_TARGET) * 100));
   var tthOnTrack = tthDays !== null && tthDays <= COMMISSION_TTH_TARGET;
-  var commissionHtml = '<div class="card" style="margin-bottom:20px;border-top:4px solid var(--purple)">';
-  commissionHtml += '<div class="card-body" style="padding:20px">';
-  commissionHtml += '<div style="font-size:13px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px">💎 Commission Progress — Q' + Math.ceil((now.getMonth()+1)/3) + ' ' + now.getFullYear() + '</div>';
-  commissionHtml += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">';
-  // Hires progress
-  commissionHtml += '<div><div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Hires this quarter</div>';
-  commissionHtml += '<div style="display:flex;align-items:baseline;gap:4px;margin-bottom:8px"><span style="font-size:32px;font-weight:800;color:' + (hiresThisQ >= COMMISSION_HIRE_TARGET ? 'var(--green)' : 'var(--brand)') + '">' + hiresThisQ + '</span><span style="font-size:14px;color:var(--text-3)">/ ' + COMMISSION_HIRE_TARGET + ' target</span></div>';
-  commissionHtml += '<div style="height:8px;background:var(--surface-3);border-radius:99px;overflow:hidden"><div style="height:100%;width:' + hiresProgress + '%;background:' + (hiresThisQ >= COMMISSION_HIRE_TARGET ? 'var(--green)' : 'var(--brand)') + ';border-radius:99px;transition:width .6s ease"></div></div>';
-  commissionHtml += '<div style="font-size:11px;color:var(--text-3);margin-top:4px">' + hiresProgress + '% to target' + (hiresThisQ >= COMMISSION_HIRE_TARGET ? ' ✓ Commission unlocked!' : ' — ' + (COMMISSION_HIRE_TARGET - hiresThisQ) + ' more needed') + '</div></div>';
-  // TTH vs target
-  commissionHtml += '<div><div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Avg TTH vs target</div>';
-  commissionHtml += '<div style="display:flex;align-items:baseline;gap:4px;margin-bottom:8px"><span style="font-size:32px;font-weight:800;color:' + (tthOnTrack ? 'var(--green)' : tthDays !== null ? 'var(--amber)' : 'var(--text-3)') + '">' + (tthDays !== null ? tthDays + 'd' : '—') + '</span><span style="font-size:14px;color:var(--text-3)">/ ' + COMMISSION_TTH_TARGET + 'd target</span></div>';
-  commissionHtml += '<div style="font-size:12px;color:' + (tthOnTrack ? 'var(--green-text)' : tthDays !== null ? 'var(--amber-text)' : 'var(--text-3)') + ';font-weight:600">' + (tthDays !== null ? (tthOnTrack ? '✓ On track for commission' : '⚠ ' + (tthDays - COMMISSION_TTH_TARGET) + 'd over target') : 'No hires yet this quarter') + '</div></div>';
-  // Status summary
   var onTrackBoth = hiresThisQ >= COMMISSION_HIRE_TARGET && tthOnTrack;
   var projectedStatus = hiresThisQ >= COMMISSION_HIRE_TARGET ? (tthOnTrack ? '✅ Commission earned' : '⚠️ Hires hit but TTH over target') : ('📊 ' + (COMMISSION_HIRE_TARGET - hiresThisQ) + ' hires to go');
-  commissionHtml += '<div style="background:' + (onTrackBoth ? 'var(--green-bg)' : 'var(--surface-3)') + ';border-radius:var(--r);padding:14px;display:flex;flex-direction:column;justify-content:center">';
-  commissionHtml += '<div style="font-size:13px;font-weight:700;color:' + (onTrackBoth ? 'var(--green-text)' : 'var(--text)') + ';margin-bottom:4px">' + projectedStatus + '</div>';
-  commissionHtml += '<div style="font-size:12px;color:var(--text-3)">Target: ' + COMMISSION_HIRE_TARGET + ' hires · ' + COMMISSION_TTH_TARGET + ' days avg TTH</div></div>';
-  commissionHtml += '</div></div></div>';
+  var commSideHtml = '<div class="card" style="overflow:hidden;border-top:3px solid var(--purple)">';
+  commSideHtml += '<div class="card-header" style="padding:12px 18px"><span class="card-title" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--purple)">💎 Commission — Q' + Math.ceil((now.getMonth()+1)/3) + ' ' + now.getFullYear() + '</span></div>';
+  commSideHtml += '<div style="padding:14px 18px;display:flex;flex-direction:column;gap:12px">';
+  commSideHtml += '<div>';
+  commSideHtml += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">';
+  commSideHtml += '<span style="font-size:11px;color:var(--text-3);font-weight:600">Hires this quarter</span>';
+  commSideHtml += '<span style="font-size:18px;font-weight:800;color:' + (hiresThisQ >= COMMISSION_HIRE_TARGET ? 'var(--green)' : 'var(--brand)') + '">' + hiresThisQ + '<span style="font-size:11px;font-weight:400;color:var(--text-3)"> / ' + COMMISSION_HIRE_TARGET + '</span></span>';
+  commSideHtml += '</div>';
+  commSideHtml += '<div style="height:6px;background:var(--surface-3);border-radius:99px;overflow:hidden"><div style="height:100%;width:' + hiresProgress + '%;background:' + (hiresThisQ >= COMMISSION_HIRE_TARGET ? 'var(--green)' : 'var(--brand)') + ';border-radius:99px;transition:width .6s"></div></div>';
+  commSideHtml += '<div style="font-size:10px;color:var(--text-3);margin-top:3px">' + hiresProgress + '% to target' + (hiresThisQ >= COMMISSION_HIRE_TARGET ? ' ✓' : ' — ' + (COMMISSION_HIRE_TARGET - hiresThisQ) + ' more to go') + '</div>';
+  commSideHtml += '</div>';
+  commSideHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--surface-2);border-radius:var(--r)">';
+  commSideHtml += '<span style="font-size:11px;color:var(--text-3)">Avg TTH vs target</span>';
+  commSideHtml += '<span style="font-size:13px;font-weight:700;color:' + (tthOnTrack ? 'var(--green)' : tthDays !== null ? 'var(--amber)' : 'var(--text-3)') + '">' + (tthDays !== null ? tthDays + 'd' : '—') + '<span style="font-size:11px;font-weight:400;color:var(--text-3)"> / ' + COMMISSION_TTH_TARGET + 'd</span></span>';
+  commSideHtml += '</div>';
+  commSideHtml += '<div style="font-size:12px;font-weight:600;color:' + (onTrackBoth ? 'var(--green-text)' : 'var(--text-2)') + ';text-align:center;padding:6px;background:' + (onTrackBoth ? 'var(--green-bg)' : 'var(--surface-3)') + ';border-radius:var(--r)">' + projectedStatus + '</div>';
+  commSideHtml += '</div></div>';
 
   // IMPORTANT: Internal candidates banner (separate from regular alerts, more prominent)
   var internalBannerHtml = '';
@@ -2836,18 +2870,31 @@ async function renderDashboard() {
   var attentionLabel = attentionCount > 0
     ? attentionCount + ' item' + (attentionCount !== 1 ? 's' : '') + ' needing attention'
     : 'Everything is on track';
+
+  var greetHtml = '<div style="margin-bottom:20px;padding:18px 24px;background:var(--sidebar);border-radius:var(--r-xl);color:#fff;border-left:3px solid var(--brand-mid);display:flex;align-items:center;justify-content:space-between">';
+  greetHtml += '<div>';
+  greetHtml += '<div style="font-size:18px;font-weight:700;letter-spacing:-.3px">' + greet + ', ' + firstName + '</div>';
+  greetHtml += '<div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">' + now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + '</div>';
+  greetHtml += '</div>';
+  greetHtml += '<div style="font-size:12px;font-weight:600;color:' + (attentionCount > 0 ? '#fbbf24' : '#34d399') + '">';
+  greetHtml += (attentionCount > 0 ? '⚠ ' : '✓ ') + attentionLabel;
+  greetHtml += '</div></div>';
+
   document.getElementById('content').innerHTML =
-    '<div style="margin-bottom:28px;padding:28px 36px;background:var(--sidebar);border-radius:var(--r-xl);color:#fff;position:relative;overflow:hidden;border-left:4px solid var(--brand-mid)">' +
-    '<div style="font-size:22px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px">' + greet + ', ' + firstName + '</div>' +
-    '<div style="font-size:14px;color:rgba(255,255,255,.5);margin-bottom:8px">' + now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + '</div>' +
-    '<div style="font-size:13px;font-weight:600;color:' + (attentionCount > 0 ? '#fbbf24' : '#34d399') + '">' +
-    (attentionCount > 0 ? '⚠ ' : '✓ ') + attentionLabel +
-    '</div>' +
-    '</div>' +
-    internalBannerHtml + kpiRow +
-    commissionHtml + _buildInternalPipelineHtml(internalInPipeline) + alertsHtml +
-    '<div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--brand);margin-bottom:12px">Active Roles <span style="color:var(--text-3);font-weight:500;font-size:11px;letter-spacing:0;text-transform:none">(' + myRoles.length + ')</span></div>' +
-    rolesHtml;
+    greetHtml +
+    '<div class="dash-layout">' +
+      '<div>' +
+        internalBannerHtml +
+        alertsHtml +
+        _buildInternalPipelineHtml(internalInPipeline) +
+        '<div class="dash-section-hdr">Active Roles <span>' + myRoles.length + '</span></div>' +
+        rolesHtml +
+      '</div>' +
+      '<div class="dash-side">' +
+        kpiSideHtml +
+        commSideHtml +
+      '</div>' +
+    '</div>';
 }
 
 // ── HTML ESCAPE HELPER ────────────────────────
