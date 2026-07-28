@@ -2743,7 +2743,7 @@ async function renderDashboard() {
     stageKeys.forEach(function(k,i){ if (stageMap[k]) pipeHtml += '<div style="flex:'+stageMap[k]+';background:'+stageColors[i]+'"></div>'; });
     pipeHtml += '</div>';
 
-    var html = '<div class="dash-role-row" onclick="viewRoleDetail(''+role.id+'')">';
+    var html = '<div class="dash-role-row" onclick="viewRoleDetail(\''+role.id+'\')">';
     html += '<div class="dash-role-accent" style="background:'+healthColor+'"></div>';
     html += '<div style="display:flex;align-items:center;gap:10px;padding:11px 16px 11px 20px">';
     html += '<div style="flex:1;min-width:0">';
@@ -2757,7 +2757,7 @@ async function renderDashboard() {
     if (newAppsCount > 0) html += '<span style="background:rgba(0,196,238,.1);color:var(--brand);font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap;flex-shrink:0">+'+newAppsCount+' new</span>';
     html += '<span class="tag '+healthTagClass+'" style="flex-shrink:0">'+healthLabel+'</span>';
     html += '<span style="font-size:12px;font-weight:700;color:'+daysColor+';flex-shrink:0;min-width:28px;text-align:right">'+daysOpen+'d</span>';
-    html += '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewRoleDetail(''+role.id+'')" style="flex-shrink:0">View →</button>';
+    html += '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewRoleDetail(\''+role.id+'\')" style="flex-shrink:0">View →</button>';
     html += '</div>';
     if (showSuggestion) html += '<div style="padding:5px 20px 7px;font-size:11px;color:var(--text-3);border-top:1px solid var(--border);background:var(--surface-2)">✶ '+suggestion+'</div>';
     html += '</div>';
@@ -2776,7 +2776,7 @@ async function renderDashboard() {
   var kpiSideHtml = '<div class="card" style="overflow:hidden">';
   kpiSideHtml += '<div class="card-header" style="padding:12px 18px"><span class="card-title" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3)">At a Glance</span></div>';
   kpiSideHtml += '<div class="dash-kpi-row-v">';
-  kpiSideHtml += '<div class="dash-kpi-item clickable" onclick="nav('roles',document.getElementById('nav-roles'))">';
+  kpiSideHtml += '<div class="dash-kpi-item clickable" onclick="nav(\'roles\',document.getElementById(\'nav-roles\'))">';
   kpiSideHtml += '<div><div class="dash-kpi-num" style="color:var(--brand)">' + myRoles.length + '</div><div class="dash-kpi-lbl">' + (userRole === 'admin' ? 'Total open roles' : 'Open roles assigned') + '</div></div>';
   kpiSideHtml += '<span style="font-size:10px;color:var(--text-3)">View →</span></div>';
   kpiSideHtml += '<div class="dash-kpi-item">';
