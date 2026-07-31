@@ -17292,7 +17292,7 @@ async function renderReports() {
   // Load any saved reports from Supabase
   var savedReports = [];
   try {
-    var {data: sr} = await sb.from('saved_reports').select('*').eq('user_id', currentUser.id).order('created_at', {ascending: false});
+    var {data: sr} = await sb.from('saved_reports').select('*, profiles:user_id(full_name)').or('user_id.eq.' + currentUser.id + ',is_public.eq.true').order('created_at', {ascending: false});
     if (sr) savedReports = sr;
   } catch(e) {}
 
@@ -17330,19 +17330,50 @@ async function renderReports() {
   }
 
   // ── SAVED REPORTS ──
-  if (savedReports.length > 0) {
+  var myReports = savedReports.filter(function(r) { return r.user_id === currentUser.id; });
+  var sharedReports = savedReports.filter(function(r) { return r.is_public === true && r.user_id !== currentUser.id; });
+
+  if (myReports.length > 0 || sharedReports.length > 0) {
     html += '<div class="section-header" style="margin-top:32px;margin-bottom:16px">Saved Reports</div>';
-    html += '<div style="display:flex;flex-direction:column;gap:8px">';
-    savedReports.forEach(function(sr) {
-      var cfg = sr.config || {};
-      html += '<div class="card" style="padding:14px 20px;display:flex;align-items:center;gap:16px">';
-      html += '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + _escHtml(sr.name) + '</div>';
-      html += '<div style="font-size:11px;color:var(--text-3);margin-top:2px">' + _escHtml(cfg.metric || '') + ' · ' + _escHtml(cfg.groupBy || '') + ' · ' + _escHtml(cfg.dateRange || '') + '</div></div>';
-      html += '<button class="btn btn-outline btn-sm" onclick="runSavedReport(\'' + sr.id + '\')">Run</button>';
-      html += '<button class="btn btn-ghost btn-sm" onclick="deleteSavedReport(\'' + sr.id + '\')">✕</button>';
+
+    // My Reports sub-section
+    if (myReports.length > 0) {
+      html += '<div style="font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">My Reports</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">';
+      myReports.forEach(function(sr) {
+        var cfg = sr.config || {};
+        var isPublic = sr.is_public === true;
+        var badgeStyle = isPublic
+          ? 'display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(0,196,238,.15);color:var(--accent);font-weight:600'
+          : 'display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 7px;border-radius:20px;background:var(--surface-2);color:var(--text-3);font-weight:600';
+        var badge = isPublic ? '<span style="' + badgeStyle + '">🌐 Public</span>' : '<span style="' + badgeStyle + '">🔒 Private</span>';
+        var toggleLabel = isPublic ? 'Make private' : 'Make public';
+        html += '<div class="card" style="padding:14px 20px;display:flex;align-items:center;gap:16px">';
+        html += '<div style="flex:1"><div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">' + _escHtml(sr.name) + badge + '</div>';
+        html += '<div style="font-size:11px;color:var(--text-3);margin-top:2px">' + _escHtml(cfg.metric || '') + ' · ' + _escHtml(cfg.groupBy || '') + ' · ' + _escHtml(cfg.dateRange || '') + '</div></div>';
+        html += '<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="toggleReportVisibility(\'' + sr.id + '\',' + isPublic + ')">' + toggleLabel + '</button>';
+        html += '<button class="btn btn-outline btn-sm" onclick="runSavedReport(\'' + sr.id + '\')">Run</button>';
+        html += '<button class="btn btn-ghost btn-sm" onclick="deleteSavedReport(\'' + sr.id + '\')">✕</button>';
+        html += '</div>';
+      });
       html += '</div>';
-    });
-    html += '</div>';
+    }
+
+    // Shared with Team sub-section
+    if (sharedReports.length > 0) {
+      html += '<div style="font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Shared with Team</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:8px">';
+      sharedReports.forEach(function(sr) {
+        var cfg = sr.config || {};
+        var creatorName = (sr.profiles && sr.profiles.full_name) ? sr.profiles.full_name : 'A teammate';
+        html += '<div class="card" style="padding:14px 20px;display:flex;align-items:center;gap:16px">';
+        html += '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + _escHtml(sr.name) + '</div>';
+        html += '<div style="font-size:11px;color:var(--text-3);margin-top:2px">' + _escHtml(cfg.metric || '') + ' · ' + _escHtml(cfg.groupBy || '') + ' · ' + _escHtml(cfg.dateRange || '') + ' · by ' + _escHtml(creatorName) + '</div></div>';
+        html += '<button class="btn btn-outline btn-sm" onclick="runSavedReport(\'' + sr.id + '\')">Run</button>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
   }
 
   document.getElementById('content').innerHTML = html;
@@ -17442,11 +17473,13 @@ async function saveCustomReport() {
   var chartType = document.getElementById('rb-charttype')?.value || '';
   var name = prompt('Name this report:');
   if (!name || !name.trim()) return;
+  var isPublic = confirm('Make this report visible to everyone in your organisation?\n\nOK = Public (team can see it)\nCancel = Private (only you)');
   try {
     var {error} = await sb.from('saved_reports').insert({
       user_id: currentUser.id,
       name: name.trim(),
-      config: { metric: metric, groupBy: groupBy, dateRange: dateRange, chartType: chartType }
+      config: { metric: metric, groupBy: groupBy, dateRange: dateRange, chartType: chartType },
+      is_public: isPublic
     });
     if (error) throw error;
     toast('Report saved!', 'ok');
@@ -17459,6 +17492,14 @@ async function saveCustomReport() {
 async function deleteSavedReport(id) {
   if (!confirm('Delete this saved report?')) return;
   await sb.from('saved_reports').delete().eq('id', id);
+  renderReports();
+}
+
+async function toggleReportVisibility(id, isCurrentlyPublic) {
+  var newVal = !isCurrentlyPublic;
+  var {error} = await sb.from('saved_reports').update({is_public: newVal}).eq('id', id);
+  if (error) { toast('Could not update report visibility', 'err'); return; }
+  toast(newVal ? 'Report is now public — team can see it' : 'Report is now private', 'ok');
   renderReports();
 }
 
