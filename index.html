@@ -17538,7 +17538,7 @@ async function approveRole(roleId) {
 // ── REPORTS HUB ───────────────────────────────────────────────
 async function renderReports() {
   _pushHistory('reports', 'Reports', renderReports);
-  document.getElementById('topbar-title').textContent = 'Reports';
+  document.getElementById('page-title').textContent = 'Reports';
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading reports…</div>';
 
   var userRole = currentUser?.role || '';
