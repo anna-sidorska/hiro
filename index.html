@@ -18159,6 +18159,7 @@ async function openCandidateFullPage(appId) {
   // Hidden data stores for CV/EPP URLs
   rightCol += '<span id="cfp-cv-url-data" data-url="' + (c.cv_url || '') + '" style="display:none"></span>';
   rightCol += '<span id="cfp-epp-url-data" data-url="' + (c.epp_url || '') + '" style="display:none"></span>';
+  rightCol += '<span id="cfp-work-history-data" data-json=\'' + _escHtml(JSON.stringify(c.work_history || null)) + '\' style="display:none"></span>';
 
   // Lifecycle progress bar
   rightCol += progressBar;
@@ -18886,7 +18887,32 @@ async function _loadCfpCvTab() {
   if (!inner || _cfpCvTabLoaded) return;
   _cfpCvTabLoaded = true;
   var cvUrl = (document.getElementById('cfp-cv-url-data') || {}).dataset?.url || null;
-  if (!cvUrl) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV on file</div>'; return; }
+  if (!cvUrl) {
+    // No CV file — try rendering LinkedIn work history instead
+    var whRaw = (document.getElementById('cfp-work-history-data') || {}).dataset?.json || 'null';
+    var wh = null;
+    try { wh = JSON.parse(whRaw); } catch(e) {}
+    if (wh && Array.isArray(wh) && wh.length > 0) {
+      var whHtml = '<div style="padding:24px 28px">';
+      whHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">';
+      whHtml += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0077b5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>';
+      whHtml += '<span style="font-size:13px;font-weight:600;color:var(--text-2)">Work History · from LinkedIn</span></div>';
+      wh.forEach(function(entry, i) {
+        whHtml += '<div style="display:flex;gap:14px;padding-bottom:20px' + (i < wh.length - 1 ? ';border-bottom:1px solid var(--border);margin-bottom:20px' : '') + '">';
+        whHtml += '<div style="flex-shrink:0;width:36px;height:36px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">🏢</div>';
+        whHtml += '<div style="min-width:0">';
+        whHtml += '<div style="font-size:14px;font-weight:600;color:var(--text)">' + _escHtml(entry.title || '') + '</div>';
+        whHtml += '<div style="font-size:13px;color:var(--text-2);margin-top:2px">' + _escHtml(entry.company || '') + '</div>';
+        if (entry.dates) whHtml += '<div style="font-size:12px;color:var(--text-3);margin-top:4px">' + _escHtml(entry.dates) + '</div>';
+        whHtml += '</div></div>';
+      });
+      whHtml += '</div>';
+      inner.innerHTML = whHtml;
+    } else {
+      inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV on file</div>';
+    }
+    return;
+  }
   inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading CV...</div>';
   try {
     // Internal candidate — fetch base64 from internal_candidates table
