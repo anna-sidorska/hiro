@@ -1899,7 +1899,7 @@ document.addEventListener('click', function(e) {
   }
 });
 
-function toast(msg, type='ok') {
+function toast(msg, type='ok', duration=4000) {
   const t = document.getElementById('toast');
   const el = document.createElement('div');
   const typeClass = type==='ok'?'toast-ok':type==='err'?'toast-err':'toast-info';
@@ -1907,7 +1907,7 @@ function toast(msg, type='ok') {
   const icon = type==='ok'?'✓':type==='err'?'✕':'ℹ';
   el.innerHTML = '<span>' + icon + '</span><span style="flex:1">' + msg + '</span><button class="toast-close" onclick="this.closest(\'.toast-item\').remove()">✕</button>';
   t.appendChild(el);
-  const timer = setTimeout(function(){ if(el.parentNode) el.remove(); }, 7000);
+  const timer = setTimeout(function(){ if(el.parentNode) el.remove(); }, duration);
   el.querySelector('.toast-close').addEventListener('click', function(){ clearTimeout(timer); });
 }
 
@@ -7444,10 +7444,16 @@ function _apOpenOutlook() {
   const to=document.getElementById('jd-ap-email-to')?.value.trim()||window._jdApEmailTo||'';
   const subject=document.getElementById('jd-ap-email-subject')?.value||window._jdApEmailSubject||'';
   const html=window._jdApEmailHtml||document.getElementById('jd-ap-email-body')?.value||window._jdApEmailBody||'';
-  const url='https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)
-    +'&subject='+encodeURIComponent(subject)
-    +'&body='+encodeURIComponent(html);
-  window.open(url,'_blank');
+  if (_outlookAccount && typeof _outlookSendMail === 'function') {
+    _outlookSendMail(to, subject, html).then(function(sent) {
+      if (sent) { toast('JD approval email sent via Outlook ✓', 'ok'); closeModal('modal-jd-approval-email'); }
+      else { toast('Could not send — check Outlook connection', 'err'); }
+    }).catch(function(e) { toast('Send error: ' + (e.message||'unknown'), 'err'); });
+  } else {
+    navigator.clipboard.writeText(html).catch(function(){});
+    window.open('https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)+'&subject='+encodeURIComponent(subject), '_blank');
+    toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+  }
 }
 
 function buildOfferApprovalEmailHtml(candName, roleTitle, hireType, startDate, salary, approvalLink, senderName) {
@@ -7532,10 +7538,16 @@ function _oaOpenOutlook() {
   var to = document.getElementById('oa-email-to')?.value.trim() || '';
   var subject = document.getElementById('oa-email-subject')?.value || '';
   var htmlBody = window._oaEmailHtml || document.getElementById('oa-email-body')?.value || '';
-  var url = 'https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(to)
-    + '&subject=' + encodeURIComponent(subject)
-    + '&body=' + encodeURIComponent(htmlBody);
-  window.open(url, '_blank');
+  if (_outlookAccount && typeof _outlookSendMail === 'function') {
+    _outlookSendMail(to, subject, htmlBody).then(function(sent) {
+      if (sent) { toast('Offer approval email sent via Outlook ✓', 'ok'); closeModal('modal-offer-approval-email'); }
+      else { toast('Could not send — check Outlook connection', 'err'); }
+    }).catch(function(e) { toast('Send error: ' + (e.message||'unknown'), 'err'); });
+  } else {
+    navigator.clipboard.writeText(htmlBody).catch(function(){});
+    window.open('https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(to) + '&subject=' + encodeURIComponent(subject), '_blank');
+    toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+  }
 }
 
 function _oaCopy(fieldId) {
@@ -11967,8 +11979,16 @@ function openMailtoEval() {
   var subject = _evalEmailSubject();
   var htmlBody = _evalEmailHtml();
   var email = _genLinkIntEmail||'';
-  var url = 'https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(email)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(htmlBody);
-  window.open(url,'_blank');
+  if (_outlookAccount && typeof _outlookSendMail === 'function') {
+    _outlookSendMail(email, subject, htmlBody).then(function(sent) {
+      if (sent) { toast('Evaluation email sent via Outlook ✓', 'ok'); }
+      else { toast('Could not send — check Outlook connection', 'err'); }
+    }).catch(function(e) { toast('Send error: ' + (e.message||'unknown'), 'err'); });
+  } else {
+    navigator.clipboard.writeText(htmlBody).catch(function(){});
+    window.open('https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(email)+'&subject='+encodeURIComponent(subject), '_blank');
+    toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+  }
 }
 
 // "Send Email" button — opens Outlook pre-filled (no extra setup needed)
@@ -11976,7 +11996,7 @@ function sendEvalEmail() {
   openMailtoEval();
   const statusEl = document.getElementById('gl-email-status');
   if (statusEl) {
-    statusEl.textContent = 'Outlook opened with the email pre-filled \u2014 just click Send in Outlook.';
+    statusEl.textContent = 'Email sent or Outlook opened \u2014 if prompted, paste the clipboard content for the formatted email.';
     statusEl.style.color = 'var(--text-3)';
     statusEl.style.display = 'block';
   }
@@ -16867,10 +16887,20 @@ async function sendComposedEmail() {
 
   if (!sent) {
     var htmlToSend = window._composeEmailHtml || body;
-    var outlookUrl = 'https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(htmlToSend);
-    window.open(outlookUrl,'_blank');
-    toast('Opened in Outlook');
-    sent = true;
+    if (_outlookAccount && typeof _outlookSendMail === 'function') {
+      var graphSent = await _outlookSendMail(to, subject, htmlToSend);
+      if (graphSent) {
+        toast('Email sent via Outlook ✓', 'ok');
+        sent = true;
+      } else {
+        toast('Could not send — check Outlook connection', 'err');
+      }
+    } else {
+      navigator.clipboard.writeText(htmlToSend).catch(function(){});
+      window.open('https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)+'&subject='+encodeURIComponent(subject), '_blank');
+      toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+      sent = true;
+    }
   }
 
   // Log in DB
@@ -21512,7 +21542,7 @@ initApp();
 
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-outline" onclick="closeModal('modal-offer-approval-email')">Close</button>
-        <button class="btn btn-primary" onclick="_oaOpenOutlook()">Open in Outlook ↗</button>
+        <button class="btn btn-primary" onclick="_oaOpenOutlook()">Open / Send in Outlook ↗</button>
       </div>
       <div id="oa-copy-confirm" style="text-align:center;font-size:12px;color:var(--green-text);margin-top:8px;min-height:18px"></div>
     </div>
@@ -21566,7 +21596,7 @@ initApp();
 
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-outline" onclick="closeModal('modal-jd-approval-email')">Close</button>
-        <button class="btn btn-primary" onclick="_apOpenOutlook()">Open Outlook Web ↗</button>
+        <button class="btn btn-primary" onclick="_apOpenOutlook()">Open / Send in Outlook ↗</button>
       </div>
       <div id="jd-ap-copy-confirm" style="text-align:center;font-size:12px;color:var(--green-text);margin-top:8px;min-height:18px"></div>
     </div>
