@@ -1802,8 +1802,8 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     storage: _store,
     storageKey: 'hiro-auth',
     detectSessionInUrl: !_HIRO_IS_PUBLIC, // allow PKCE code exchange on auth pages
-    persistSession: !_HIRO_IS_PUBLIC,
-    autoRefreshToken: !_HIRO_IS_PUBLIC
+    persistSession: false,
+    autoRefreshToken: true
   }
 });
 
