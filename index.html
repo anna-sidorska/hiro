@@ -147,8 +147,11 @@ html,body{height:100%;font-family:'DM Sans',-apple-system,sans-serif;background:
 .pipeline-col-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3)}
 .pipeline-col-count{background:var(--surface-3);color:var(--text-2);font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--border)}
 .pipeline-cards{padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1}
-.pipeline-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;cursor:pointer;transition:all .2s ease;box-shadow:var(--shadow)}
+.pipeline-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;cursor:grab;transition:all .2s ease;box-shadow:var(--shadow)}
 .pipeline-card:hover{border-color:var(--brand);box-shadow:0 4px 20px rgba(0,196,238,.15),var(--shadow-md);transform:translateY(-2px)}
+.pipeline-card.dragging{opacity:0.4;transform:scale(0.97);cursor:grabbing}
+.pipeline-col.drag-over{background:rgba(0,196,238,0.08);border-color:rgba(0,196,238,0.5);box-shadow:0 0 0 2px rgba(0,196,238,0.25)}
+.pipeline-cards.drag-over-cards{min-height:80px;background:rgba(0,196,238,0.05);border-radius:var(--r);transition:background .15s}
 .pc-name{font-size:13px;font-weight:600;margin-bottom:2px}
 .pc-role{font-size:11px;color:var(--text-3);margin-bottom:8px}
 .pc-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -1818,6 +1821,8 @@ let _bulkSelected = new Set();
 let _pipelineView = 'kanban'; // 'kanban' | 'list'
 let _prevPage     = null; // legacy — kept for compatibility
 let _pipelineSort = {col:'days',dir:'desc'};
+var _dragAppId = null;
+var _dragFromStage = null;
 
 // ── NAVIGATION HISTORY ────────────────────────
 const _navHistory = [];
@@ -3906,18 +3911,18 @@ function renderPipelineBoard(data) {
   const _avatarColors = ['#2563eb','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#65a30d','#be185d'];
   function _pcAvatarBg(name) { return _avatarColors[((name||'A').charCodeAt(0))%_avatarColors.length]; }
   const cols = STAGES.filter(s=>!['hired','rejected'].includes(s.key)).map(s=>`
-    <div class="pipeline-col" style="border-top:3px solid ${s.color};width:240px;flex-shrink:0">
+    <div class="pipeline-col" data-stage="${s.key}" style="border-top:3px solid ${s.color};width:240px;flex-shrink:0">
       <div class="pipeline-col-header">
         <div class="pipeline-col-title">${s.label}</div>
         <div class="pipeline-col-count" style="background:${s.color}22;color:${s.color}">${byStage[s.key].length}</div>
       </div>
-      <div class="pipeline-cards">
+      <div class="pipeline-cards" ondragover="pipelineDragOver(event)" ondragleave="pipelineDragLeave(event)" ondrop="pipelineDrop(event,'${s.key}')">
         ${byStage[s.key].length ? byStage[s.key].map(app=>{
           var _avatBg = _pcAvatarBg(app.candidates.first_name);
           var _initials = ((app.candidates.first_name||'?')[0]+(app.candidates.last_name||'?')[0]).toUpperCase();
           var _src = app.candidates?.source;
           return `
-          <div class="pipeline-card" data-stage="${app.stage}" id="pc-${app.id}" onclick="_bulkMode?toggleBulkCard('${app.id}',this):openCandidateDrawer('${app.id}')">
+          <div class="pipeline-card" data-stage="${app.stage}" data-app-id="${app.id}" id="pc-${app.id}" draggable="true" ondragstart="pipelineDragStart(event,'${app.id}','${app.stage}')" ondragend="pipelineDragEnd(event)" onclick="_bulkMode?toggleBulkCard('${app.id}',this):openCandidateDrawer('${app.id}')">
             <div style="display:flex;align-items:flex-start;gap:8px">
               <div class="bulk-cb" id="cb-${app.id}" style="display:none;width:16px;height:16px;border:2px solid var(--border);border-radius:3px;flex-shrink:0;margin-top:2px"></div>
               <div class="pc-avatar" style="background:${_avatBg};margin-top:1px;flex-shrink:0">${_initials}</div>
@@ -3937,6 +3942,89 @@ function renderPipelineBoard(data) {
     </div>`).join('');
   const board=document.getElementById('pipeline-board');
   if(board) board.innerHTML=`<div class="pipeline">${cols}</div>`;
+}
+
+// ── PIPELINE DRAG-AND-DROP ────────────────────
+function pipelineDragStart(e, appId, fromStage) {
+  _dragAppId = appId;
+  _dragFromStage = fromStage;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', appId);
+  setTimeout(function() {
+    var el = document.querySelector('.pipeline-card[data-app-id="' + appId + '"]');
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+
+function pipelineDragEnd(e) {
+  document.querySelectorAll('.pipeline-card.dragging').forEach(function(el) { el.classList.remove('dragging'); });
+  document.querySelectorAll('.pipeline-col.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+  document.querySelectorAll('.pipeline-cards.drag-over-cards').forEach(function(el) { el.classList.remove('drag-over-cards'); });
+}
+
+function pipelineDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var cardsEl = e.currentTarget;
+  cardsEl.classList.add('drag-over-cards');
+  var col = cardsEl.closest('.pipeline-col');
+  if (col) col.classList.add('drag-over');
+}
+
+function pipelineDragLeave(e) {
+  var cardsEl = e.currentTarget;
+  if (!cardsEl.contains(e.relatedTarget)) {
+    cardsEl.classList.remove('drag-over-cards');
+    var col = cardsEl.closest('.pipeline-col');
+    if (col) col.classList.remove('drag-over');
+  }
+}
+
+async function pipelineDrop(e, toStage) {
+  e.preventDefault();
+  var cardsEl = e.currentTarget;
+  cardsEl.classList.remove('drag-over-cards');
+  var col = cardsEl.closest('.pipeline-col');
+  if (col) col.classList.remove('drag-over');
+
+  var appId = _dragAppId;
+  var fromStage = _dragFromStage;
+  if (!appId || toStage === fromStage) return;
+
+  // Optimistic UI: move the card in the DOM immediately
+  var card = document.querySelector('.pipeline-card[data-app-id="' + appId + '"]');
+  if (card) {
+    card.classList.remove('dragging');
+    card.setAttribute('data-stage', toStage);
+    cardsEl.appendChild(card);
+    _updateColumnCount(fromStage, -1);
+    _updateColumnCount(toStage, 1);
+  }
+
+  // Update in Supabase
+  var {error} = await sb.from('applications').update({stage: toStage, updated_at: new Date().toISOString()}).eq('id', appId);
+  if (error) {
+    toast('Could not update stage — please refresh', 'err');
+    return;
+  }
+
+  // Audit log
+  try { await auditLog('update', 'application', appId, {stage: toStage, from_stage: fromStage}); } catch(e2) {}
+
+  var stageInfo = STAGES.find(function(x){ return x.key === toStage; });
+  var stageName = stageInfo ? stageInfo.label : toStage;
+  toast('Moved to ' + stageName, 'ok');
+  _dragAppId = null;
+  _dragFromStage = null;
+}
+
+function _updateColumnCount(stageKey, delta) {
+  var col = document.querySelector('.pipeline-col[data-stage="' + stageKey + '"]');
+  if (!col) return;
+  var badge = col.querySelector('.pipeline-col-count');
+  if (!badge) return;
+  var current = parseInt(badge.textContent) || 0;
+  badge.textContent = Math.max(0, current + delta);
 }
 
 // ── PIPELINE LIST VIEW ────────────────────────
