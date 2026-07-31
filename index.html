@@ -7450,9 +7450,7 @@ function _apOpenOutlook() {
       else { toast('Could not send — check Outlook connection', 'err'); }
     }).catch(function(e) { toast('Send error: ' + (e.message||'unknown'), 'err'); });
   } else {
-    navigator.clipboard.writeText(html).catch(function(){});
-    window.open('https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)+'&subject='+encodeURIComponent(subject), '_blank');
-    toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+    showOutlookSendHelper(to, subject, html);
   }
 }
 
@@ -7544,10 +7542,20 @@ function _oaOpenOutlook() {
       else { toast('Could not send — check Outlook connection', 'err'); }
     }).catch(function(e) { toast('Send error: ' + (e.message||'unknown'), 'err'); });
   } else {
-    navigator.clipboard.writeText(htmlBody).catch(function(){});
-    window.open('https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(to) + '&subject=' + encodeURIComponent(subject), '_blank');
-    toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+    showOutlookSendHelper(to, subject, htmlBody);
   }
+}
+
+function showOutlookSendHelper(to, subject, htmlBody) {
+  navigator.clipboard.writeText(htmlBody).catch(function(){});
+  var btn = document.getElementById('outlook-helper-open-btn');
+  if (btn) {
+    btn.onclick = function() {
+      window.open('https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(to) + '&subject=' + encodeURIComponent(subject), '_blank');
+      closeModal('modal-outlook-helper');
+    };
+  }
+  openModal('modal-outlook-helper');
 }
 
 function _oaCopy(fieldId) {
@@ -11985,9 +11993,7 @@ function openMailtoEval() {
       else { toast('Could not send — check Outlook connection', 'err'); }
     }).catch(function(e) { toast('Send error: ' + (e.message||'unknown'), 'err'); });
   } else {
-    navigator.clipboard.writeText(htmlBody).catch(function(){});
-    window.open('https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(email)+'&subject='+encodeURIComponent(subject), '_blank');
-    toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+    showOutlookSendHelper(email, subject, htmlBody);
   }
 }
 
@@ -16896,9 +16902,7 @@ async function sendComposedEmail() {
         toast('Could not send — check Outlook connection', 'err');
       }
     } else {
-      navigator.clipboard.writeText(htmlToSend).catch(function(){});
-      window.open('https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)+'&subject='+encodeURIComponent(subject), '_blank');
-      toast('HTML copied to clipboard — paste into Outlook with Ctrl+V for the formatted email', 'info', 7000);
+      showOutlookSendHelper(to, subject, htmlToSend);
       sent = true;
     }
   }
@@ -21497,6 +21501,37 @@ initApp();
 </script>
 
 <!-- OFFER APPROVAL EMAIL MODAL -->
+<!-- Outlook paste helper modal -->
+<div class="modal-overlay" id="modal-outlook-helper">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">Send via Outlook</div>
+      <button class="modal-close" onclick="closeModal('modal-outlook-helper')">&#x2715;</button>
+    </div>
+    <div class="modal-body" style="padding:24px">
+      <p style="margin:0 0 20px;font-size:14px;color:var(--text-2)">Outlook web doesn't accept HTML via link. Follow these 3 steps:</p>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:24px">
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:rgba(0,196,238,0.07);border-radius:8px;border:1px solid rgba(0,196,238,0.2)">
+          <div style="width:28px;height:28px;background:#00c4ee;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;color:#000;font-size:13px">1</div>
+          <div style="font-size:13px;color:var(--text-1)">HTML email is <strong>copied to your clipboard</strong> &#x2713;</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border)">
+          <div style="width:28px;height:28px;background:var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;color:var(--text-1);font-size:13px">2</div>
+          <div style="font-size:13px;color:var(--text-1)">Click <strong>Open Outlook</strong> below &mdash; To and Subject are pre-filled</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--bg-2);border-radius:8px;border:1px solid var(--border)">
+          <div style="width:28px;height:28px;background:var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;color:var(--text-1);font-size:13px">3</div>
+          <div style="font-size:13px;color:var(--text-1)">Click in the email body and press <strong>Ctrl+V</strong> to paste the formatted email</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeModal('modal-outlook-helper')">Cancel</button>
+        <button id="outlook-helper-open-btn" class="btn btn-primary" style="background:#e8500a;border-color:#e8500a">Open Outlook &rarr;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-offer-approval-email">
   <div class="modal" style="max-width:620px">
     <div class="modal-header">
