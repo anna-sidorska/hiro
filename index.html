@@ -2197,6 +2197,7 @@ function showApp() {
   document.getElementById('sb-user-name').textContent = currentUser.full_name;
   document.getElementById('sb-user-role').textContent  = currentUser.role;
   renderSidebarNav();
+  checkSchema();
   // Check if opened via req_approval link — route directly to the approval view
   const _reqApParam = new URLSearchParams(window.location.search).get('req_approval');
   if (_reqApParam) {
@@ -2217,104 +2218,156 @@ function showLoginScreen() {
   currentUser = null;
 }
 
+async function checkSchema() {
+  if (localStorage.getItem('hiro_schema_v2_warned')) return;
+  var warned = false;
+  var r1 = await sb.from('roles').select('co_recruiter_id').limit(1);
+  if (r1.error && r1.error.code === '42703') {
+    toast('New column needed: run in Supabase SQL editor → ALTER TABLE roles ADD COLUMN co_recruiter_id uuid REFERENCES profiles(id);', 'info', 12000);
+    warned = true;
+  }
+  var r2 = await sb.from('saved_reports').select('id').limit(1);
+  if (r2.error && (r2.error.code === '42P01' || (r2.error.message && r2.error.message.includes('does not exist')))) {
+    toast('New table needed: run in Supabase SQL editor → CREATE TABLE saved_reports (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, user_id uuid REFERENCES profiles(id), name text, config jsonb, created_at timestamptz DEFAULT now());', 'info', 12000);
+    warned = true;
+  }
+  if (warned) localStorage.setItem('hiro_schema_v2_warned', '1');
+}
+
 // ── SIDEBAR ───────────────────────────────────
 function renderSidebarNav() {
-  const nav = document.getElementById('sidebar-nav');
-  if(!nav) return;
+  const navEl = document.getElementById('sidebar-nav');
+  if (!navEl) return;
 
   const icon = {
-    dashboard:  `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
-    pipeline:   `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="8" rx="1"/></svg>`,
-    candidates: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6m3-3h-6"/></svg>`,
-    roles:      `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`,
-    reports:    `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>`,
-    tasks:      `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-    jd_library: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
-    settings:   `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
-    hr_portal:  `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
-    hm_roles:       `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`,
-    hm_interviews:  `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+    dashboard:  '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    pipeline:   '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="8" rx="1"/></svg>',
+    candidates: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6m3-3h-6"/></svg>',
+    roles:      '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+    reports:    '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>',
+    tasks:      '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    jd_library: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+    settings:   '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    hr_portal:  '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+    interviews: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+    hm_roles:   '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+    hm_interviews: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+    scheduling: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    agencies:   '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    business:   '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8h.01M6 12h.01M10 8h8M10 12h5"/></svg>',
+    team:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    tracker:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
+    email:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
   };
 
-  if(currentUser?.role === 'manager') {
-    nav.innerHTML = `
-      <div class="sb-section">My Recruitment</div>
-      <button class="sb-item" id="nav-hm_roles" onclick="nav('hm_roles',this)">${icon.hm_roles} My Roles <span class="sb-badge" id="sb-hm-pending" style="display:none"></span></button>
-      <button class="sb-item" id="nav-hm_interviews" onclick="nav('hm_interviews',this)">${icon.hm_interviews} My Interviews</button>
-    `;
+  var _r = currentUser ? (currentUser.role || '') : '';
+  var html = '';
+
+  // ── MANAGER: simple 2-item menu ──
+  if (_r === 'manager') {
+    navEl.innerHTML = '<div class="sb-section">My Recruitment</div>'
+      + '<button class="sb-item" id="nav-hm_roles" onclick="nav(\'hm_roles\',this)">' + icon.hm_roles + ' My Roles <span class="sb-badge" id="sb-hm-pending" style="display:none"></span></button>'
+      + '<button class="sb-item" id="nav-hm_interviews" onclick="nav(\'hm_interviews\',this)">' + icon.hm_interviews + ' My Interviews</button>';
     loadHmPendingCount();
-  } else {
-    var _r = currentUser?.role;
-    var _isHrRole = (_r === 'hr');
-    var navHtml = '';
-
-    // ── MANAGEMENT role: read-only overview ──
-    if (_r === 'management') {
-      navHtml += '<div class="sb-section">Overview</div>';
-      navHtml += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
-      navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
-      nav.innerHTML = navHtml;
-      return;
-    }
-
-    // ── HOME ──
-    navHtml += '<button class="sb-item" id="nav-home" onclick="nav(\'home\',this)" style="margin:6px 8px 2px;border-radius:var(--r)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> Home</button>';
-    navHtml += '<hr style="border:none;border-top:1px solid var(--border);margin:6px 8px">';
-    // ── RECRUIT section ──
-    navHtml += '<div class="sb-section">Recruit</div>';
-    if (!_isHrRole) {
-      navHtml += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
-      navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
-      navHtml += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
-      navHtml += '<button class="sb-item" id="nav-interviews" onclick="nav(\'interviews\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Interviews</button>';
-    } else {
-      navHtml += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
-    }
-
-    // ── MANAGE section ──
-    navHtml += '<hr class="sb-section-sep"><div class="sb-section">Manage</div>';
-    if (!_isHrRole) {
-      navHtml += '<button class="sb-item" id="nav-tasks" onclick="nav(\'tasks\',this)">' + icon.tasks + ' Tasks <span class="sb-badge" id="sb-task-count" style="display:none"></span></button>';
-      navHtml += '<button class="sb-item" id="nav-jd_library" onclick="nav(\'jd_library\',this)">' + icon.jd_library + ' JD Library</button>';
-      navHtml += '<button class="sb-item" id="nav-email_templates" onclick="nav(\'email_templates\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email Templates</button>';
-    }
-    if (_r === 'admin' || _r === 'hr' || _r === 'recruiter') {
-      navHtml += '<button class="sb-item" id="nav-hr_portal" onclick="nav(\'hr_portal\',this)">' + icon.hr_portal + ' HR Portal</button>';
-      navHtml += '<button class="sb-item" id="nav-agencies" onclick="nav(\'agencies\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Agencies</button>';
-    }
-    if (_r === 'admin' || _r === 'hr' || _r === 'recruiter' || _r === 'manager') {
-      navHtml += '<button class="sb-item" id="nav-business_portal" onclick="nav(\'business_portal\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8h.01M6 12h.01M10 8h8M10 12h5"/></svg> Business Portal</button>';
-    }
-    if (_r === 'coordinator') {
-      navHtml += '<button class="sb-item" id="nav-scheduling_hub" onclick="nav(\'scheduling_hub\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Scheduling Hub</button>';
-    }
-
-    // ── REPORTS section ──
-    navHtml += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
-    navHtml += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
-    if (_r === 'admin' || _r === 'recruiter' || _r === 'hr') {
-      navHtml += '<button class="sb-item" id="nav-hiring_dashboard" onclick="nav(\'hiring_dashboard\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polyline points="14,8 16,10 20,6"/></svg> Hiring Dashboard</button>';
-      navHtml += '<button class="sb-item" id="nav-fpa_report" onclick="window._bpTab=\'fpa\';nav(\'business_portal\',document.getElementById(\'nav-business_portal\'))"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> FP&amp;A Report</button>';
-      navHtml += '<button class="sb-item" id="nav-recruiter_dashboard" onclick="nav(\'recruiter_dashboard\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Recruiter Stats</button>';
-      navHtml += '<button class="sb-item" id="nav-offer_outcomes" onclick="nav(\'offer_outcomes\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Offer Outcomes</button>';
-      navHtml += '<button class="sb-item" id="nav-hm_satisfaction" onclick="nav(\'hm_satisfaction\',this)"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> HM Feedback</button>';
-    }
-    if (_r === 'admin') {
-      navHtml += '<button class="sb-item" id="nav-roles_tracker" onclick="nav(\'roles_tracker\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> Roles Tracker</button>';
-    }
-
-    // ── ADMIN section ──
-    if (_r === 'admin') {
-      navHtml += '<hr class="sb-section-sep"><div class="sb-section">Admin</div>';
-      navHtml += '<button class="sb-item" id="nav-team_users" onclick="nav(\'team_users\',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Team &amp; Users</button>';
-    }
-
-    // ── SETTINGS (bottom, subtle) ──
-    navHtml += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
-    navHtml += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
-
-    nav.innerHTML = navHtml;
+    return;
   }
+
+  // ── EXEC / FP&A: numbers-only overview ──
+  if (_r === 'exec' || _r === 'fp_and_a') {
+    html += '<div class="sb-section">Overview</div>';
+    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+    html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
+    html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
+    navEl.innerHTML = html;
+    return;
+  }
+
+  // ── ADMIN ──
+  if (_r === 'admin') {
+    html += '<div class="sb-section">Recruit</div>';
+    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
+    html += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
+    html += '<button class="sb-item" id="nav-pipeline" onclick="nav(\'pipeline\',this)">' + icon.pipeline + ' Pipeline</button>';
+    html += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
+    html += '<button class="sb-item" id="nav-interviews" onclick="nav(\'interviews\',this)">' + icon.interviews + ' Interviews</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Manage</div>';
+    html += '<button class="sb-item" id="nav-tasks" onclick="nav(\'tasks\',this)">' + icon.tasks + ' Tasks <span class="sb-badge" id="sb-task-count" style="display:none"></span></button>';
+    html += '<button class="sb-item" id="nav-jd_library" onclick="nav(\'jd_library\',this)">' + icon.jd_library + ' JD Library</button>';
+    html += '<button class="sb-item" id="nav-email_templates" onclick="nav(\'email_templates\',this)">' + icon.email + ' Email Templates</button>';
+    html += '<button class="sb-item" id="nav-hr_portal" onclick="nav(\'hr_portal\',this)">' + icon.hr_portal + ' HR Portal</button>';
+    html += '<button class="sb-item" id="nav-agencies" onclick="nav(\'agencies\',this)">' + icon.agencies + ' Agencies</button>';
+    html += '<button class="sb-item" id="nav-business_portal" onclick="nav(\'business_portal\',this)">' + icon.business + ' Business Portal</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Admin</div>';
+    html += '<button class="sb-item" id="nav-roles_tracker" onclick="nav(\'roles_tracker\',this)">' + icon.tracker + ' Roles Tracker</button>';
+    html += '<button class="sb-item" id="nav-team_users" onclick="nav(\'team_users\',this)">' + icon.team + ' Team &amp; Users</button>';
+    html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
+    html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
+    navEl.innerHTML = html;
+    return;
+  }
+
+  // ── RECRUITER ──
+  if (_r === 'recruiter') {
+    html += '<div class="sb-section">Recruit</div>';
+    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
+    html += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' My Roles</button>';
+    html += '<button class="sb-item" id="nav-pipeline" onclick="nav(\'pipeline\',this)">' + icon.pipeline + ' Pipeline</button>';
+    html += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
+    html += '<button class="sb-item" id="nav-interviews" onclick="nav(\'interviews\',this)">' + icon.interviews + ' Interviews</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Manage</div>';
+    html += '<button class="sb-item" id="nav-tasks" onclick="nav(\'tasks\',this)">' + icon.tasks + ' Tasks <span class="sb-badge" id="sb-task-count" style="display:none"></span></button>';
+    html += '<button class="sb-item" id="nav-jd_library" onclick="nav(\'jd_library\',this)">' + icon.jd_library + ' JD Library</button>';
+    html += '<button class="sb-item" id="nav-email_templates" onclick="nav(\'email_templates\',this)">' + icon.email + ' Email Templates</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+    html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
+    html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
+    navEl.innerHTML = html;
+    return;
+  }
+
+  // ── COORDINATOR ──
+  if (_r === 'coordinator') {
+    html += '<div class="sb-section">Recruit</div>';
+    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
+    html += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' All Roles</button>';
+    html += '<button class="sb-item" id="nav-scheduling_hub" onclick="nav(\'scheduling_hub\',this)">' + icon.scheduling + ' Scheduling Hub</button>';
+    html += '<button class="sb-item" id="nav-interviews" onclick="nav(\'interviews\',this)">' + icon.interviews + ' Interviews</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Manage</div>';
+    html += '<button class="sb-item" id="nav-tasks" onclick="nav(\'tasks\',this)">' + icon.tasks + ' Tasks <span class="sb-badge" id="sb-task-count" style="display:none"></span></button>';
+    html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
+    html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
+    navEl.innerHTML = html;
+    return;
+  }
+
+  // ── HR ──
+  if (_r === 'hr') {
+    html += '<div class="sb-section">Recruit</div>';
+    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
+    html += '<button class="sb-item" id="nav-roles" onclick="nav(\'roles\',this)">' + icon.roles + ' Roles</button>';
+    html += '<button class="sb-item" id="nav-candidates" onclick="nav(\'candidates\',this)">' + icon.candidates + ' Candidates <span class="sb-badge" id="sb-cand-count" style="display:none"></span></button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Manage</div>';
+    html += '<button class="sb-item" id="nav-hr_portal" onclick="nav(\'hr_portal\',this)">' + icon.hr_portal + ' HR Portal</button>';
+    html += '<button class="sb-item" id="nav-business_portal" onclick="nav(\'business_portal\',this)">' + icon.business + ' Business Portal</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+    html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
+    html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
+    navEl.innerHTML = html;
+    return;
+  }
+
+  // ── FALLBACK (unknown role): minimal nav ──
+  html += '<div class="sb-section">Overview</div>';
+  html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
+  html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
+  html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
+  navEl.innerHTML = html;
 }
 
 async function loadSidebarCounts() {
@@ -2504,9 +2557,103 @@ function _buildInternalPipelineHtml(apps) {
     '</div></div>';
 }
 
+// ── EXEC AGGREGATE DASHBOARD ──────────────────────────────────
+async function renderExecDashboard() {
+  var topbar = document.getElementById('topbar-title');
+  if (topbar) topbar.textContent = 'Executive Overview';
+  var topbarActions = document.getElementById('topbar-actions');
+  if (topbarActions) topbarActions.innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading executive overview...</div>';
+
+  var now = new Date();
+  var qStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1).toISOString();
+  var qEnd = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0, 23, 59, 59).toISOString();
+
+  var results = await Promise.allSettled([
+    sb.from('roles').select('id,title,department,status').eq('status','open'),
+    sb.from('applications').select('id,stage,role_id').not('stage','in','(hired,rejected,withdrawn)'),
+    sb.from('roles').select('id,department').eq('status','filled').gte('updated_at', qStart).lte('updated_at', qEnd),
+  ]);
+
+  function safeData(i) { return (results[i].status === 'fulfilled' && results[i].value.data) ? results[i].value.data : []; }
+  var openRoles = safeData(0);
+  var activeApps = safeData(1);
+  var filledThisQ = safeData(2);
+
+  var interviewStages = ['interview_1','interview_2','final_interview'];
+  var finalistStages = ['final_interview','offer'];
+
+  var kpiOpenRoles = openRoles.length;
+  var kpiActiveCands = activeApps.length;
+  var kpiInterviews = activeApps.filter(function(a){ return interviewStages.indexOf(a.stage) !== -1; }).length;
+  var kpiFinalists = activeApps.filter(function(a){ return finalistStages.indexOf(a.stage) !== -1; }).length;
+  var kpiOffersPending = activeApps.filter(function(a){ return a.stage === 'offer'; }).length;
+  var kpiHiresQtr = filledThisQ.length;
+
+  var kpis = [
+    { label: 'Open Roles', value: kpiOpenRoles },
+    { label: 'Active Candidates', value: kpiActiveCands },
+    { label: 'Interviews in Flight', value: kpiInterviews },
+    { label: 'Finalists', value: kpiFinalists },
+    { label: 'Offers Pending', value: kpiOffersPending },
+    { label: 'Hires This Quarter', value: kpiHiresQtr },
+  ];
+
+  var kpiHtml = kpis.map(function(k) {
+    return '<div class="kpi"><div class="kpi-value">' + k.value + '</div><div class="kpi-label">' + k.label + '</div></div>';
+  }).join('');
+
+  // Department breakdown
+  var deptMap = {};
+  openRoles.forEach(function(r) {
+    var d = r.department || 'Unknown';
+    if (!deptMap[d]) deptMap[d] = { open: 0, cands: 0, interviews: 0, finalists: 0 };
+    deptMap[d].open++;
+  });
+  var openRoleIds = {};
+  openRoles.forEach(function(r){ openRoleIds[r.id] = r.department || 'Unknown'; });
+  activeApps.forEach(function(a) {
+    var dept = openRoleIds[a.role_id];
+    if (!dept) return;
+    if (!deptMap[dept]) deptMap[dept] = { open: 0, cands: 0, interviews: 0, finalists: 0 };
+    deptMap[dept].cands++;
+    if (interviewStages.indexOf(a.stage) !== -1) deptMap[dept].interviews++;
+    if (finalistStages.indexOf(a.stage) !== -1) deptMap[dept].finalists++;
+  });
+
+  var deptRows = Object.keys(deptMap).sort().map(function(d) {
+    var v = deptMap[d];
+    return '<tr><td style="padding:8px 12px;font-size:13px">' + d + '</td>'
+      + '<td style="padding:8px 12px;text-align:center;font-size:13px">' + v.open + '</td>'
+      + '<td style="padding:8px 12px;text-align:center;font-size:13px">' + v.cands + '</td>'
+      + '<td style="padding:8px 12px;text-align:center;font-size:13px">' + v.interviews + '</td>'
+      + '<td style="padding:8px 12px;text-align:center;font-size:13px">' + v.finalists + '</td></tr>';
+  }).join('');
+
+  document.getElementById('content').innerHTML =
+    '<h2 style="font-size:20px;font-weight:700;margin-bottom:18px">Executive Overview</h2>'
+    + '<div class="grid-4" style="margin-bottom:28px">' + kpiHtml + '</div>'
+    + '<div class="card"><div class="card-header"><div class="card-title">Department Breakdown</div></div>'
+    + '<div class="card-body" style="padding:0">'
+    + '<table style="width:100%;border-collapse:collapse">'
+    + '<thead><tr style="border-bottom:1px solid var(--border)">'
+    + '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Department</th>'
+    + '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Open Roles</th>'
+    + '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Candidates</th>'
+    + '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Interviews</th>'
+    + '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Finalists</th>'
+    + '</tr></thead><tbody>' + (deptRows || '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text-3)">No data</td></tr>') + '</tbody>'
+    + '</table></div></div>';
+}
+
 // ── DASHBOARD (Recruiter Personal Assistant View) ─────────────
 async function renderDashboard() {
   _pushHistory('dashboard', 'Dashboard', renderDashboard);
+  var userRole = currentUser ? (currentUser.role || '') : '';
+  if (userRole === 'exec' || userRole === 'fp_and_a') {
+    await renderExecDashboard();
+    return;
+  }
   var isAdminRole = currentUser && ['admin','manager'].includes(currentUser.role || '');
   if (window._dashAdminAll === undefined) window._dashAdminAll = false; // default: my roles only
   if (isAdminRole) {
@@ -2532,11 +2679,11 @@ async function renderDashboard() {
   var userId = currentUser ? currentUser.id : null;
   var userRole = currentUser ? (currentUser.role || '') : '';
 
-  // Fetch roles — admin can toggle between all vs assigned to them
+  // Fetch roles — admin/coordinator can toggle between all vs assigned to them
   var _dashAdminAll = window._dashAdminAll !== false; // default: show all for admin
   var rolesQuery = sb.from('roles').select('*').eq('status', 'open');
-  if (!['admin','manager'].includes(userRole) || !_dashAdminAll) {
-    rolesQuery = rolesQuery.eq('assigned_recruiter_id', userId);
+  if (!['admin','manager','coordinator'].includes(userRole) || !_dashAdminAll) {
+    rolesQuery = rolesQuery.or('assigned_recruiter_id.eq.' + userId + ',co_recruiter_id.eq.' + userId);
   }
 
   var results = await Promise.allSettled([
@@ -4422,8 +4569,12 @@ async function _reassignRecruiter(roleId) {
   var res = await sb.from('profiles').select('id,user_id,full_name,email,role').in('role',['recruiter','admin','coordinator']).order('full_name');
   if (res.error || !res.data?.length) { toast('Could not load recruiter list','err'); return; }
   var current = _rdData?.role?.assigned_recruiter_id || '';
+  var currentCo = _rdData?.role?.co_recruiter_id || '';
   var opts = res.data.map(function(p) {
     return '<option value="' + p.id + '"' + (p.id===current?' selected':'') + '>' + (p.full_name||p.email) + ' (' + p.role + ')</option>';
+  }).join('');
+  var coOpts = res.data.map(function(p) {
+    return '<option value="' + p.id + '"' + (p.id===currentCo?' selected':'') + '>' + (p.full_name||p.email) + ' (' + p.role + ')</option>';
   }).join('');
   // Remove any existing modal
   var old = document.getElementById('reassign-modal');
@@ -4431,10 +4582,15 @@ async function _reassignRecruiter(roleId) {
   var m = document.createElement('div');
   m.id = 'reassign-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
-  m.innerHTML = '<div style="background:#132038;border-radius:12px;padding:28px 28px 22px;width:380px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.7);isolation:isolate;position:relative;z-index:10000">'
-    + '<div style="font-weight:700;font-size:16px;margin-bottom:16px;color:var(--text)">Reassign Recruiter</div>'
-    + '<select id="reassign-sel" style="width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;margin-bottom:20px">'
+  m.innerHTML = '<div style="background:#132038;border-radius:12px;padding:28px 28px 22px;width:420px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.7);isolation:isolate;position:relative;z-index:10000">'
+    + '<div style="font-weight:700;font-size:16px;margin-bottom:18px;color:var(--text)">Assign Recruiter</div>'
+    + '<div style="font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Primary Recruiter</div>'
+    + '<select id="reassign-sel" style="width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;margin-bottom:18px">'
     + '<option value="">— Unassigned —</option>' + opts + '</select>'
+    + '<div style="font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Co-Recruiter (OoO Cover)</div>'
+    + '<div style="font-size:11px;color:var(--text-3);margin-bottom:6px">Optional — gets full pipeline access while primary recruiter is away.</div>'
+    + '<select id="reassign-co-sel" style="width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;margin-bottom:20px">'
+    + '<option value="">— None —</option>' + coOpts + '</select>'
     + '<div style="display:flex;gap:10px;justify-content:flex-end">'
     + '<button onclick="document.getElementById(\'reassign-modal\').remove()" style="padding:8px 18px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:14px">Cancel</button>'
     + '<button id="reassign-confirm-btn" style="padding:8px 18px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer;font-size:14px;font-weight:600">Confirm</button>'
@@ -4442,12 +4598,15 @@ async function _reassignRecruiter(roleId) {
   document.body.appendChild(m);
   document.getElementById('reassign-confirm-btn').onclick = async function() {
     var selEl = document.getElementById('reassign-sel');
+    var coSelEl = document.getElementById('reassign-co-sel');
     var chosenId = selEl.value;
+    var chosenCoId = coSelEl.value;
     var chosen = chosenId ? res.data.find(function(p){ return p.id === chosenId; }) : null;
+    var chosenCo = chosenCoId ? res.data.find(function(p){ return p.id === chosenCoId; }) : null;
     m.remove();
-    var upd = await sb.from('roles').update({assigned_recruiter_id: chosenId || null}).eq('id', roleId);
+    var upd = await sb.from('roles').update({assigned_recruiter_id: chosenId || null, co_recruiter_id: chosenCoId || null}).eq('id', roleId);
     if (upd.error) { toast('Error: ' + upd.error.message, 'err'); return; }
-    await auditLog('update','role',roleId,{assigned_recruiter_id: chosenId||null, recruiter_name: chosen ? chosen.full_name : 'unassigned'});
+    await auditLog('update','role',roleId,{assigned_recruiter_id: chosenId||null, recruiter_name: chosen ? chosen.full_name : 'unassigned', co_recruiter_id: chosenCoId||null, co_recruiter_name: chosenCo ? chosenCo.full_name : null});
     toast(chosen ? 'Assigned to ' + (chosen.full_name||chosen.email) + ' ✓' : 'Role unassigned ✓');
     if (currentPage === 'roles_tracker') { renderRolesTracker(); } else { viewRoleDetail(roleId); }
   };
