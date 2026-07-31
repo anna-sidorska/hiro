@@ -7649,8 +7649,8 @@ async function renderTasks() {
   loadTaskSelects();
 }
 
-// ── REPORTS ───────────────────────────────────
-async function renderReports() {
+// ── REPORTS (legacy v1, kept for export helper) ─────────────
+async function renderReports_v1() {
   document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-outline btn-sm" onclick="exportReportCSV()">Export CSV</button>`;
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading...</div>';
 
@@ -17280,148 +17280,221 @@ async function approveRole(roleId) {
   renderHrPortal();
 }
 
-// ── REPORTS DASHBOARD (v6 enhanced, replaces v5) ──────────────
+// ── REPORTS HUB ───────────────────────────────────────────────
 async function renderReports() {
   _pushHistory('reports', 'Reports', renderReports);
-  if (!_canSee('reports')) {
-    document.getElementById('topbar-actions').innerHTML = '';
-    document.getElementById('content').innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><div class="empty-title">Access Restricted</div><div class="empty-sub">You don\'t have access to reports. Contact your admin if you need access.</div></div>';
-    return;
+  document.getElementById('topbar-title').textContent = 'Reports';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading reports…</div>';
+
+  var userRole = currentUser?.role || '';
+  var canBuild = ['admin','hr','recruiter'].includes(userRole);
+
+  // Load any saved reports from Supabase
+  var savedReports = [];
+  try {
+    var {data: sr} = await sb.from('saved_reports').select('*').eq('user_id', currentUser.id).order('created_at', {ascending: false});
+    if (sr) savedReports = sr;
+  } catch(e) {}
+
+  // Standard built-in reports list
+  var builtInReports = [
+    {id: 'hiring_dashboard', label: 'Hiring Dashboard', desc: 'Open roles, pipeline health, time-to-hire', icon: '\u{1F4CA}', roles: ['admin','hr','recruiter','coordinator']},
+    {id: 'recruiter_dashboard', label: 'Recruiter Performance', desc: 'Activity, conversions, and speed per recruiter', icon: '\u{1F464}', roles: ['admin','hr']},
+    {id: 'offer_outcomes', label: 'Offer Outcomes', desc: 'Acceptance rates, declines, and reasons', icon: '✅', roles: ['admin','hr','recruiter']},
+    {id: 'hm_satisfaction', label: 'HM Feedback', desc: 'Hiring manager satisfaction scores', icon: '\u{1F4AC}', roles: ['admin','hr']},
+    {id: 'fpa_report', label: 'FP&A / Headcount', desc: 'Headcount by department, budget, cost tracking', icon: '\u{1F4B0}', roles: ['admin','hr','fp_and_a','exec']},
+    {id: 'roles_tracker', label: 'Roles Tracker', desc: 'All roles status, aging, and history', icon: '\u{1F4CB}', roles: ['admin']},
+    {id: 'business_portal', label: 'Business Portal', desc: 'Cross-functional view for business partners', icon: '\u{1F3E2}', roles: ['admin','hr','recruiter','manager']},
+  ].filter(function(r){ return !r.roles || r.roles.includes(userRole); });
+
+  var html = '';
+
+  // ── BUILT-IN REPORTS GRID ──
+  html += '<div class="section-header" style="margin-bottom:16px">Built-in Reports</div>';
+  html += '<div class="grid-3" style="margin-bottom:32px">';
+  builtInReports.forEach(function(r) {
+    html += '<div class="card" style="padding:20px;cursor:pointer;transition:all .2s" onclick="nav(\'' + r.id + '\',null)" onmouseover="this.style.borderColor=\'rgba(0,196,238,.35)\'" onmouseout="this.style.borderColor=\'\'">';
+    html += '<div style="font-size:26px;margin-bottom:12px">' + r.icon + '</div>';
+    html += '<div style="font-size:14px;font-weight:600;margin-bottom:4px">' + r.label + '</div>';
+    html += '<div style="font-size:12px;color:var(--text-3);line-height:1.5">' + r.desc + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // ── REPORT BUILDER (admin/hr/recruiter only) ──
+  if (canBuild) {
+    html += '<div class="section-header" style="margin-bottom:16px">Custom Report Builder</div>';
+    html += '<div class="card card-body" id="report-builder-panel">';
+    html += buildReportBuilderUI();
+    html += '</div>';
   }
-  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-outline btn-sm" onclick="exportReportCSV()">Export CSV</button>';
-  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
-  var results = await Promise.allSettled([
-    sb.from('candidates').select('*',{count:'exact',head:true}),
-    sb.from('roles').select('*',{count:'exact',head:true}).eq('status','open'),
-    sb.from('applications').select('*',{count:'exact',head:true}).not('stage','in','(hired,rejected,withdrawn)'),
-    sb.from('interviews').select('*',{count:'exact',head:true}).eq('status','scheduled'),
-    sb.from('applications').select('*',{count:'exact',head:true}).eq('stage','hired').gte('updated_at',new Date(Date.now()-30*86400000).toISOString()),
-    sb.from('applications').select('stage,created_at,updated_at,role_id'),
-    sb.from('candidates').select('source'),
-    sb.from('roles').select('region,status,created_at,title,department'),
-    sb.from('applications').select('stage,roles(region)').not('stage','in','(hired,rejected,withdrawn)'),
-    sb.from('applications').select('*',{count:'exact',head:true}).eq('stage','offer'),
-    sb.from('applications').select('stage,created_at').gte('created_at', new Date(Date.now()-7*86400000).toISOString()),
-    sb.from('roles').select('department,status'),
-  ]);
+  // ── SAVED REPORTS ──
+  if (savedReports.length > 0) {
+    html += '<div class="section-header" style="margin-top:32px;margin-bottom:16px">Saved Reports</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px">';
+    savedReports.forEach(function(sr) {
+      var cfg = sr.config || {};
+      html += '<div class="card" style="padding:14px 20px;display:flex;align-items:center;gap:16px">';
+      html += '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + _escHtml(sr.name) + '</div>';
+      html += '<div style="font-size:11px;color:var(--text-3);margin-top:2px">' + _escHtml(cfg.metric || '') + ' · ' + _escHtml(cfg.groupBy || '') + ' · ' + _escHtml(cfg.dateRange || '') + '</div></div>';
+      html += '<button class="btn btn-outline btn-sm" onclick="runSavedReport(\'' + sr.id + '\')">Run</button>';
+      html += '<button class="btn btn-ghost btn-sm" onclick="deleteSavedReport(\'' + sr.id + '\')">✕</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
 
-  var r = function(i) { return results[i].status==='fulfilled' ? results[i].value : {}; };
-  var totalCands=r(0).count??0, totalRoles=r(1).count??0, openApps=r(2).count??0;
-  var totalInterviews=r(3).count??0, hired30=r(4).count??0;
-  var allAppsData=r(5).data||[], sourceData=r(6).data||[], rolesData=r(7).data||[];
-  var inOffer=r(9).count??0;
-  var weekApps=r(10).data||[];
-  var allRolesData=r(11).data||[];
+  document.getElementById('content').innerHTML = html;
+}
 
-  // Stage pipeline
-  var stageActive=allAppsData.filter(function(a){return !['hired','rejected','withdrawn'].includes(a.stage);});
-  var stageCounts={};
-  STAGES.forEach(function(s){stageCounts[s.key]=0;});
-  stageActive.forEach(function(a){if(stageCounts[a.stage]!==undefined)stageCounts[a.stage]++;});
-  var maxStage=Math.max.apply(null,Object.values(stageCounts).concat([1]));
-  var bars=STAGES.filter(function(s){return !['hired','rejected','withdrawn'].includes(s.key);}).map(function(s){
-    var n=stageCounts[s.key]||0;
-    var pct=Math.round(n/maxStage*100);
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">' +
-      '<div style="width:130px;font-size:12px;font-weight:500;color:var(--text-2);flex-shrink:0">' + s.label + '</div>' +
-      '<div style="flex:1;height:12px;background:var(--surface-2);border-radius:99px;overflow:hidden">' +
-      '<div style="width:' + pct + '%;height:100%;background:' + s.color + ';border-radius:99px"></div></div>' +
-      '<div style="width:28px;text-align:right;font-size:13px;font-weight:700;color:var(--text-2)">' + n + '</div></div>';
-  }).join('');
+function buildReportBuilderUI() {
+  var metrics = ['Applications received','Time to hire (avg days)','Offer acceptance rate','Pipeline conversion rate','Interviews per hire','Sourcing channel breakdown','Active candidates by stage','Hires by department'];
+  var groupBys = ['Department','Recruiter','Location','Role','Month','Quarter'];
+  var dateRanges = ['Last 30 days','Last 90 days','This quarter','Last quarter','This year','Custom range'];
+  var chartTypes = ['Bar chart','Line chart','Table','Donut chart'];
 
-  // Conversion funnel
-  var funnelStages=['applied','screening','shortlisted','interview_1','interview_2','final_interview','offer'];
-  var funnelCounts={};
-  allAppsData.forEach(function(a){var s=a.stage;if(funnelStages.includes(s)||(s==='hired')){var key=s==='hired'?'hired':s;funnelCounts[key]=(funnelCounts[key]||0)+1;}});
-  ['hired'].concat(funnelStages).forEach(function(s){if(!funnelCounts[s])funnelCounts[s]=0;});
-  var firstCount=funnelCounts['applied']||1;
-  var funnelRows=funnelStages.map(function(s){return {key:s,label:STAGES.find(function(x){return x.key===s;})?.label||s};}).concat([{key:'hired',label:'Hired'}]).map(function(s,i,arr){
-    var n=funnelCounts[s.key]||0;
-    var prev=i>0?funnelCounts[arr[i-1].key]||1:null;
-    var pct=Math.round(n/firstCount*100);
-    var conv=prev&&prev>0?Math.round(n/prev*100):null;
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-      '<div style="width:130px;font-size:12px;font-weight:500;flex-shrink:0">' + s.label + '</div>' +
-      '<div style="width:40px;text-align:right;font-size:13px;font-weight:700">' + n + '</div>' +
-      '<div style="flex:1;height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden">' +
-      '<div style="width:' + pct + '%;height:100%;background:' + (s.key==='hired'?'var(--green)':'var(--brand)') + ';border-radius:99px"></div></div>' +
-      (conv!==null?'<div style="width:40px;font-size:11px;text-align:right;color:' + (conv<30?'var(--red)':conv<60?'var(--amber)':'var(--green)') + '">' + conv + '%</div>':'<div style="width:40px"></div>') +
-      '</div>';
-  }).join('');
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;margin-bottom:20px">';
 
-  // Source breakdown
-  var sourceCounts={};
-  sourceData.forEach(function(c){var s=c.source||'Unknown';sourceCounts[s]=(sourceCounts[s]||0)+1;});
-  var totalSrc=Object.values(sourceCounts).reduce(function(a,b){return a+b;},0)||1;
-  var sourceRows=Object.entries(sourceCounts).sort(function(a,b){return b[1]-a[1];}).map(function(entry){
-    var s=entry[0]; var n=entry[1];
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-      '<div style="width:120px;font-size:12px;font-weight:500;color:var(--text-2);flex-shrink:0">' + s + '</div>' +
-      '<div style="flex:1;height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden">' +
-      '<div style="width:' + Math.round(n/totalSrc*100) + '%;height:100%;background:var(--brand);border-radius:99px"></div></div>' +
-      '<div style="font-size:12px;font-weight:600;color:var(--text-2);width:52px;text-align:right">' + n + ' (' + Math.round(n/totalSrc*100) + '%)</div></div>';
-  }).join('');
+  html += '<div class="form-group" style="margin-bottom:0"><label>Metric</label><select id="rb-metric" style="width:100%">';
+  metrics.forEach(function(m) { html += '<option>' + m + '</option>'; });
+  html += '</select></div>';
 
-  // Open roles by dept
-  var deptCounts={};
-  allRolesData.filter(function(r){return r.status==='open';}).forEach(function(r){var k=r.department||'No Dept';deptCounts[k]=(deptCounts[k]||0)+1;});
-  var deptRows=Object.entries(deptCounts).sort(function(a,b){return b[1]-a[1];}).map(function(e){return '<tr><td>' + e[0] + '</td><td style="font-weight:600">' + e[1] + '</td></tr>';}).join('');
+  html += '<div class="form-group" style="margin-bottom:0"><label>Group by</label><select id="rb-groupby" style="width:100%">';
+  groupBys.forEach(function(g) { html += '<option>' + g + '</option>'; });
+  html += '</select></div>';
 
-  // Region breakdown
-  var regionCounts={};
-  rolesData.filter(function(r){return r.status==='open';}).forEach(function(r){var k=r.region||'No Region';regionCounts[k]=(regionCounts[k]||0)+1;});
-  var regionRows=Object.entries(regionCounts).sort(function(a,b){return b[1]-a[1];}).map(function(e){return '<tr><td>' + e[0] + '</td><td>' + e[1] + '</td></tr>';}).join('');
+  html += '<div class="form-group" style="margin-bottom:0"><label>Date range</label><select id="rb-daterange" style="width:100%">';
+  dateRanges.forEach(function(d) { html += '<option>' + d + '</option>'; });
+  html += '</select></div>';
 
-  // TTH
-  var hiredApps=allAppsData.filter(function(a){return a.stage==='hired'&&a.created_at&&a.updated_at;});
-  var avgDays=hiredApps.length?Math.round(hiredApps.reduce(function(sum,a){return sum+(new Date(a.updated_at)-new Date(a.created_at))/86400000;},0)/hiredApps.length):null;
+  html += '<div class="form-group" style="margin-bottom:0"><label>Display as</label><select id="rb-charttype" style="width:100%">';
+  chartTypes.forEach(function(c) { html += '<option>' + c + '</option>'; });
+  html += '</select></div>';
 
-  // Weekly snapshot
-  var weekHired=weekApps.filter(function(a){return a.stage==='hired';}).length;
-  var weekApplied=weekApps.length;
-  var weekOffers=weekApps.filter(function(a){return a.stage==='offer';}).length;
+  html += '</div>';
 
-  // Longest open roles
-  var openRoles=rolesData.filter(function(r){return r.status==='open';}).map(function(r){return Object.assign({},r,{daysOpen:Math.floor((Date.now()-new Date(r.created_at))/86400000)});}).sort(function(a,b){return b.daysOpen-a.daysOpen;}).slice(0,8);
-  var roleAgeRows=openRoles.map(function(r){return '<tr><td class="fw-600">' + r.title + '</td><td>' + (r.region||'—') + '</td><td><span style="color:' + (r.daysOpen>60?'var(--red)':r.daysOpen>30?'var(--amber)':'var(--green)') + ';font-weight:600">' + r.daysOpen + 'd</span></td></tr>';}).join('');
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += '<button class="btn btn-primary" onclick="runCustomReport()">▶ Run Report</button>';
+  html += '<button class="btn btn-outline" onclick="saveCustomReport()">Save as…</button>';
+  html += '<button class="btn btn-outline" onclick="exportCustomReport()">Export Excel</button>';
+  html += '</div>';
+  html += '<div id="rb-output" style="margin-top:24px"></div>';
 
-  document.getElementById('content').innerHTML =
-    '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:20px">' +
-    '<div class="card kpi"><div class="kpi-val">' + totalCands + '</div><div class="kpi-label">Total Candidates</div></div>' +
-    '<div class="card kpi"><div class="kpi-val">' + totalRoles + '</div><div class="kpi-label">Open Roles</div></div>' +
-    '<div class="card kpi"><div class="kpi-val">' + openApps + '</div><div class="kpi-label">Active Apps</div></div>' +
-    '<div class="card kpi"><div class="kpi-val">' + totalInterviews + '</div><div class="kpi-label">Interviews</div></div>' +
-    '<div class="card kpi"><div class="kpi-val" style="color:var(--green)">' + hired30 + '</div><div class="kpi-label">Hired (30d)</div></div>' +
-    '<div class="card kpi"><div class="kpi-val" style="color:var(--amber)">' + inOffer + '</div><div class="kpi-label">In Offer</div></div>' +
-    '<div class="card kpi"><div class="kpi-val" style="color:var(--brand)">' + (avgDays!==null?avgDays+'d':'—') + '</div><div class="kpi-label">Avg TTH</div></div>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">' +
-    '<div class="card"><div class="card-header"><div class="card-title">Weekly Snapshot</div><span class="text-muted" style="font-size:11px">Last 7 days</span></div>' +
-    '<div class="card-body"><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">' +
-    '<div style="text-align:center;padding:12px;background:var(--surface-2);border-radius:var(--r)"><div style="font-size:22px;font-weight:700;color:var(--brand)">' + weekApplied + '</div><div style="font-size:11px;color:var(--text-3)">New Candidates</div></div>' +
-    '<div style="text-align:center;padding:12px;background:var(--surface-2);border-radius:var(--r)"><div style="font-size:22px;font-weight:700;color:var(--amber)">' + weekOffers + '</div><div style="font-size:11px;color:var(--text-3)">Offers</div></div>' +
-    '<div style="text-align:center;padding:12px;background:var(--surface-2);border-radius:var(--r)"><div style="font-size:22px;font-weight:700;color:var(--green)">' + weekHired + '</div><div style="font-size:11px;color:var(--text-3)">Hires</div></div>' +
-    '</div></div></div>' +
-    '<div class="card"><div class="card-header"><div class="card-title">Pipeline by Stage</div><span class="text-muted" style="font-size:12px">' + openApps + ' active</span></div>' +
-    '<div class="card-body">' + (bars||'<div class="text-muted">No active applications</div>') + '</div></div>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">' +
-    '<div class="card"><div class="card-header"><div class="card-title">Conversion Funnel</div><span class="text-muted" style="font-size:12px">% stage-to-stage</span></div>' +
-    '<div class="card-body">' + (funnelRows||'<div class="text-muted">No data</div>') + '</div></div>' +
-    '<div class="card"><div class="card-header"><div class="card-title">Candidates by Source</div></div>' +
-    '<div class="card-body">' + (sourceRows||'<div class="text-muted">No data yet</div>') + '</div></div>' +
-    '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
-    '<div class="card"><div class="card-header"><div class="card-title">Open Roles by Department</div></div>' +
-    '<table><thead><tr><th>Department</th><th>Open Roles</th></tr></thead><tbody>' + (deptRows||'<tr><td colspan="2" class="text-muted">No data</td></tr>') + '</tbody></table></div>' +
-    '<div><div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title">Open Roles by Region</div></div>' +
-    '<table><thead><tr><th>Region</th><th>Open Roles</th></tr></thead><tbody>' + (regionRows||'<tr><td colspan="2" class="text-muted">No data</td></tr>') + '</tbody></table></div>' +
-    '<div class="card"><div class="card-header"><div class="card-title">Longest Open Roles</div></div>' +
-    '<table><thead><tr><th>Role</th><th>Region</th><th>Days Open</th></tr></thead><tbody>' + (roleAgeRows||'<tr><td colspan="3" class="text-muted">No data</td></tr>') + '</tbody></table></div></div>' +
-    '</div>';
+  return html;
+}
 
-  window._reportData={totalCands,totalRoles,openApps,totalInterviews,hired30,avgDays,stageCounts,sourceCounts,regionCounts};
+async function runCustomReport() {
+  var metric = document.getElementById('rb-metric')?.value || '';
+  var groupBy = document.getElementById('rb-groupby')?.value || '';
+  var dateRange = document.getElementById('rb-daterange')?.value || '';
+  var chartType = document.getElementById('rb-charttype')?.value || '';
+  var out = document.getElementById('rb-output');
+  if (!out) return;
+  out.innerHTML = '<div class="loading"><div class="spinner"></div> Running report…</div>';
+
+  try {
+    var {data: apps} = await sb.from('applications').select('*, roles(title, department, location), profiles:candidate_id(id)').not('stage', 'eq', 'rejected');
+    if (!apps) apps = [];
+
+    var now = new Date();
+    var cutoff = null;
+    if (dateRange === 'Last 30 days') cutoff = new Date(now - 30*86400000);
+    else if (dateRange === 'Last 90 days') cutoff = new Date(now - 90*86400000);
+    else if (dateRange === 'This quarter') { var qm = Math.floor(now.getMonth()/3)*3; cutoff = new Date(now.getFullYear(), qm, 1); }
+    else if (dateRange === 'Last quarter') { var qm2 = Math.floor(now.getMonth()/3)*3; cutoff = new Date(qm2===0 ? now.getFullYear()-1 : now.getFullYear(), qm2===0 ? 9 : qm2-3, 1); }
+    else if (dateRange === 'This year') cutoff = new Date(now.getFullYear(), 0, 1);
+    if (cutoff) apps = apps.filter(function(a){ return new Date(a.created_at) >= cutoff; });
+
+    var groups = {};
+    apps.forEach(function(a) {
+      var key = '';
+      if (groupBy === 'Department') key = a.roles?.department || 'Unknown';
+      else if (groupBy === 'Location') key = a.roles?.location || 'Unknown';
+      else if (groupBy === 'Role') key = a.roles?.title || 'Unknown';
+      else if (groupBy === 'Month') key = (a.created_at||'').substring(0,7);
+      else if (groupBy === 'Quarter') { var d = new Date(a.created_at); key = 'Q' + (Math.floor(d.getMonth()/3)+1) + ' ' + d.getFullYear(); }
+      else key = 'All';
+      if (!groups[key]) groups[key] = { count: 0, apps: [] };
+      groups[key].count++;
+      groups[key].apps.push(a);
+    });
+
+    var keys = Object.keys(groups).sort();
+    if (keys.length === 0) { out.innerHTML = '<div class="empty"><div class="empty-icon">\u{1F4CA}</div><div class="empty-title">No data for selected criteria</div></div>'; return; }
+
+    var tableHtml = '<div style="overflow-x:auto"><table><thead><tr><th>' + groupBy + '</th><th>' + metric + '</th></tr></thead><tbody>';
+    keys.forEach(function(k) {
+      tableHtml += '<tr><td>' + _escHtml(k) + '</td><td style="font-weight:600">' + groups[k].count + '</td></tr>';
+    });
+    tableHtml += '</tbody></table></div>';
+    tableHtml += '<div style="font-size:11px;color:var(--text-3);margin-top:8px">Showing count of applications. Advanced metric calculations (time-to-hire, acceptance rate) require additional data processing.</div>';
+    out.innerHTML = tableHtml;
+  } catch(e) {
+    out.innerHTML = '<div style="color:var(--red);padding:16px">Error running report: ' + (e.message||'Unknown error') + '</div>';
+  }
+}
+
+async function saveCustomReport() {
+  var metric = document.getElementById('rb-metric')?.value || '';
+  var groupBy = document.getElementById('rb-groupby')?.value || '';
+  var dateRange = document.getElementById('rb-daterange')?.value || '';
+  var chartType = document.getElementById('rb-charttype')?.value || '';
+  var name = prompt('Name this report:');
+  if (!name || !name.trim()) return;
+  try {
+    var {error} = await sb.from('saved_reports').insert({
+      user_id: currentUser.id,
+      name: name.trim(),
+      config: { metric: metric, groupBy: groupBy, dateRange: dateRange, chartType: chartType }
+    });
+    if (error) throw error;
+    toast('Report saved!', 'ok');
+    renderReports();
+  } catch(e) {
+    toast('Could not save report — saved_reports table may not exist yet. Check the schema toast for setup instructions.', 'err');
+  }
+}
+
+async function deleteSavedReport(id) {
+  if (!confirm('Delete this saved report?')) return;
+  await sb.from('saved_reports').delete().eq('id', id);
+  renderReports();
+}
+
+async function runSavedReport(id) {
+  try {
+    var {data} = await sb.from('saved_reports').select('*').eq('id', id).single();
+    if (!data) return;
+    await renderReports();
+    setTimeout(function() {
+      if (document.getElementById('rb-metric')) {
+        document.getElementById('rb-metric').value = data.config?.metric || '';
+        document.getElementById('rb-groupby').value = data.config?.groupBy || '';
+        document.getElementById('rb-daterange').value = data.config?.dateRange || '';
+        document.getElementById('rb-charttype').value = data.config?.chartType || '';
+        runCustomReport();
+      }
+    }, 300);
+  } catch(e) { toast('Could not load saved report', 'err'); }
+}
+
+function exportCustomReport() {
+  var table = document.querySelector('#rb-output table');
+  if (!table) { toast('Run a report first', 'info'); return; }
+  var rows = [];
+  table.querySelectorAll('tr').forEach(function(tr) {
+    var row = [];
+    tr.querySelectorAll('th,td').forEach(function(cell) { row.push(cell.textContent); });
+    rows.push(row.join('\t'));
+  });
+  var tsv = rows.join('\n');
+  var blob = new Blob([tsv], {type: 'text/tab-separated-values'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'hiro-report.tsv'; a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported!', 'ok');
 }
 
 // ── LIFECYCLE TIMELINE RENDERER ────────────────────────────────
