@@ -18879,6 +18879,26 @@ async function _renderDocxFrame(inner, url, title) {
 function _isDocx(url) {
   return url && (url.toLowerCase().includes('.docx') || url.toLowerCase().includes('docx'));
 }
+function _isHtml(url) {
+  return url && url.toLowerCase().includes('.html');
+}
+async function _renderHtmlFrame(inner, url, title) {
+  try {
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('Could not fetch file (status ' + resp.status + ')');
+    var html = await resp.text();
+    // Use srcdoc to avoid iframe origin/CSP blocking
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width:100%;height:clamp(400px,75vh,780px);border:none;display:block;border-radius:var(--r)';
+    iframe.title = title;
+    iframe.sandbox = 'allow-same-origin';
+    iframe.srcdoc = html;
+    inner.innerHTML = '';
+    inner.appendChild(iframe);
+  } catch(e) {
+    inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not render: ' + e.message + '</div>';
+  }
+}
 
 // ── CV TAB LOADER ────────────────────────────────────────────────────
 var _cfpCvTabLoaded = false;
@@ -18936,7 +18956,9 @@ async function _loadCfpCvTab() {
     }
     var url = await _resolveFileUrl(cvUrl);
     if (!url) { inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Could not load CV — check storage bucket</div>'; return; }
-    if (_isDocx(cvUrl)) { await _renderDocxFrame(inner, url, 'CV'); } else { _renderPdfFrame(inner, url, 'CV'); }
+    if (_isDocx(cvUrl)) { await _renderDocxFrame(inner, url, 'CV'); }
+    else if (_isHtml(cvUrl)) { await _renderHtmlFrame(inner, url, 'LinkedIn Profile'); }
+    else { _renderPdfFrame(inner, url, 'CV'); }
   } catch(e) {
     inner.innerHTML = '<div style="padding:40px;text-align:center;color:var(--red);font-size:13px">Error: ' + e.message + '</div>';
   }
