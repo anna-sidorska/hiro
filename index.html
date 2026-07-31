@@ -6776,6 +6776,7 @@ async function _s4SendSelfSchedule(roleId) {
     }
     // Log activity
     try { await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'self_schedule_sent',p_description:'Self-schedule link sent to '+candidateEmail}); } catch(e) {}
+    var htmlInviteEmail = buildSovosEmail({greeting:'Hi,',intro:'We would like to invite you to interview for the <strong>'+(role&&role.title?role.title:'the role')+'</strong> position at Sovos.',bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">To confirm your interview, please use the self-scheduling link to choose a time that works for you. Once confirmed, you\'ll automatically receive a calendar invite with a Microsoft Teams meeting link.</p>',ctaUrl:bookingUrl,ctaLabel:'Choose Your Interview Time &rarr;',closing:'We look forward to speaking with you,',senderName:(_outlookAccount&&_outlookAccount.name?_outlookAccount.name:'Anna Sidorska')+' &middot; Talent Acquisition, Sovos',footerNote:'Sovos &middot; Global Talent Acquisition'});
     var mailtoSubj = encodeURIComponent('Interview Invitation – ' + (role?.title||'role') + ' at Sovos');
     var mailtoBody = encodeURIComponent(
       'Hi,\n\n' +
@@ -6794,7 +6795,7 @@ async function _s4SendSelfSchedule(roleId) {
       '<div style="padding:10px 12px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--r);font-size:12px;color:var(--green-text)">' +
       (emailSent ? '✅ Email sent to ' + candidateEmail : '📋 Booking link created') +
       '<br><div style="margin-top:6px"><a href="' + bookingUrl + '" target="_blank" style="color:var(--brand);font-size:11px;word-break:break-all">' + bookingUrl + '</a></div>' +
-      (!emailSent ? '<div style="margin-top:8px;display:flex;gap:6px"><a href="mailto:' + candidateEmail + '?subject=' + mailtoSubj + '&body=' + mailtoBody + '" class="btn btn-primary btn-sm" style="font-size:11px">📨 Open in Outlook</a><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(this.dataset.u).then(function(){toast(\'Link copied\')})" data-u="' + bookingUrl + '">Copy Link</button></div>' : '') +
+      (!emailSent ? '<div style="margin-top:8px;display:flex;gap:6px"><a href="https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(candidateEmail)+'&subject='+mailtoSubj+'&body='+encodeURIComponent(htmlInviteEmail)+'" class="btn btn-primary btn-sm" style="font-size:11px">📨 Open in Outlook</a><button class="btn btn-outline btn-sm" style="font-size:11px" onclick="navigator.clipboard.writeText(this.dataset.u).then(function(){toast(\'Link copied\')})" data-u="' + bookingUrl + '">Copy Link</button></div>' : '') +
       '</div>';
   } catch(e) {
     if (result) result.innerHTML = '<div style="font-size:12px;color:var(--red)">' + (e.message || 'Error creating booking link') + '</div>';
@@ -7418,7 +7419,9 @@ Anna`;
   window._jdApEmailSubject=subject;
   window._jdApEmailTo=hmEmail;
   window._jdApEmailBody=emailBody;
+  window._jdApEmailHtml = buildSovosEmail({greeting:greeting,intro:"I'm reaching out to share the Job Description for <strong>"+roleTitle+"</strong> and request your approval before we go live with the search.",ctaUrl:approvalUrl,ctaLabel:'Review &amp; Approve JD &rarr;',bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">If you have any questions or would like to discuss before approving, feel free to reply to this email or give me a call.</p>',closing:'Thanks in advance,',senderName:(currentUser?.full_name||'Anna Sidorska')+'<span style="font-weight:400;color:#6b7280"> &middot; Talent Acquisition, Sovos</span>',footerNote:'No login required &mdash; approve directly from the link above. Sent via Hiro &middot; Sovos TA'});
   openModal('modal-jd-approval-email');
+  setTimeout(function(){var fr=document.getElementById('jd-ap-email-preview');if(fr&&window._jdApEmailHtml){fr.srcdoc=window._jdApEmailHtml;}},100);
 
   try{await sb.rpc('log_role_activity',{p_role_id:roleId,p_actor_id:uid,p_action_type:'jd_submitted',p_description:'JD v'+version+' sent to HM for approval'});}catch(e){}
   viewRoleDetail(roleId);
@@ -7438,13 +7441,12 @@ function _apCopy(fieldId) {
 }
 
 function _apOpenOutlook() {
-  // Always read from the input field so user edits are respected
   const to=document.getElementById('jd-ap-email-to')?.value.trim()||window._jdApEmailTo||'';
   const subject=document.getElementById('jd-ap-email-subject')?.value||window._jdApEmailSubject||'';
-  const body=document.getElementById('jd-ap-email-body')?.value||window._jdApEmailBody||'';
+  const html=window._jdApEmailHtml||document.getElementById('jd-ap-email-body')?.value||window._jdApEmailBody||'';
   const url='https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)
     +'&subject='+encodeURIComponent(subject)
-    +'&body='+encodeURIComponent(body);
+    +'&body='+encodeURIComponent(html);
   window.open(url,'_blank');
 }
 
@@ -7511,6 +7513,19 @@ function buildOfferApprovalEmailHtml(candName, roleTitle, hireType, startDate, s
     + '</td></tr>'
 
     + '</table></td></tr></table></body></html>';
+}
+
+function buildSovosEmail(opts) {
+  var detailRows = '';
+  if (opts.details && opts.details.length) {
+    detailRows = '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:24px"><tr><td style="padding:18px 22px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#9ca3af;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e9ecf0">Details</div><table width="100%" cellpadding="0" cellspacing="0">'
+      + opts.details.filter(Boolean).map(function(r){ return '<tr><td style="padding:8px 0;font-size:12px;color:#6b7280;width:130px;vertical-align:top;border-bottom:1px solid #f1f5f9">'+r[0]+'</td><td style="padding:8px 0;font-size:13px;font-weight:600;color:#1e2d45;border-bottom:1px solid #f1f5f9">'+(r[1]||'&mdash;')+'</td></tr>'; }).join('')
+      + '</table></td></tr></table>';
+  }
+  var ctaHtml = opts.ctaUrl
+    ? '<table cellpadding="0" cellspacing="0" style="margin:0 auto 24px"><tr><td style="background:#e8500a;border-radius:6px;padding:13px 32px;text-align:center"><a href="'+opts.ctaUrl+'" style="color:#ffffff;font-size:14px;font-weight:700;text-decoration:none">'+(opts.ctaLabel||'Open &rarr;')+'</a></td></tr></table><p style="margin:0 0 20px;font-size:11px;color:#9ca3af;text-align:center">Or copy this link: <a href="'+opts.ctaUrl+'" style="color:#e8500a;word-break:break-all">'+opts.ctaUrl+'</a></p>'
+    : '';
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f0f2f5;font-family:Arial,Helvetica,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:36px 16px"><tr><td align="center"><table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.10)"><tr><td style="background:#1a2d4f;padding:22px 32px"><div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px">Sovos</div><div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:1px;letter-spacing:.3px;text-transform:uppercase">Global Talent Acquisition</div></td></tr><tr><td style="height:3px;background:linear-gradient(90deg,#e8500a,#f59e0b)"></td></tr><tr><td style="padding:32px 32px 24px"><p style="margin:0 0 20px;font-size:15px;color:#1e2d45;font-weight:600">'+(opts.greeting||'Hi,')+'</p>'+(opts.intro?'<p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.65">'+opts.intro+'</p>':'')+detailRows+ctaHtml+(opts.bodyHtml||'')+'<p style="margin:24px 0 0;font-size:13px;color:#4b5563">'+(opts.closing||'Kind regards,')+'<br><strong style="color:#1e2d45">'+(opts.senderName||'Sovos Talent Acquisition')+'</strong></p></td></tr><tr><td style="background:#f8fafc;padding:14px 32px;border-top:1px solid #e9ecf0"><div style="font-size:11px;color:#9ca3af">'+(opts.footerNote||'Sent via Hiro &middot; Sovos Global Talent Acquisition')+'</div></td></tr></table></td></tr></table></body></html>';
 }
 
 function _oaOpenOutlook() {
@@ -11939,9 +11954,21 @@ function _evalEmailBody() {
   return 'Hi ' + name + ',\n\nPlease use the link below to complete your evaluation for ' + cand + (role ? ' for the ' + role + ' role' : '') + '.\n\n' + link_url + '\n\nYou\'ll need to enter your email address to unlock the form. The link expires in 7 days and can only be submitted once.\n\nThanks,\nHiro \xb7 Talent Acquisition';
 }
 
+function _evalEmailHtml() {
+  var name = (_genLinkIntName||'').split(' ')[0]||'';
+  var cand = _genLinkCandName||'the candidate';
+  var role = _genLinkJdData&&_genLinkJdData.title?_genLinkJdData.title:'';
+  var link_url = document.getElementById('gl-link-output')?document.getElementById('gl-link-output').value:'';
+  return buildSovosEmail({greeting:name?'Hi '+name+',':'Hi,',intro:'Please use the link below to complete your interview evaluation for <strong>'+cand+'</strong>'+(role?' for the <strong>'+role+'</strong> role':'')+'.',ctaUrl:link_url,ctaLabel:'Complete Evaluation &rarr;',bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">You\'ll need to enter your email address to unlock the form. The link expires in 7 days and can only be submitted once.</p>',closing:'Thanks,',senderName:'Hiro &middot; Talent Acquisition',footerNote:'This evaluation is confidential. Sent via Hiro &middot; Sovos TA'});
+}
+
 // Opens Outlook with everything pre-filled — just hit Send
 function openMailtoEval() {
-  window.location.href = 'mailto:' + encodeURIComponent(_genLinkIntEmail) + '?subject=' + encodeURIComponent(_evalEmailSubject()) + '&body=' + encodeURIComponent(_evalEmailBody());
+  var subject = _evalEmailSubject();
+  var htmlBody = _evalEmailHtml();
+  var email = _genLinkIntEmail||'';
+  var url = 'https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(email)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(htmlBody);
+  window.open(url,'_blank');
 }
 
 // "Send Email" button — opens Outlook pre-filled (no extra setup needed)
@@ -16743,47 +16770,59 @@ function applyEmailTemplate() {
       .replace(/\{\{interview_location\}\}/g, '[location/link TBC]');
   }
 
-  var templates = {
+  var tplData = {
     'app_received': {
       subject: 'Application received — [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, thank you for applying for the {{role_title}} position at {{company_name}}. We\'ve received your application and will be in touch within 5 working days. Kind regards, {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, thank you for applying for the {{role_title}} position at {{company_name}}. We\'ve received your application and will be in touch within 5 working days. Kind regards, {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('Thank you for applying for the <strong>{{role_title}}</strong> position at Sovos.'),bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">We\'ve received your application and will be in touch within 5 working days.</p>',closing:'Kind regards,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'interview_invite': {
       subject: 'Interview invitation — [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, I\'d love to invite you to interview for the {{role_title}} role at {{company_name}}. I\'d like to schedule this for {{interview_date}} at {{interview_time}} via {{interview_location}}. Please confirm your availability. Best, {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, I\'d love to invite you to interview for the {{role_title}} role at {{company_name}}. I\'d like to schedule this for {{interview_date}} at {{interview_time}} via {{interview_location}}. Please confirm your availability. Best, {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('I\'d love to invite you to interview for the <strong>{{role_title}}</strong> role at Sovos.'),details:[[subVars('Date'),subVars('[date TBC]')],[subVars('Time'),subVars('[time TBC]')],[subVars('Location'),subVars('[location/link TBC]')]],bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">Please confirm your availability by replying to this email.</p>',closing:'Best,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'interview_reminder': {
       subject: 'Interview reminder — [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, just a reminder about your interview for the {{role_title}} role tomorrow, {{interview_date}} at {{interview_time}}. {{interview_location}}. Looking forward to speaking with you. Best, {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, just a reminder about your interview for the {{role_title}} role tomorrow, {{interview_date}} at {{interview_time}}. {{interview_location}}. Looking forward to speaking with you. Best, {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('Just a reminder about your upcoming interview for the <strong>{{role_title}}</strong> role at Sovos.'),details:[[subVars('Date'),subVars('[date TBC]')],[subVars('Time'),subVars('[time TBC]')],[subVars('Location'),subVars('[location/link TBC]')]],bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">We look forward to speaking with you!</p>',closing:'Best,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'rejection_screening': {
       subject: 'Your application for [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, thank you for your interest in the {{role_title}} position at {{company_name}}. After careful consideration, we\'ve decided not to progress your application at this stage. We\'ll keep your details on file for future opportunities. Best of luck, {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, thank you for your interest in the {{role_title}} position at {{company_name}}. After careful consideration, we\'ve decided not to progress your application at this stage. We\'ll keep your details on file for future opportunities. Best of luck, {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('Thank you for your interest in the <strong>{{role_title}}</strong> position at Sovos.'),bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">After careful consideration, we\'ve decided not to progress your application at this stage. We\'ll keep your details on file for future opportunities.</p>',closing:'Best of luck,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'rejection_interview': {
       subject: 'Your application for [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, it was great meeting you to discuss the {{role_title}} role. After careful consideration, we\'ve decided to move forward with another candidate. Thank you for your time and we wish you every success. {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, it was great meeting you to discuss the {{role_title}} role. After careful consideration, we\'ve decided to move forward with another candidate. Thank you for your time and we wish you every success. {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('It was great meeting you to discuss the <strong>{{role_title}}</strong> role at Sovos.'),bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">After careful consideration, we\'ve decided to move forward with another candidate. Thank you for your time and we wish you every success.</p>',closing:'Kind regards,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'offer_notification': {
       subject: 'Offer — [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, I\'m delighted to inform you that we\'d like to offer you the {{role_title}} position at {{company_name}}. I\'ll be in touch shortly with the formal offer details. {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, I\'m delighted to inform you that we\'d like to offer you the {{role_title}} position at {{company_name}}. I\'ll be in touch shortly with the formal offer details. {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('I\'m delighted to inform you that we\'d like to offer you the <strong>{{role_title}}</strong> position at Sovos!'),bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">I\'ll be in touch shortly with the formal offer details. Please don\'t hesitate to reach out if you have any questions.</p>',closing:'Congratulations,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'chasing_response': {
       subject: 'Following up — [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, I wanted to follow up on my previous message regarding the {{role_title}} role at {{company_name}}. Are you still interested in this opportunity? Please let me know at your earliest convenience. Best, {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, I wanted to follow up on my previous message regarding the {{role_title}} role at {{company_name}}. Are you still interested in this opportunity? Please let me know at your earliest convenience. Best, {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('I wanted to follow up on my previous message regarding the <strong>{{role_title}}</strong> role at Sovos.'),bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">Are you still interested in this opportunity? Please let me know at your earliest convenience.</p>',closing:'Best,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'background_check': {
       subject: 'Background check — [Role Title] at Sovos',
-      body: subVars('Hi {{candidate_name}}, as part of our onboarding process for the {{role_title}} role, we need to complete a background check. You\'ll receive a separate email from our provider. Please complete it within 5 working days. {{recruiter_name}}')
+      body: subVars('Hi {{candidate_name}}, as part of our onboarding process for the {{role_title}} role, we need to complete a background check. You\'ll receive a separate email from our provider. Please complete it within 5 working days. {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:subVars('Hi {{candidate_name}},'),intro:subVars('As part of our onboarding process for the <strong>{{role_title}}</strong> role, we need to complete a background check.'),bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">You\'ll receive a separate email from our background check provider. Please complete it within 5 working days.</p>',closing:'Thanks,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     },
     'reference_request': {
       subject: 'Reference request — [Candidate Name] at Sovos',
-      body: subVars('Dear [Reference Name], {{candidate_full_name}} has applied for the {{role_title}} position at {{company_name}} and has listed you as a professional reference. Would you be available for a brief call? Please reply with your availability. Thank you, {{recruiter_name}}')
+      body: subVars('Dear [Reference Name], {{candidate_full_name}} has applied for the {{role_title}} position at {{company_name}} and has listed you as a professional reference. Would you be available for a brief call? Please reply with your availability. Thank you, {{recruiter_name}}'),
+      html: function(){ return buildSovosEmail({greeting:'Dear [Reference Name],',intro:subVars('<strong>{{candidate_full_name}}</strong> has applied for the <strong>{{role_title}}</strong> position at Sovos and has listed you as a professional reference.'),bodyHtml:'<p style="margin:0 0 16px;font-size:13px;color:#4b5563">Would you be available for a brief reference call? Please reply with your availability and we\'ll arrange a convenient time.</p>',closing:'Thank you,',senderName:subVars('{{recruiter_name}} &middot; Talent Acquisition, Sovos'),footerNote:'Sent via Hiro &middot; Sovos Global Talent Acquisition'}); }
     }
   };
-  if (tpl && templates[tpl]) {
-    document.getElementById('compose-subject').value = templates[tpl].subject;
-    document.getElementById('compose-body').value = templates[tpl].body;
+  if (tpl && tplData[tpl]) {
+    document.getElementById('compose-subject').value = tplData[tpl].subject;
+    document.getElementById('compose-body').value = tplData[tpl].body;
+    window._composeEmailHtml = tplData[tpl].html ? tplData[tpl].html() : null;
+    var prevFr = document.getElementById('compose-email-preview');
+    if (prevFr && window._composeEmailHtml) { prevFr.srcdoc = window._composeEmailHtml; prevFr.style.display='block'; }
   }
 }
 
@@ -16827,8 +16866,9 @@ async function sendComposedEmail() {
   }
 
   if (!sent) {
-    var mailto = 'mailto:' + to + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-    window.location.href = mailto;
+    var htmlToSend = window._composeEmailHtml || body;
+    var outlookUrl = 'https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)+'&subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(htmlToSend);
+    window.open(outlookUrl,'_blank');
     toast('Opened in Outlook');
     sent = true;
   }
@@ -21513,12 +21553,15 @@ initApp();
         <input id="jd-ap-email-link" readonly style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--brand);font-size:12px;box-sizing:border-box">
       </div>
 
-      <div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Email Body</div>
-          <button class="btn btn-primary btn-sm" onclick="_apCopy('jd-ap-email-body')">📋 Copy Body</button>
+      <div style="margin-bottom:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Email Preview</div>
+          <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(window._jdApEmailHtml||'').then(function(){toast('HTML copied ✓')})">📋 Copy HTML</button>
         </div>
-        <textarea id="jd-ap-email-body" readonly rows="9" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px;resize:none;font-family:inherit;line-height:1.5;box-sizing:border-box"></textarea>
+        <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:#f0f2f5">
+          <iframe id="jd-ap-email-preview" style="width:100%;height:340px;border:none;display:block" sandbox="allow-same-origin"></iframe>
+        </div>
+        <textarea id="jd-ap-email-body" readonly rows="1" style="position:absolute;left:-9999px;opacity:0;pointer-events:none"></textarea>
       </div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -21564,6 +21607,15 @@ initApp();
       <div class="form-group"><label>To *</label><input id="compose-to" type="email" placeholder="candidate@email.com"></div>
       <div class="form-group"><label>Subject *</label><input id="compose-subject" placeholder="Email subject"></div>
       <div class="form-group"><label>Body *</label><textarea id="compose-body" rows="8" placeholder="Write your email here..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;resize:vertical"></textarea></div>
+      <div id="compose-preview-wrap" style="margin-bottom:12px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Email Preview</div>
+          <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(window._composeEmailHtml||'').then(function(){toast('HTML copied ✓')})">📋 Copy HTML</button>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:#f0f2f5">
+          <iframe id="compose-email-preview" style="width:100%;height:340px;border:none;display:block" sandbox="allow-same-origin"></iframe>
+        </div>
+      </div>
       <div id="compose-status" style="display:none;padding:8px 12px;background:var(--surface-2);border-radius:var(--r);font-size:12px;margin-bottom:12px"></div>
       <!-- ICS Schedule Interview -->
       <div style="margin-bottom:12px">
