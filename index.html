@@ -6127,6 +6127,8 @@ async function _requestOfferApproval(appId, roleId, candName) {
     'Once approved, I will extend the offer to the candidate.\n\n' +
     'Thank you,\n' + (currentUser?.full_name || 'TA Team');
 
+  window._oaEmailHtml = buildOfferApprovalEmailHtml(candName, roleTitle, '', startDate, salary, approvalLink, currentUser?.full_name || 'TA Team');
+
   // Populate and show offer approval email modal
   var toEl = document.getElementById('oa-email-to');
   var subEl = document.getElementById('oa-email-subject');
@@ -6137,6 +6139,10 @@ async function _requestOfferApproval(appId, roleId, candName) {
   if (linkEl) linkEl.value = approvalLink || '(link unavailable — check Supabase offer_requests table)';
   if (bodyEl) bodyEl.value = emailBody;
   openModal('modal-offer-approval-email');
+  setTimeout(function() {
+    var iframe = document.getElementById('oa-email-preview');
+    if (iframe && window._oaEmailHtml) { iframe.srcdoc = window._oaEmailHtml; }
+  }, 50);
 }
 
 async function _setOfferStatus(appId, roleId, newStatus) {
@@ -7442,14 +7448,79 @@ function _apOpenOutlook() {
   window.open(url,'_blank');
 }
 
+function buildOfferApprovalEmailHtml(candName, roleTitle, hireType, startDate, salary, approvalLink, senderName) {
+  var btnHtml = approvalLink
+    ? '<table cellpadding="0" cellspacing="0" style="margin:0 auto 24px"><tr><td style="background:#e8500a;border-radius:6px;padding:14px 36px;text-align:center"><a href="' + approvalLink + '" style="color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:-0.2px">Review &amp; Approve Offer &rarr;</a></td></tr></table><p style="margin:0 0 20px;font-size:11px;color:#9ca3af;text-align:center">Or copy this link: <a href="' + approvalLink + '" style="color:#e8500a;word-break:break-all">' + approvalLink + '</a><br>No login required &mdash; approve directly from this link.</p>'
+    : '<p style="margin:0 0 20px;font-size:13px;color:#4b5563">Please log into <strong>Hiro</strong> to review and approve this offer.</p>';
+
+  var rows = [
+    ['Candidate', candName],
+    ['Role', roleTitle],
+    hireType ? ['Hire Type', hireType] : null,
+    startDate ? ['Start Date', startDate] : null,
+    salary ? ['Compensation', salary] : null,
+  ].filter(Boolean);
+
+  var detailRows = rows.map(function(r) {
+    return '<tr><td style="padding:9px 0;font-size:12px;color:#6b7280;width:130px;vertical-align:top;border-bottom:1px solid #f1f5f9">' + r[0] + '</td>'
+         + '<td style="padding:9px 0;font-size:13px;font-weight:600;color:#1e2d45;border-bottom:1px solid #f1f5f9">' + (r[1]||'&mdash;') + '</td></tr>';
+  }).join('');
+
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+    + '<body style="margin:0;padding:0;background:#f0f2f5;font-family:Arial,Helvetica,sans-serif">'
+    + '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:36px 16px">'
+    + '<tr><td align="center">'
+    + '<table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.10)">'
+
+    /* ── Header ── */
+    + '<tr><td style="background:#1a2d4f;padding:22px 32px">'
+    + '<table cellpadding="0" cellspacing="0"><tr>'
+    + '<td><div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">Sovos</div>'
+    + '<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;letter-spacing:0.3px;text-transform:uppercase">Global Talent Acquisition</div></td>'
+    + '<td style="padding-left:20px"><div style="background:rgba(232,80,10,0.15);border:1px solid rgba(232,80,10,0.4);border-radius:99px;padding:4px 12px;font-size:11px;font-weight:700;color:#ff8c5a;letter-spacing:0.3px;white-space:nowrap">Offer Approval Required</div></td>'
+    + '</tr></table>'
+    + '</td></tr>'
+
+    /* ── Orange accent ── */
+    + '<tr><td style="height:3px;background:linear-gradient(90deg,#e8500a 0%,#f59e0b 100%)"></td></tr>'
+
+    /* ── Body ── */
+    + '<tr><td style="padding:32px 32px 24px">'
+    + '<p style="margin:0 0 20px;font-size:15px;color:#1e2d45;font-weight:600">Hi,</p>'
+    + '<p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.65">I\'m requesting your approval for the following offer. Please review the details below and use the button to approve or reject.</p>'
+
+    /* ── Details card ── */
+    + '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:28px">'
+    + '<tr><td style="padding:18px 22px">'
+    + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:#9ca3af;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e9ecf0">Offer Details</div>'
+    + '<table width="100%" cellpadding="0" cellspacing="0">' + detailRows + '</table>'
+    + '</td></tr></table>'
+
+    /* ── CTA button ── */
+    + btnHtml
+
+    /* ── Closing ── */
+    + '<p style="margin:24px 0 0;font-size:13px;color:#4b5563">Once approved, I will extend the offer to the candidate.</p>'
+    + '<p style="margin:16px 0 0;font-size:13px;color:#1e2d45;font-weight:600">Thank you,<br>'
+    + '<span style="font-weight:400;color:#4b5563">' + (senderName||'TA Team') + '</span></p>'
+    + '</td></tr>'
+
+    /* ── Footer ── */
+    + '<tr><td style="background:#f8fafc;padding:14px 32px;border-top:1px solid #e9ecf0">'
+    + '<div style="font-size:11px;color:#9ca3af">Sent via <strong style="color:#6b7280">Hiro</strong> &middot; Sovos Global Talent Acquisition &middot; This email requires action</div>'
+    + '</td></tr>'
+
+    + '</table></td></tr></table></body></html>';
+}
+
 function _oaOpenOutlook() {
-  const to=document.getElementById('oa-email-to')?.value.trim()||'';
-  const subject=document.getElementById('oa-email-subject')?.value||'';
-  const body=document.getElementById('oa-email-body')?.value||'';
-  const url='https://outlook.office.com/mail/deeplink/compose?to='+encodeURIComponent(to)
-    +'&subject='+encodeURIComponent(subject)
-    +'&body='+encodeURIComponent(body);
-  window.open(url,'_blank');
+  var to = document.getElementById('oa-email-to')?.value.trim() || '';
+  var subject = document.getElementById('oa-email-subject')?.value || '';
+  var htmlBody = window._oaEmailHtml || document.getElementById('oa-email-body')?.value || '';
+  var url = 'https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(to)
+    + '&subject=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(htmlBody);
+  window.open(url, '_blank');
 }
 
 function _oaCopy(fieldId) {
@@ -7460,6 +7531,18 @@ function _oaCopy(fieldId) {
   });
   const c=document.getElementById('oa-copy-confirm');
   if(c){c.textContent='Copied ✓';setTimeout(()=>{c.textContent='';},2000);}
+}
+
+function _oaCopyHtml() {
+  var html = window._oaEmailHtml || '';
+  navigator.clipboard?.writeText(html).catch(function() {
+    var ta = document.createElement('textarea');
+    ta.value = html; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+  });
+  var c = document.getElementById('oa-copy-confirm');
+  if (c) { c.textContent = 'HTML copied ✓'; setTimeout(function(){ c.textContent=''; }, 2000); }
 }
 
 async function _undoJdApproval(roleId) {
@@ -10502,6 +10585,10 @@ async function submitRequisition() {
       var modalTitle = document.querySelector('#modal-offer-approval-email .modal-title');
       if (modalTitle) modalTitle.textContent = '📧 Notify Approvers — ' + reqTracking;
       openModal('modal-offer-approval-email');
+      setTimeout(function() {
+        var iframe = document.getElementById('oa-email-preview');
+        if (iframe && window._oaEmailHtml) { iframe.srcdoc = window._oaEmailHtml; }
+      }, 50);
     } else {
       toast('Requisition submitted for approval ✓');
     }
@@ -12819,6 +12906,8 @@ async function _cfpSubmitOffer(action) {
       'Once approved, I will extend the offer to the candidate.\n\n'+
       'Thank you,\n'+(currentUser?.full_name||'TA Team');
 
+    window._oaEmailHtml = buildOfferApprovalEmailHtml(_cn, _rt, hireType||'', startDate||'', (document.getElementById('cfp-offer-currency')?.value||'') + ' ' + (salAnnual ? Number(salAnnual).toLocaleString() + ' annual' : ''), approvalLink, currentUser?.full_name || 'TA Team');
+
     var toEl = document.getElementById('oa-email-to');
     var subEl = document.getElementById('oa-email-subject');
     var linkEl = document.getElementById('oa-email-link');
@@ -12830,6 +12919,10 @@ async function _cfpSubmitOffer(action) {
     var modalTitle = document.querySelector('#modal-offer-approval-email .modal-title');
     if (modalTitle) modalTitle.textContent = '📧 Send Offer for Approval';
     openModal('modal-offer-approval-email');
+    setTimeout(function() {
+      var iframe = document.getElementById('oa-email-preview');
+      if (iframe && window._oaEmailHtml) { iframe.srcdoc = window._oaEmailHtml; }
+    }, 50);
   } else {
     toast('💾 Offer draft saved');
   }
@@ -21335,13 +21428,12 @@ initApp();
 
 <!-- OFFER APPROVAL EMAIL MODAL -->
 <div class="modal-overlay" id="modal-offer-approval-email">
-  <div class="modal" style="max-width:580px">
+  <div class="modal" style="max-width:620px">
     <div class="modal-header">
       <div class="modal-title">📧 Send Offer for Approval</div>
       <button class="modal-close" onclick="closeModal('modal-offer-approval-email')">✕</button>
     </div>
     <div class="modal-body" style="padding:20px">
-      <div style="font-size:12px;color:var(--text-3);margin-bottom:16px">Enter the approver's email, copy the link, then open in Outlook to send.</div>
 
       <div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">To</div>
@@ -21367,17 +21459,20 @@ initApp();
         <input id="oa-email-link" readonly style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--brand);font-size:12px;box-sizing:border-box">
       </div>
 
-      <div style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Email Body</div>
-          <button class="btn btn-primary btn-sm" onclick="_oaCopy('oa-email-body')">📋 Copy Body</button>
+      <div style="margin-bottom:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px">Email Preview</div>
+          <button class="btn btn-outline btn-sm" onclick="_oaCopyHtml()">📋 Copy HTML</button>
         </div>
-        <textarea id="oa-email-body" readonly rows="9" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);color:var(--text);font-size:13px;resize:none;font-family:inherit;line-height:1.5;box-sizing:border-box"></textarea>
+        <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:#f0f2f5">
+          <iframe id="oa-email-preview" style="width:100%;height:340px;border:none;display:block" sandbox="allow-same-origin"></iframe>
+        </div>
+        <textarea id="oa-email-body" readonly rows="1" style="position:absolute;left:-9999px;opacity:0;pointer-events:none"></textarea>
       </div>
 
-      <div style="display:flex;gap:8px;justify-content:flex-end">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-outline" onclick="closeModal('modal-offer-approval-email')">Close</button>
-        <button class="btn btn-primary" onclick="_oaOpenOutlook()">Open Outlook Web ↗</button>
+        <button class="btn btn-primary" onclick="_oaOpenOutlook()">Open in Outlook ↗</button>
       </div>
       <div id="oa-copy-confirm" style="text-align:center;font-size:12px;color:var(--green-text);margin-top:8px;min-height:18px"></div>
     </div>
