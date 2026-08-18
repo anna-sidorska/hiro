@@ -2211,6 +2211,15 @@ function showApp() {
     _showReqApprovalModal(_reqApParam);
     return;
   }
+  // Check if opened via extension deep-link: #candidate/{uuid}
+  const _hashMatch = window.location.hash.match(/^#candidate\/([a-f0-9-]{36})$/i);
+  if (_hashMatch) {
+    history.replaceState(null, '', window.location.pathname); // clean the URL
+    nav('candidates', document.getElementById('nav-candidates'));
+    if(currentUser.role !== 'manager') loadSidebarCounts();
+    setTimeout(() => openCandidateDrawerById(_hashMatch[1]), 600);
+    return;
+  }
   const defaultPage = currentUser.role === 'manager' ? 'hm_roles' : 'home';
   nav(defaultPage, document.getElementById(`nav-${defaultPage}`));
   if(currentUser.role !== 'manager') loadSidebarCounts();
