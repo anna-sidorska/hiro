@@ -18170,6 +18170,7 @@ async function openCandidateFullPage(appId) {
   rightCol += '<span id="cfp-epp-url-data" data-url="' + (c.epp_url || '') + '" style="display:none"></span>';
   rightCol += '<span id="cfp-work-history-data" data-json=\'' + _escHtml(JSON.stringify(c.work_history || null)) + '\' style="display:none"></span>';
   rightCol += '<span id="cfp-profile-html-flag" data-has="' + (c.profile_html ? '1' : '') + '" style="display:none"></span>';
+  rightCol += '<span id="cfp-cv-base64-flag" data-has="' + (c.cv_base64 ? '1' : '') + '" style="display:none"></span>';
 
   // Lifecycle progress bar
   rightCol += progressBar;
@@ -18918,6 +18919,7 @@ async function _loadCfpCvTab() {
   _cfpCvTabLoaded = true;
   var cvUrl = (document.getElementById('cfp-cv-url-data') || {}).dataset?.url || null;
   var hasProfileHtml = (document.getElementById('cfp-profile-html-flag') || {}).dataset?.has === '1';
+  var hasCvBase64 = (document.getElementById('cfp-cv-base64-flag') || {}).dataset?.has === '1';
   if (!cvUrl) {
     // Check profile_html saved by extension (LinkedIn profile captured as HTML)
     if (hasProfileHtml && window._drawerCandidateId) {
@@ -18929,6 +18931,27 @@ async function _loadCfpCvTab() {
           var _phUrl = URL.createObjectURL(_phBlob);
           await _renderHtmlFrame(inner, _phUrl, 'LinkedIn Profile');
           setTimeout(function(){ URL.revokeObjectURL(_phUrl); }, 120000);
+          return;
+        }
+      } catch(e) {}
+    }
+    // Check cv_base64 saved by extension (uploaded PDF/DOCX stored as base64)
+    if (hasCvBase64 && window._drawerCandidateId) {
+      try {
+        var { data: _b64Row } = await sb.from('candidates').select('cv_base64,cv_filename').eq('id', window._drawerCandidateId).single();
+        if (_b64Row?.cv_base64) {
+          inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading CV...</div>';
+          var _b64Mime = (_b64Row.cv_base64.match(/^data:([^;]+);base64,/) || [])[1] || 'application/pdf';
+          var _b64Raw = _b64Row.cv_base64.replace(/^data:[^;]+;base64,/, '');
+          var _b64Bytes = atob(_b64Raw);
+          var _b64Ab = new ArrayBuffer(_b64Bytes.length);
+          var _b64Ia = new Uint8Array(_b64Ab);
+          for (var _bi = 0; _bi < _b64Bytes.length; _bi++) _b64Ia[_bi] = _b64Bytes.charCodeAt(_bi);
+          var _b64Blob = new Blob([_b64Ab], { type: _b64Mime });
+          var _b64Url = URL.createObjectURL(_b64Blob);
+          if (_isDocx(_b64Row.cv_filename || '')) { await _renderDocxFrame(inner, _b64Url, 'CV'); }
+          else { _renderPdfFrame(inner, _b64Url, 'CV'); }
+          setTimeout(function(){ URL.revokeObjectURL(_b64Url); }, 120000);
           return;
         }
       } catch(e) {}
