@@ -18917,6 +18917,29 @@ async function _loadCfpCvTab() {
   _cfpCvTabLoaded = true;
   var cvUrl = (document.getElementById('cfp-cv-url-data') || {}).dataset?.url || null;
   if (!cvUrl) {
+    // No cv_url on record — check storage bucket for extension-uploaded files
+    var _storCandId = window._drawerCandidateId;
+    if (_storCandId) {
+      try {
+        var { data: _storFiles } = await sb.storage.from('candidate-cvs').list(_storCandId + '/');
+        if (_storFiles && _storFiles.length > 0) {
+          // Sort newest first, pick first
+          _storFiles.sort(function(a, b){ return new Date(b.created_at) - new Date(a.created_at); });
+          var _storName = _storFiles[0].name;
+          var _storPath = _storCandId + '/' + _storName;
+          var { data: _signedData } = await sb.storage.from('candidate-cvs').createSignedUrl(_storPath, 3600);
+          if (_signedData?.signedUrl) {
+            inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading CV...</div>';
+            if (_isHtml(_storName))  { await _renderHtmlFrame(inner, _signedData.signedUrl, 'LinkedIn Profile'); }
+            else if (_isDocx(_storName)) { await _renderDocxFrame(inner, _signedData.signedUrl, 'CV'); }
+            else { _renderPdfFrame(inner, _signedData.signedUrl, 'CV'); }
+            // Silently save cv_url so next open is instant
+            sb.from('candidates').update({ cv_url: 'storage:' + _storPath, cv_filename: _storName }).eq('id', _storCandId).then(function(){});
+            return;
+          }
+        }
+      } catch(e) {}
+    }
     // No CV file — try rendering LinkedIn work history instead
     var whRaw = (document.getElementById('cfp-work-history-data') || {}).dataset?.json || 'null';
     var wh = null;
