@@ -1530,11 +1530,12 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
           <input id="offer-hm" placeholder="Name" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
         </div>
         <div class="form-group"><label>Location</label>
-          <input id="offer-location" placeholder="e.g. Madrid, Spain" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+          <input id="offer-location" placeholder="e.g. Madrid, Spain" oninput="_offerUpdatePayNote()" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
         </div>
       </div>
 
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:14px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Compensation</div>
+      <div id="offer-pay-note" style="font-size:11px;color:var(--text-3);margin:-6px 0 10px;padding:4px 10px;background:var(--surface-2);border-radius:4px">12 salary payments · 12 commission payments per year</div>
 
       <div class="form-grid">
         <div class="form-group"><label>Currency <span style="color:var(--red)">*</span></label>
@@ -1551,7 +1552,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <div class="form-group"><label>Base Salary Annual (LC)</label>
           <input id="offer-salary-annual" type="number" placeholder="Annual amount" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)" oninput="_calcOfferMonthly('salary')">
         </div>
-        <div class="form-group"><label>Base Salary Monthly (LC)</label>
+        <div class="form-group"><label id="offer-salary-monthly-label">Base Salary Monthly (LC) — 12 payments/yr</label>
           <input id="offer-salary-monthly" type="number" placeholder="Monthly amount" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)" oninput="_calcOfferAnnual('salary')">
         </div>
       </div>
@@ -10236,39 +10237,50 @@ const _DEPT_MAP = {
   'Transformation':                  { elt: 'Eva Krauss',        fpa: 'Jason Luginbuhl' },
 };
 
-// ── LOCATION → TRACKING PREFIX + CURRENCY ────────────────────────
+// ── LOCATION → TRACKING PREFIX + CURRENCY + PAY STRUCTURE ───────────
+// salaryMonths: number of monthly salary payments per year
+// commMonths:   number of monthly commission payments per year
 const _LOC_CONFIG = {
   // United States
-  'US-Remote':              { prefix:'US',   currency:'USD' },
-  'US-Atlanta':             { prefix:'US',   currency:'USD' },
-  'US-Minneapolis':         { prefix:'US',   currency:'USD' },
+  'US-Remote':              { prefix:'US',   currency:'USD', salaryMonths:12, commMonths:12 },
+  'US-Atlanta':             { prefix:'US',   currency:'USD', salaryMonths:12, commMonths:12 },
+  'US-Minneapolis':         { prefix:'US',   currency:'USD', salaryMonths:12, commMonths:12 },
   // Europe
-  'France - Paris':         { prefix:'EUR',  currency:'EUR' },
-  'Germany':                { prefix:'EUR',  currency:'EUR' },
-  'Lithuania':              { prefix:'EUR',  currency:'EUR' },
-  'Netherlands':            { prefix:'EUR',  currency:'EUR' },
-  'Portugal - Lisbon':      { prefix:'EUR',  currency:'EUR' },
-  'Portugal - Porto':       { prefix:'EUR',  currency:'EUR' },
-  'Spain':                  { prefix:'EUR',  currency:'EUR' },
-  'Sweden - Stockholm':     { prefix:'EUR',  currency:'EUR' },
-  'UK-Brighton':            { prefix:'EUR',  currency:'GBP' },
-  'UK-London':              { prefix:'EUR',  currency:'GBP' },
+  'France - Paris':         { prefix:'EUR',  currency:'EUR', salaryMonths:12, commMonths:12 },
+  'Germany':                { prefix:'EUR',  currency:'EUR', salaryMonths:12, commMonths:12 },
+  'Lithuania':              { prefix:'EUR',  currency:'EUR', salaryMonths:12, commMonths:12 },
+  'Netherlands':            { prefix:'EUR',  currency:'EUR', salaryMonths:12, commMonths:12 },
+  'Portugal - Lisbon':      { prefix:'EUR',  currency:'EUR', salaryMonths:14, commMonths:12 },
+  'Portugal - Porto':       { prefix:'EUR',  currency:'EUR', salaryMonths:14, commMonths:12 },
+  'Spain':                  { prefix:'EUR',  currency:'EUR', salaryMonths:14, commMonths:12 },
+  'Sweden - Stockholm':     { prefix:'EUR',  currency:'EUR', salaryMonths:12, commMonths:12 },
+  'UK-Brighton':            { prefix:'EUR',  currency:'GBP', salaryMonths:12, commMonths:12 },
+  'UK-London':              { prefix:'EUR',  currency:'GBP', salaryMonths:12, commMonths:12 },
   // Turkey
-  'Turkey - Istanbul':      { prefix:'TRY',  currency:'TRY' },
+  'Turkey - Istanbul':      { prefix:'TRY',  currency:'TRY', salaryMonths:12, commMonths:12 },
   // APAC
-  'India - Navi Mumbai':    { prefix:'APAC', currency:'INR' },
-  'Malaysia':               { prefix:'APAC', currency:'USD' },
+  'India - Navi Mumbai':    { prefix:'APAC', currency:'INR', salaryMonths:12, commMonths:12 },
+  'Malaysia':               { prefix:'APAC', currency:'USD', salaryMonths:12, commMonths:12 },
   // Brazil
-  'Brazil - Sao Paulo':     { prefix:'BRA',  currency:'BRL' },
+  'Brazil - Sao Paulo':     { prefix:'BRA',  currency:'BRL', salaryMonths:12, commMonths:12 },
   // Argentina
-  'Argentina - Tucuman':    { prefix:'ARG',  currency:'ARS' },
+  'Argentina - Tucuman':    { prefix:'ARG',  currency:'ARS', salaryMonths:12, commMonths:12 },
   // SSA (South & Central America — excl. ARG/BRA)
-  'Chile - Santiago':       { prefix:'SSA',  currency:'USD' },
-  'Colombia - Bogota':      { prefix:'SSA',  currency:'USD' },
-  'Ecuador - Quito':        { prefix:'SSA',  currency:'USD' },
-  'Mexico - Mexico City':   { prefix:'SSA',  currency:'MXN' },
-  'Peru - Lima':            { prefix:'SSA',  currency:'USD' },
+  'Chile - Santiago':       { prefix:'SSA',  currency:'USD', salaryMonths:12, commMonths:12 },
+  'Colombia - Bogota':      { prefix:'SSA',  currency:'USD', salaryMonths:12, commMonths:12 },
+  'Ecuador - Quito':        { prefix:'SSA',  currency:'USD', salaryMonths:12, commMonths:12 },
+  'Mexico - Mexico City':   { prefix:'SSA',  currency:'MXN', salaryMonths:12, commMonths:12 },
+  'Peru - Lima':            { prefix:'SSA',  currency:'USD', salaryMonths:12, commMonths:12 },
 };
+
+// ── PAY STRUCTURE HELPER ─────────────────────────────────────────────
+// Get pay structure from a free-text location string (for offer form)
+function _getPayStructureFromText(locationText) {
+  var t = (locationText||'').toLowerCase();
+  if (t.includes('spain') || t.includes('españa') || t.includes('madrid') || t.includes('barcelona')) return { salaryMonths:14, commMonths:12 };
+  if (t.includes('portugal') || t.includes('lisbon') || t.includes('porto')) return { salaryMonths:14, commMonths:12 };
+  return { salaryMonths:12, commMonths:12 };
+}
 
 const _LOC_OPTIONS = [
   '── United States ──',
@@ -10300,6 +10312,25 @@ async function _reqLocationChange(selectEl, rowIdx) {
   if (row) {
     var currSel = row.querySelectorAll('select')[1];
     if (currSel) currSel.value = cfg.currency;
+
+    // Show/update pay structure badge
+    var badge = row.parentElement.querySelector('.req-pay-badge[data-row="' + rowIdx + '"]');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'req-pay-badge';
+      badge.dataset.row = rowIdx;
+      badge.style.cssText = 'margin:-3px 0 5px;font-size:10px;color:var(--text-3);padding:3px 8px;background:var(--surface-2);border-radius:4px;display:inline-block';
+      row.after(badge);
+    }
+    if (cfg.salaryMonths === 12) {
+      badge.textContent = '📅 12 salary payments / year · 12 commission payments / year';
+    } else {
+      badge.textContent = '📅 ' + cfg.salaryMonths + ' salary payments / year (÷' + cfg.salaryMonths + ' for monthly) · 12 commission payments / year';
+      badge.style.color = 'var(--brand)';
+    }
+
+    // Recalculate monthly hints for salary inputs on this row
+    _reqUpdateSalaryHints(row, cfg.salaryMonths);
   }
 
   // Only auto-generate tracking if this is the FIRST data row
@@ -10325,6 +10356,40 @@ async function _reqLocationChange(selectEl, rowIdx) {
   trackingEl.value = newTracking;
   trackingEl.style.background = 'var(--brand-light)';
   setTimeout(()=>trackingEl.style.background='', 1400);
+}
+
+// Update monthly salary hints on a location row
+function _reqUpdateSalaryHints(row, salaryMonths) {
+  var inputs = row.querySelectorAll('input[type="number"]');
+  // inputs[0]=Base Min, inputs[1]=Base Max
+  [0, 1].forEach(function(i) {
+    if (!inputs[i]) return;
+    var val = parseFloat(inputs[i].value);
+    var hint = inputs[i].nextElementSibling;
+    if (!hint || !hint.classList.contains('salary-hint')) {
+      hint = document.createElement('div');
+      hint.className = 'salary-hint';
+      hint.style.cssText = 'font-size:10px;color:var(--text-3);margin-top:1px';
+      inputs[i].after(hint);
+    }
+    if (val && salaryMonths) {
+      var monthly = Math.round(val / salaryMonths);
+      hint.textContent = '≈ ' + monthly.toLocaleString() + '/mo (' + salaryMonths + ' pmts)';
+      hint.style.color = salaryMonths !== 12 ? 'var(--brand)' : 'var(--text-3)';
+    } else {
+      hint.textContent = salaryMonths !== 12 ? '÷' + salaryMonths + ' for monthly' : '';
+    }
+  });
+}
+
+function _reqOnSalaryInput(inputEl) {
+  var row = inputEl.closest('div[style*="grid"]');
+  if (!row) return;
+  var locSel = row.querySelectorAll('select')[0];
+  var loc = locSel?.value;
+  var cfg = _LOC_CONFIG[loc];
+  var salaryMonths = cfg?.salaryMonths || 12;
+  _reqUpdateSalaryHints(row, salaryMonths);
 }
 
 function _reqDeptChange(dept) {
@@ -10359,8 +10424,8 @@ function _reqAddLocation() {
     <select style="padding:7px 6px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
       <option>USD</option><option>EUR</option><option>GBP</option><option>BRL</option><option>MXN</option><option>ARS</option><option>TRY</option><option>INR</option>
     </select>
-    <input type="number" placeholder="Base Min" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Base salary minimum">
-    <input type="number" placeholder="Base Max" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Base salary maximum">
+    <input type="number" placeholder="Base Min (annual)" oninput="_reqOnSalaryInput(this)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Annual base salary minimum">
+    <input type="number" placeholder="Base Max (annual)" oninput="_reqOnSalaryInput(this)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Annual base salary maximum">
     <input type="number" placeholder="Bonus %" min="0" max="100" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Target bonus % of base">
     <input type="number" placeholder="Commission" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)" title="Target commission (annual)">
     <button type="button" onclick="this.closest('div').remove()" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--red-text);cursor:pointer;font-size:14px" title="Remove">✕</button>`;
@@ -12658,16 +12723,49 @@ async function checkDuplicateCandidate(email) {
 }
 
 // ── OFFER TRACKING ────────────────────────────
-// Auto-calculate annual/monthly
+// Get pay structure from the offer location field
+function _offerPayStructure() {
+  var loc = document.getElementById('offer-location')?.value || '';
+  return _getPayStructureFromText(loc);
+}
+
+// Update the pay structure note in the offer form
+function _offerUpdatePayNote() {
+  var note = document.getElementById('offer-pay-note');
+  if (!note) return;
+  var ps = _offerPayStructure();
+  if (ps.salaryMonths === 12) {
+    note.textContent = '12 salary payments · 12 commission payments per year';
+    note.style.color = 'var(--text-3)';
+    note.style.fontWeight = 'normal';
+  } else {
+    note.textContent = '📅 ' + ps.salaryMonths + ' salary payments / year · 12 commission payments / year';
+    note.style.color = 'var(--brand)';
+    note.style.fontWeight = '600';
+  }
+  // Update salary labels
+  var salLabel = document.getElementById('offer-salary-monthly-label');
+  if (salLabel) salLabel.textContent = 'Base Salary Monthly (LC) — ' + ps.salaryMonths + ' payments/yr';
+}
+
+// Auto-calculate annual ↔ monthly using country pay structure
 function _calcOfferMonthly(type) {
   var ann = parseFloat(document.getElementById('offer-'+type+'-annual')?.value||0);
   var mEl = document.getElementById('offer-'+type+'-monthly');
-  if (ann && mEl && !mEl.value) mEl.value = Math.round(ann/12);
+  if (!ann || !mEl) return;
+  var ps = _offerPayStructure();
+  var months = (type === 'salary') ? ps.salaryMonths : ps.commMonths;
+  mEl.value = Math.round(ann / months);
+  _offerUpdatePayNote();
 }
 function _calcOfferAnnual(type) {
   var mon = parseFloat(document.getElementById('offer-'+type+'-monthly')?.value||0);
   var aEl = document.getElementById('offer-'+type+'-annual');
-  if (mon && aEl && !aEl.value) aEl.value = Math.round(mon*12);
+  if (!mon || !aEl) return;
+  var ps = _offerPayStructure();
+  var months = (type === 'salary') ? ps.salaryMonths : ps.commMonths;
+  aEl.value = Math.round(mon * months);
+  _offerUpdatePayNote();
 }
 
 function _offerAddApprover() {
