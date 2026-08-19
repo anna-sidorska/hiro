@@ -10358,28 +10358,30 @@ async function _reqLocationChange(selectEl, rowIdx) {
   setTimeout(()=>trackingEl.style.background='', 1400);
 }
 
-// Update monthly salary hints on a location row
+// Update monthly salary hints on a location row (shown in the pay badge below — never injected into grid)
 function _reqUpdateSalaryHints(row, salaryMonths) {
   var inputs = row.querySelectorAll('input[type="number"]');
-  // inputs[0]=Base Min, inputs[1]=Base Max
-  [0, 1].forEach(function(i) {
-    if (!inputs[i]) return;
-    var val = parseFloat(inputs[i].value);
-    var hint = inputs[i].nextElementSibling;
-    if (!hint || !hint.classList.contains('salary-hint')) {
-      hint = document.createElement('div');
-      hint.className = 'salary-hint';
-      hint.style.cssText = 'font-size:10px;color:var(--text-3);margin-top:1px';
-      inputs[i].after(hint);
-    }
-    if (val && salaryMonths) {
-      var monthly = Math.round(val / salaryMonths);
-      hint.textContent = '≈ ' + monthly.toLocaleString() + '/mo (' + salaryMonths + ' pmts)';
-      hint.style.color = salaryMonths !== 12 ? 'var(--brand)' : 'var(--text-3)';
-    } else {
-      hint.textContent = salaryMonths !== 12 ? '÷' + salaryMonths + ' for monthly' : '';
-    }
-  });
+  // inputs[0]=Base Min, inputs[1]=Base Max (in grid order)
+  var minVal = parseFloat(inputs[0]?.value) || 0;
+  var maxVal = parseFloat(inputs[1]?.value) || 0;
+
+  // Update title tooltips on the inputs
+  if (inputs[0]) inputs[0].title = minVal ? ('Annual ' + minVal.toLocaleString() + ' ÷ ' + salaryMonths + ' = ' + Math.round(minVal/salaryMonths).toLocaleString() + '/mo') : 'Annual base salary minimum';
+  if (inputs[1]) inputs[1].title = maxVal ? ('Annual ' + maxVal.toLocaleString() + ' ÷ ' + salaryMonths + ' = ' + Math.round(maxVal/salaryMonths).toLocaleString() + '/mo') : 'Annual base salary maximum';
+
+  // Find the pay badge below this row and update it with monthly breakdowns
+  var rowIdx = row.dataset?.idx || row.parentElement?.dataset?.idx;
+  var badge = row.parentElement?.querySelector('.req-pay-badge');
+  if (!badge) return;
+  var label = salaryMonths !== 12
+    ? '📅 ' + salaryMonths + ' salary pmts/yr · 12 commission pmts/yr'
+    : '📅 12 salary pmts/yr · 12 commission pmts/yr';
+  var calc = '';
+  if (minVal) calc += ' | Min ≈ ' + Math.round(minVal/salaryMonths).toLocaleString() + '/mo';
+  if (maxVal) calc += ' | Max ≈ ' + Math.round(maxVal/salaryMonths).toLocaleString() + '/mo';
+  badge.textContent = label + calc;
+  badge.style.color = salaryMonths !== 12 ? 'var(--brand)' : 'var(--text-3)';
+  badge.style.fontWeight = salaryMonths !== 12 ? '600' : 'normal';
 }
 
 function _reqOnSalaryInput(inputEl) {
