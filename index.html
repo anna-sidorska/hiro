@@ -4232,6 +4232,9 @@ Talent Acquisition | Sovos`
 // ── PIPELINE ──────────────────────────────────
 async function renderPipeline() {
   _pushHistory('pipeline', 'Pipeline', renderPipeline);
+  var _pRole = currentUser ? (currentUser.role || '') : '';
+  var _pUid  = currentUser ? currentUser.id : null;
+  var _pCanAct = ['admin','recruiter'].includes(_pRole);
   document.getElementById('topbar-actions').innerHTML = `
     <div style="display:flex;gap:4px;border:1.5px solid var(--border);border-radius:var(--r);padding:2px;background:var(--surface-2)">
       <button id="view-kanban" onclick="setPipelineView('kanban')" style="padding:4px 10px;font-size:12px;font-weight:500;border:none;border-radius:5px;cursor:pointer;background:${_pipelineView==='kanban'?'var(--surface)':'transparent'};color:${_pipelineView==='kanban'?'var(--text)':'var(--text-3)'}">
@@ -4241,16 +4244,22 @@ async function renderPipeline() {
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>List
       </button>
     </div>
-    <button class="btn btn-outline btn-sm" id="bulk-select-btn" onclick="toggleBulkMode()">☐ Select</button>
-    <button class="btn btn-outline btn-sm" onclick="openAddCandidateModal()">+ Add Candidate</button>
-    <button class="btn btn-primary btn-sm" onclick="openInterviewModal()">+ Schedule Interview</button>
+    ${_pCanAct ? '<button class="btn btn-outline btn-sm" id="bulk-select-btn" onclick="toggleBulkMode()">☐ Select</button>' : ''}
+    ${_pCanAct ? '<button class="btn btn-outline btn-sm" onclick="openAddCandidateModal()">+ Add Candidate</button>' : ''}
+    ${_pCanAct ? '<button class="btn btn-primary btn-sm" onclick="openInterviewModal()">+ Schedule Interview</button>' : ''}
   `;
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading pipeline...</div>';
 
-  const { data, error } = await sb.from('applications')
-    .select('*, candidates(*), roles(id,title,department,region)')
-    .not('stage','in','(hired,rejected,withdrawn)')
-    .order('created_at');
+  var pipeQ = sb.from('applications').select('*, candidates(*), roles(id,title,department,region)').not('stage','in','(hired,rejected,withdrawn)').order('created_at');
+  if ((_pRole === 'recruiter' || _pRole === 'manager') && _pUid) {
+    var myRolesP = sb.from('roles').select('id');
+    if (_pRole === 'recruiter') myRolesP = myRolesP.or('assigned_recruiter_id.eq.' + _pUid + ',co_recruiter_id.eq.' + _pUid);
+    if (_pRole === 'manager') myRolesP = myRolesP.eq('hiring_manager_id', _pUid);
+    var { data: pRoles } = await myRolesP;
+    var pRoleIds = (pRoles || []).map(function(r){ return r.id; });
+    if (pRoleIds.length) { pipeQ = pipeQ.in('role_id', pRoleIds); } else { pipelineData = []; document.getElementById('content').innerHTML = '<div class="card"><div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No pipeline data</div><div class="empty-sub">No roles assigned to you yet</div></div></div>'; return; }
+  }
+  const { data, error } = await pipeQ;
 
   if(error) { document.getElementById('content').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Error loading pipeline</div><div class="empty-sub">${error.message}</div></div>`; return; }
 
@@ -4629,9 +4638,32 @@ function _candTabBar(activeTab) {
 async function renderCandidates() {
   window._candTab = 'all';
   _pushHistory('candidates', 'Candidates', renderCandidates);
-  document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-primary btn-sm" onclick="openAddCandidateModal()">+ Add Candidate</button>`;
+  var _cRole = currentUser ? (currentUser.role || '') : '';
+  var _cUid  = currentUser ? currentUser.id : null;
+  var _canAddCand = ['admin','recruiter'].includes(_cRole);
+  document.getElementById('topbar-actions').innerHTML = _canAddCand ? `<button class="btn btn-primary btn-sm" onclick="openAddCandidateModal()">+ Add Candidate</button>` : '';
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading candidates...</div>';
-  const {data,error}=await sb.from('candidates').select('*').order('created_at',{ascending:false});
+
+  var data, error;
+  if ((_cRole === 'recruiter' || _cRole === 'manager') && _cUid) {
+    // Fetch only candidates in this user's roles
+    var myRolesQ = sb.from('roles').select('id');
+    if (_cRole === 'recruiter') myRolesQ = myRolesQ.or('assigned_recruiter_id.eq.' + _cUid + ',co_recruiter_id.eq.' + _cUid);
+    if (_cRole === 'manager') myRolesQ = myRolesQ.eq('hiring_manager_id', _cUid);
+    var { data: myRoles } = await myRolesQ;
+    var myRoleIds = (myRoles || []).map(function(r){ return r.id; });
+    if (myRoleIds.length) {
+      var { data: apps } = await sb.from('applications').select('candidate_id').in('role_id', myRoleIds);
+      var candIds = [...new Set((apps || []).map(function(a){ return a.candidate_id; }).filter(Boolean))];
+      if (candIds.length) {
+        var res = await sb.from('candidates').select('*').in('id', candIds).order('created_at',{ascending:false});
+        data = res.data; error = res.error;
+      } else { data = []; error = null; }
+    } else { data = []; error = null; }
+  } else {
+    var res2 = await sb.from('candidates').select('*').order('created_at',{ascending:false});
+    data = res2.data; error = res2.error;
+  }
   if(error){toast('Error loading candidates','err');return;}
   candidatesData=data;
   const cbadge=document.getElementById('sb-cand-count');
@@ -5019,11 +5051,20 @@ function clearCandidateFilters() {
 // ── ROLES ─────────────────────────────────────
 async function renderRoles() {
   _pushHistory('roles', 'Roles', renderRoles);
-  document.getElementById('topbar-actions').innerHTML = `<button class="btn btn-primary btn-sm" onclick="openAddRoleModal()">+ Add Role</button>`;
+  var _rRole = currentUser ? (currentUser.role || '') : '';
+  var _rUid  = currentUser ? currentUser.id : null;
+  var _canAddRole = ['admin','recruiter'].includes(_rRole);
+  var _canEditRole = ['admin','recruiter'].includes(_rRole);
+  var _readOnly = ['coordinator','hr'].includes(_rRole);
+  document.getElementById('topbar-actions').innerHTML = _canAddRole ? `<button class="btn btn-primary btn-sm" onclick="openAddRoleModal()">+ Add Role</button>` : '';
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading roles...</div>';
-  const {data:rawData,error}=await sb.from('roles')
-    .select('*, applications(count), profiles!hiring_manager_id(full_name)')
-    .order('created_at',{ascending:false});
+  var rolesQ = sb.from('roles').select('*, applications(count), profiles!hiring_manager_id(full_name)').order('created_at',{ascending:false});
+  if (_rRole === 'recruiter' && _rUid) {
+    rolesQ = rolesQ.or('assigned_recruiter_id.eq.' + _rUid + ',co_recruiter_id.eq.' + _rUid);
+  } else if (_rRole === 'manager' && _rUid) {
+    rolesQ = rolesQ.eq('hiring_manager_id', _rUid);
+  }
+  const {data:rawData,error}= await rolesQ;
   // Sort: Open → On Hold → Filled → Closed
   const statusOrder = {open:0, on_hold:1, filled:2, closed:3, cancelled:4};
   const data = (rawData||[]).sort((a,b) => (statusOrder[a.status]??5) - (statusOrder[b.status]??5));
@@ -5069,7 +5110,7 @@ async function renderRoles() {
           <div style="font-size:12px;color:var(--text-3)">${r.profiles?.full_name?'HM: '+r.profiles.full_name:'—'}</div>
         </div>
         <div style="display:flex;gap:6px;justify-content:flex-end">
-          <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="event.stopPropagation();openEditRoleModal('${r.id}')">Edit</button>
+          ${_canEditRole ? `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="event.stopPropagation();openEditRoleModal('${r.id}')">Edit</button>` : ''}
           <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="event.stopPropagation();viewRoleDetail('${r.id}')">View Role</button>
         </div>
       </div>
