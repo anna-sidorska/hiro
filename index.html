@@ -2225,9 +2225,12 @@ function showApp() {
     setTimeout(() => openCandidateDrawerById(_hashMatch[1]), 600);
     return;
   }
-  const defaultPage = currentUser.role === 'manager' ? 'hm_roles' : 'home';
+  var _defRole = currentUser.role || '';
+  var defaultPage = _defRole === 'manager' ? 'hm_roles'
+    : (_defRole === 'fpa' || _defRole === 'fp_and_a' || _defRole === 'leadership' || _defRole === 'exec') ? 'reports'
+    : 'home';
   nav(defaultPage, document.getElementById(`nav-${defaultPage}`));
-  if(currentUser.role !== 'manager') loadSidebarCounts();
+  if(_defRole !== 'manager') loadSidebarCounts();
 }
 
 function showLoginScreen() {
@@ -2291,13 +2294,9 @@ function renderSidebarNav() {
     return;
   }
 
-  // ── FP&A ──
+  // ── FP&A — Reports only ──
   if (_r === 'fpa' || _r === 'fp_and_a') {
-    html += '<div class="sb-section">Overview</div>';
-    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Budget Overview</button>';
-    html += '<hr class="sb-section-sep"><div class="sb-section">Business</div>';
-    html += '<button class="sb-item" id="nav-business_portal" onclick="nav(\'business_portal\',this)">' + icon.business + ' Business Portal</button>';
-    html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    html += '<div class="sb-section">Reports</div>';
     html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
     html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
     html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
@@ -2305,11 +2304,9 @@ function renderSidebarNav() {
     return;
   }
 
-  // ── LEADERSHIP / EXEC ──
+  // ── LEADERSHIP / EXEC — Reports only ──
   if (_r === 'leadership' || _r === 'exec') {
-    html += '<div class="sb-section">Overview</div>';
-    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Executive Overview</button>';
-    html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    html += '<div class="sb-section">Reports</div>';
     html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
     html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
     html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
@@ -2538,16 +2535,16 @@ function renderHome() {
   var dashLabel = _isFpa ? 'Budget Overview' : _isLeadership ? 'Executive Overview' : _isCoord ? 'Coordinator Hub' : _isHm ? 'Hiring Dashboard' : _isHr ? 'HR Overview' : 'Dashboard';
   var dashSub = _isFpa ? 'Headcount & cost tracking' : _isLeadership ? 'Aggregate hiring KPIs' : _isCoord ? 'Schedule & logistics' : _isHm ? 'My roles & candidates' : _isHr ? 'Compliance & pipeline' : 'My roles & pipeline';
   const tiles=[
-    {id:'dashboard',label:dashLabel,sub:dashSub,icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',grad:'linear-gradient(135deg,#6366f1,#a855f7)'},
+    {id:'dashboard',label:dashLabel,sub:dashSub,icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',grad:'linear-gradient(135deg,#6366f1,#a855f7)',roles:['admin','recruiter','coordinator','hr','manager']},
     {id:'roles',label:'Roles',sub:'Open positions & tracking',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',grad:'linear-gradient(135deg,#0891b2,#06b6d4)',roles:['admin','recruiter','coordinator','hr','manager']},
     {id:'candidates',label:'Candidates',sub:'Talent pipeline & profiles',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6m3-3h-6"/></svg>',grad:'linear-gradient(135deg,#059669,#10b981)',roles:['admin','recruiter','hr','manager']},
     {id:'interviews',label:'Interviews',sub:'Schedule & weekly view',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',grad:'linear-gradient(135deg,#d97706,#f59e0b)',roles:['admin','recruiter','coordinator','manager']},
     {id:'scheduling_hub',label:'Scheduling Hub',sub:'Book & manage interviews',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>',grad:'linear-gradient(135deg,#0891b2,#22d3ee)',roles:['coordinator']},
-    {id:'reports',label:'Reports',sub:'Analytics & hiring data',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>',grad:'linear-gradient(135deg,#7c3aed,#a78bfa)',roles:['admin','recruiter','hr','fpa','fp_and_a','leadership','exec']},
+    {id:'reports',label:'Reports',sub:'Analytics & hiring data',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>',grad:'linear-gradient(135deg,#7c3aed,#a78bfa)'},
     {id:'internal_pool',label:'Internal Pool',sub:'Sovos talent first',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',grad:'linear-gradient(135deg,#be185d,#f472b6)',roles:['admin','recruiter','hr']},
     {id:'jd_library',label:'JD Library',sub:'Job descriptions & templates',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',grad:'linear-gradient(135deg,#2563eb,#60a5fa)',roles:['admin','recruiter','coordinator']},
     {id:'hr_portal',label:'HR Portal',sub:'Requisitions & approvals',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',grad:'linear-gradient(135deg,#0f766e,#14b8a6)',roles:['admin','recruiter','hr','manager']},
-    {id:'business_portal',label:'Business Portal',sub:'Role health, FP&A & headcount',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><line x1="6" y1="8" x2="6" y2="13"/><line x1="10" y1="10" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="13"/><line x1="18" y1="11" x2="18" y2="13"/></svg>',grad:'linear-gradient(135deg,#1e40af,#3b82f6)',roles:['admin','hr','recruiter','manager','fpa','fp_and_a']},
+    {id:'business_portal',label:'Business Portal',sub:'Role health & headcount',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><line x1="6" y1="8" x2="6" y2="13"/><line x1="10" y1="10" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="13"/><line x1="18" y1="11" x2="18" y2="13"/></svg>',grad:'linear-gradient(135deg,#1e40af,#3b82f6)',roles:['admin','hr','recruiter','manager']},
     {id:'ai_assistant',label:'AI Assistant',sub:'Coming soon',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/></svg>',grad:'linear-gradient(135deg,#374151,#6b7280)',disabled:true},
   ];
   document.getElementById('content').innerHTML=`
@@ -3121,12 +3118,9 @@ async function renderLeadershipDashboard() {
 async function renderDashboard() {
   _pushHistory('dashboard', 'Dashboard', renderDashboard);
   var userRole = currentUser ? (currentUser.role || '') : '';
-  if (userRole === 'leadership' || userRole === 'exec') {
-    await renderLeadershipDashboard();
-    return;
-  }
-  if (userRole === 'fpa' || userRole === 'fp_and_a') {
-    await renderFpaDashboard();
+  if (userRole === 'leadership' || userRole === 'exec' || userRole === 'fpa' || userRole === 'fp_and_a') {
+    // These roles only have Reports access — redirect there
+    nav('reports', document.getElementById('nav-reports'));
     return;
   }
   if (userRole === 'coordinator') {
@@ -4251,10 +4245,15 @@ async function renderPipeline() {
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading pipeline...</div>';
 
   var pipeQ = sb.from('applications').select('*, candidates(*), roles(id,title,department,region)').not('stage','in','(hired,rejected,withdrawn)').order('created_at');
-  if ((_pRole === 'recruiter' || _pRole === 'manager') && _pUid) {
+  if ((_pRole === 'recruiter' || _pRole === 'manager' || _pRole === 'hr') && _pUid) {
     var myRolesP = sb.from('roles').select('id');
     if (_pRole === 'recruiter') myRolesP = myRolesP.or('assigned_recruiter_id.eq.' + _pUid + ',co_recruiter_id.eq.' + _pUid);
     if (_pRole === 'manager') myRolesP = myRolesP.eq('hiring_manager_id', _pUid);
+    if (_pRole === 'hr') {
+      var hrRegP = currentUser ? (currentUser.region || '') : '';
+      if (hrRegP) { myRolesP = myRolesP.or('created_by.eq.' + _pUid + ',region.eq.' + hrRegP); }
+      else { myRolesP = myRolesP.eq('created_by', _pUid); }
+    }
     var { data: pRoles } = await myRolesP;
     var pRoleIds = (pRoles || []).map(function(r){ return r.id; });
     if (pRoleIds.length) { pipeQ = pipeQ.in('role_id', pRoleIds); } else { pipelineData = []; document.getElementById('content').innerHTML = '<div class="card"><div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No pipeline data</div><div class="empty-sub">No roles assigned to you yet</div></div></div>'; return; }
@@ -4645,11 +4644,16 @@ async function renderCandidates() {
   document.getElementById('content').innerHTML='<div class="loading"><div class="spinner"></div> Loading candidates...</div>';
 
   var data, error;
-  if ((_cRole === 'recruiter' || _cRole === 'manager') && _cUid) {
+  if ((_cRole === 'recruiter' || _cRole === 'manager' || _cRole === 'hr') && _cUid) {
     // Fetch only candidates in this user's roles
     var myRolesQ = sb.from('roles').select('id');
     if (_cRole === 'recruiter') myRolesQ = myRolesQ.or('assigned_recruiter_id.eq.' + _cUid + ',co_recruiter_id.eq.' + _cUid);
     if (_cRole === 'manager') myRolesQ = myRolesQ.eq('hiring_manager_id', _cUid);
+    if (_cRole === 'hr') {
+      var hrReg = currentUser ? (currentUser.region || '') : '';
+      if (hrReg) { myRolesQ = myRolesQ.or('created_by.eq.' + _cUid + ',region.eq.' + hrReg); }
+      else { myRolesQ = myRolesQ.eq('created_by', _cUid); }
+    }
     var { data: myRoles } = await myRolesQ;
     var myRoleIds = (myRoles || []).map(function(r){ return r.id; });
     if (myRoleIds.length) {
@@ -5063,6 +5067,14 @@ async function renderRoles() {
     rolesQ = rolesQ.or('assigned_recruiter_id.eq.' + _rUid + ',co_recruiter_id.eq.' + _rUid);
   } else if (_rRole === 'manager' && _rUid) {
     rolesQ = rolesQ.eq('hiring_manager_id', _rUid);
+  } else if (_rRole === 'hr' && _rUid) {
+    // HR: roles they opened OR in their region
+    var hrRegion = currentUser ? (currentUser.region || '') : '';
+    if (hrRegion) {
+      rolesQ = rolesQ.or('created_by.eq.' + _rUid + ',region.eq.' + hrRegion);
+    } else {
+      rolesQ = rolesQ.eq('created_by', _rUid);
+    }
   }
   const {data:rawData,error}= await rolesQ;
   // Sort: Open → On Hold → Filled → Closed
@@ -9058,7 +9070,7 @@ async function renderTeam() {
   const {data,error}=await sb.from('profiles').select('*').order('full_name');
   if(error){toast('Error loading team','err');return;}
 
-  const roleColors={admin:'tag-red',recruiter:'tag-blue',manager:'tag-purple',coordinator:'tag-amber',hr:'tag-amber'};
+  const roleColors={admin:'tag-red',recruiter:'tag-blue',manager:'tag-purple',coordinator:'tag-amber',hr:'tag-amber',fpa:'tag-gray',fp_and_a:'tag-gray',leadership:'tag-gray',exec:'tag-gray'};
   const regionLabels={EMEA:'EMEA',LATAM:'LATAM',APAC:'APAC',US:'US',Global:'Global'};
 
   const linked=data.filter(p=>p.user_id);
@@ -9085,7 +9097,7 @@ async function renderTeam() {
         ${p.region?`<span class="tag tag-blue">${regionLabels[p.region]||p.region}</span>`:''}
         <div style="margin-left:auto;display:flex;gap:6px">
           <select style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-family:inherit;color:var(--text-2);background:var(--surface)" onchange="updateMemberRole('${p.id}',this.value)" title="Change role">
-            ${['admin','recruiter','coordinator','manager','hr'].map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${r}</option>`).join('')}
+            ${['admin','recruiter','coordinator','manager','hr','fpa','leadership'].map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${r}</option>`).join('')}
           </select>
           ${!isLinked?`<button class="btn btn-primary btn-sm" style="font-size:11px;padding:3px 10px" onclick="_sendHiroInvite('${p.email}','${p.full_name||''}')">✉ Invite</button>`:''}
           <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="openEditMemberModal('${p.id}')">Edit</button>
