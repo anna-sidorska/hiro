@@ -1409,7 +1409,9 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
       <div class="form-group"><label>Role</label>
         <select id="em-role">
           <option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option>
-          <option value="manager">Hiring Manager</option><option value="admin">Admin</option>
+          <option value="manager">Hiring Manager</option><option value="hr">HR</option>
+          <option value="fpa">FP&amp;A</option><option value="leadership">Leadership</option>
+          <option value="admin">Admin</option>
         </select>
       </div>
       <div class="form-actions">
@@ -1443,7 +1445,9 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
       <div class="form-group"><label>Role</label>
         <select id="nm-role">
           <option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option>
-          <option value="manager">Hiring Manager</option><option value="admin">Admin</option>
+          <option value="manager">Hiring Manager</option><option value="hr">HR</option>
+          <option value="fpa">FP&amp;A</option><option value="leadership">Leadership</option>
+          <option value="admin">Admin</option>
         </select>
       </div>
       <p class="text-muted" style="font-size:12px;margin-top:4px">The person will auto-link on first login via their Sovos email.</p>
@@ -2287,10 +2291,24 @@ function renderSidebarNav() {
     return;
   }
 
-  // ── EXEC / FP&A: numbers-only overview ──
-  if (_r === 'exec' || _r === 'fp_and_a') {
+  // ── FP&A ──
+  if (_r === 'fpa' || _r === 'fp_and_a') {
     html += '<div class="sb-section">Overview</div>';
-    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Dashboard</button>';
+    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Budget Overview</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Business</div>';
+    html += '<button class="sb-item" id="nav-business_portal" onclick="nav(\'business_portal\',this)">' + icon.business + ' Business Portal</button>';
+    html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
+    html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
+    html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
+    html += '<button class="sb-settings-item" onclick="openSettingsModal()">' + icon.settings + ' Settings</button>';
+    navEl.innerHTML = html;
+    return;
+  }
+
+  // ── LEADERSHIP / EXEC ──
+  if (_r === 'leadership' || _r === 'exec') {
+    html += '<div class="sb-section">Overview</div>';
+    html += '<button class="sb-item" id="nav-dashboard" onclick="nav(\'dashboard\',this)">' + icon.dashboard + ' Executive Overview</button>';
     html += '<hr class="sb-section-sep"><div class="sb-section">Reports</div>';
     html += '<button class="sb-item" id="nav-reports" onclick="nav(\'reports\',this)">' + icon.reports + ' Reports</button>';
     html += '<hr class="sb-section-sep" style="margin-top:12px"><div class="sb-section" style="padding-top:12px">Settings</div>';
@@ -2509,16 +2527,27 @@ function renderHome() {
   document.getElementById('topbar-actions').innerHTML='';
   document.getElementById('sidebar').style.display='none';
   document.querySelector('.topbar').style.display='none';
+  var _r = currentUser ? (currentUser.role || '') : '';
+  var _isFpa = _r === 'fpa' || _r === 'fp_and_a';
+  var _isLeadership = _r === 'leadership' || _r === 'exec';
+  var _isCoord = _r === 'coordinator';
+  var _isHm = _r === 'manager';
+  var _isHr = _r === 'hr';
+  var _isRecruiter = _r === 'recruiter' || _r === 'admin';
+  // Role-specific dashboard label/sub
+  var dashLabel = _isFpa ? 'Budget Overview' : _isLeadership ? 'Executive Overview' : _isCoord ? 'Coordinator Hub' : _isHm ? 'Hiring Dashboard' : _isHr ? 'HR Overview' : 'Dashboard';
+  var dashSub = _isFpa ? 'Headcount & cost tracking' : _isLeadership ? 'Aggregate hiring KPIs' : _isCoord ? 'Schedule & logistics' : _isHm ? 'My roles & candidates' : _isHr ? 'Compliance & pipeline' : 'My roles & pipeline';
   const tiles=[
-    {id:'dashboard',label:'Dashboard',sub:'My roles & commission',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',grad:'linear-gradient(135deg,#6366f1,#a855f7)'},
-    {id:'roles',label:'Roles',sub:'Open positions & tracking',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',grad:'linear-gradient(135deg,#0891b2,#06b6d4)'},
-    {id:'candidates',label:'Candidates',sub:'Talent pipeline & profiles',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6m3-3h-6"/></svg>',grad:'linear-gradient(135deg,#059669,#10b981)'},
-    {id:'interviews',label:'Interviews',sub:'Schedule & weekly view',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',grad:'linear-gradient(135deg,#d97706,#f59e0b)'},
-    {id:'reports',label:'Reports',sub:'Analytics & hiring data',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>',grad:'linear-gradient(135deg,#7c3aed,#a78bfa)'},
-    {id:'internal_pool',label:'Internal Pool',sub:'Sovos talent first',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',grad:'linear-gradient(135deg,#be185d,#f472b6)'},
-    {id:'jd_library',label:'JD Library',sub:'Job descriptions & templates',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',grad:'linear-gradient(135deg,#2563eb,#60a5fa)'},
-    {id:'hr_portal',label:'HR Portal',sub:'Requisitions & approvals',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',grad:'linear-gradient(135deg,#0f766e,#14b8a6)'},
-    {id:'business_portal',label:'Business Portal',sub:'Role health, FP&A & headcount',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><line x1="6" y1="8" x2="6" y2="13"/><line x1="10" y1="10" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="13"/><line x1="18" y1="11" x2="18" y2="13"/></svg>',grad:'linear-gradient(135deg,#1e40af,#3b82f6)',roles:['admin','hr','recruiter','manager']},
+    {id:'dashboard',label:dashLabel,sub:dashSub,icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',grad:'linear-gradient(135deg,#6366f1,#a855f7)'},
+    {id:'roles',label:'Roles',sub:'Open positions & tracking',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',grad:'linear-gradient(135deg,#0891b2,#06b6d4)',roles:['admin','recruiter','coordinator','hr','manager']},
+    {id:'candidates',label:'Candidates',sub:'Talent pipeline & profiles',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><path d="M19 8v6m3-3h-6"/></svg>',grad:'linear-gradient(135deg,#059669,#10b981)',roles:['admin','recruiter','hr','manager']},
+    {id:'interviews',label:'Interviews',sub:'Schedule & weekly view',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',grad:'linear-gradient(135deg,#d97706,#f59e0b)',roles:['admin','recruiter','coordinator','manager']},
+    {id:'scheduling_hub',label:'Scheduling Hub',sub:'Book & manage interviews',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>',grad:'linear-gradient(135deg,#0891b2,#22d3ee)',roles:['coordinator']},
+    {id:'reports',label:'Reports',sub:'Analytics & hiring data',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>',grad:'linear-gradient(135deg,#7c3aed,#a78bfa)',roles:['admin','recruiter','hr','fpa','fp_and_a','leadership','exec']},
+    {id:'internal_pool',label:'Internal Pool',sub:'Sovos talent first',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',grad:'linear-gradient(135deg,#be185d,#f472b6)',roles:['admin','recruiter','hr']},
+    {id:'jd_library',label:'JD Library',sub:'Job descriptions & templates',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',grad:'linear-gradient(135deg,#2563eb,#60a5fa)',roles:['admin','recruiter','coordinator']},
+    {id:'hr_portal',label:'HR Portal',sub:'Requisitions & approvals',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',grad:'linear-gradient(135deg,#0f766e,#14b8a6)',roles:['admin','recruiter','hr','manager']},
+    {id:'business_portal',label:'Business Portal',sub:'Role health, FP&A & headcount',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><line x1="6" y1="8" x2="6" y2="13"/><line x1="10" y1="10" x2="10" y2="13"/><line x1="14" y1="7" x2="14" y2="13"/><line x1="18" y1="11" x2="18" y2="13"/></svg>',grad:'linear-gradient(135deg,#1e40af,#3b82f6)',roles:['admin','hr','recruiter','manager','fpa','fp_and_a']},
     {id:'ai_assistant',label:'AI Assistant',sub:'Coming soon',icon:'<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/></svg>',grad:'linear-gradient(135deg,#374151,#6b7280)',disabled:true},
   ];
   document.getElementById('content').innerHTML=`
@@ -2573,7 +2602,434 @@ function _buildInternalPipelineHtml(apps) {
 }
 
 // ── EXEC AGGREGATE DASHBOARD ──────────────────────────────────
-async function renderExecDashboard() {
+// ── COORDINATOR DASHBOARD ────────────────────────────────────────
+async function renderCoordinatorDashboard() {
+  _pushHistory('dashboard', 'Dashboard', renderDashboard);
+  var topbar = document.getElementById('topbar-title');
+  if (topbar) topbar.textContent = 'Coordinator Hub';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading your hub...</div>';
+
+  var today = new Date();
+  var todayStr = today.toISOString().split('T')[0];
+  var tomorrowStr = new Date(today.getTime() + 86400000).toISOString().split('T')[0];
+  var weekStr = new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0];
+
+  var results = await Promise.allSettled([
+    sb.from('interviews').select('id,scheduled_date,stage,location,notes,applications(id,candidates(first_name,last_name),roles(title)),profiles(full_name)').gte('scheduled_date', todayStr).lte('scheduled_date', weekStr).order('scheduled_date', {ascending:true}),
+    sb.from('applications').select('id,stage,created_at,candidates(first_name,last_name),roles(title)').in('stage',['interview_1','interview_2','final_interview']).not('stage','is',null),
+    sb.from('tasks').select('id,title,due_date,status,priority').eq('status','open').order('due_date',{ascending:true}).limit(10),
+    sb.from('roles').select('id,title,department,status').eq('status','open'),
+  ]);
+
+  function safe(i) { return (results[i].status === 'fulfilled' && results[i].value.data) ? results[i].value.data : []; }
+  var interviews = safe(0);
+  var appsInInterview = safe(1);
+  var tasks = safe(2);
+  var openRoles = safe(3);
+
+  var todayInterviews = interviews.filter(function(i) { return i.scheduled_date && i.scheduled_date.startsWith(todayStr); });
+  var upcomingInterviews = interviews.filter(function(i) { return i.scheduled_date && !i.scheduled_date.startsWith(todayStr); });
+
+  // Build today's schedule
+  var todayHtml = todayInterviews.length ? todayInterviews.map(function(iv) {
+    var c = iv.applications && iv.applications.candidates ? iv.applications.candidates : {};
+    var role = iv.applications && iv.applications.roles ? iv.applications.roles : {};
+    var time = iv.scheduled_date ? new Date(iv.scheduled_date).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '—';
+    var stageBadge = {'interview_1':'1st Interview','interview_2':'2nd Interview','final_interview':'Final'}[iv.stage] || iv.stage || '—';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border)">'
+      + '<div style="min-width:54px;font-size:14px;font-weight:700;color:var(--brand)">' + time + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:13px;font-weight:600">' + _escHtml((c.first_name||'?') + ' ' + (c.last_name||'?')) + '</div>'
+      + '<div style="font-size:12px;color:var(--text-3)">' + _escHtml(role.title||'—') + '</div>'
+      + '</div>'
+      + '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(0,196,238,.15);color:var(--brand)">' + stageBadge + '</span>'
+      + (iv.location ? '<span style="font-size:11px;color:var(--text-3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _escHtml(iv.location) + '</span>' : '')
+      + '</div>';
+  }).join('') : '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px">No interviews scheduled today 🎉</div>';
+
+  // Upcoming this week
+  var upcomingHtml = upcomingInterviews.length ? upcomingInterviews.slice(0,8).map(function(iv) {
+    var c = iv.applications && iv.applications.candidates ? iv.applications.candidates : {};
+    var role = iv.applications && iv.applications.roles ? iv.applications.roles : {};
+    var dt = iv.scheduled_date ? new Date(iv.scheduled_date) : null;
+    var dateStr = dt ? dt.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) : '—';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border)">'
+      + '<div style="min-width:80px;font-size:12px;color:var(--text-2)">' + dateStr + '</div>'
+      + '<div style="flex:1;font-size:13px">' + _escHtml((c.first_name||'?') + ' ' + (c.last_name||'?')) + '</div>'
+      + '<div style="font-size:12px;color:var(--text-3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _escHtml(role.title||'—') + '</div>'
+      + '</div>';
+  }).join('') : '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">No upcoming interviews this week</div>';
+
+  // Pending tasks
+  var tasksHtml = tasks.length ? tasks.map(function(t) {
+    var isOverdue = t.due_date && new Date(t.due_date) < today;
+    var priBadge = t.priority === 'high' ? '<span style="font-size:10px;font-weight:700;color:var(--red);margin-left:4px">HIGH</span>' : '';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border)">'
+      + '<div style="flex:1;font-size:13px">' + _escHtml(t.title||'Untitled') + priBadge + '</div>'
+      + (t.due_date ? '<div style="font-size:12px;color:' + (isOverdue?'var(--red)':'var(--text-3)') + '">' + new Date(t.due_date).toLocaleDateString('en-GB',{month:'short',day:'numeric'}) + (isOverdue?' ⚠':'') + '</div>' : '')
+      + '</div>';
+  }).join('') : '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">No open tasks</div>';
+
+  document.getElementById('content').innerHTML =
+    '<h2 style="font-size:20px;font-weight:700;margin-bottom:18px">Coordinator Hub</h2>'
+    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">'
+    + '<div class="card kpi" style="cursor:pointer" onclick="nav(\'interviews\',document.getElementById(\'nav-interviews\'))">'
+      + '<div class="kpi-val" style="color:var(--brand)">' + todayInterviews.length + '</div>'
+      + '<div class="kpi-label">Today\'s Interviews</div>'
+      + '<div style="font-size:10px;color:var(--text-3);margin-top:4px">View all →</div>'
+    + '</div>'
+    + '<div class="card kpi" style="cursor:pointer" onclick="nav(\'scheduling_hub\',document.getElementById(\'nav-scheduling_hub\'))">'
+      + '<div class="kpi-val">' + upcomingInterviews.length + '</div>'
+      + '<div class="kpi-label">This Week\'s Interviews</div>'
+      + '<div style="font-size:10px;color:var(--text-3);margin-top:4px">Scheduling hub →</div>'
+    + '</div>'
+    + '<div class="card kpi">'
+      + '<div class="kpi-val">' + openRoles.length + '</div>'
+      + '<div class="kpi-label">Active Open Roles</div>'
+    + '</div>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">'
+    + '<div class="card"><div class="card-header"><div class="card-title">📅 Today\'s Schedule</div>'
+      + '<button onclick="nav(\'interviews\',document.getElementById(\'nav-interviews\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">All Interviews</button>'
+      + '</div><div class="card-body" style="padding:0">' + todayHtml + '</div></div>'
+    + '<div class="card"><div class="card-header"><div class="card-title">📆 This Week</div>'
+      + '<button onclick="nav(\'scheduling_hub\',document.getElementById(\'nav-scheduling_hub\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Scheduling Hub</button>'
+      + '</div><div class="card-body" style="padding:0">' + upcomingHtml + '</div></div>'
+    + '</div>'
+    + '<div class="card"><div class="card-header"><div class="card-title">✅ My Tasks</div>'
+      + '<button onclick="nav(\'tasks\',document.getElementById(\'nav-tasks\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">All Tasks</button>'
+      + '</div><div class="card-body" style="padding:0">' + tasksHtml + '</div></div>';
+}
+
+// ── HIRING MANAGER DASHBOARD ─────────────────────────────────────
+async function renderHmDashboard() {
+  _pushHistory('dashboard', 'Dashboard', renderDashboard);
+  var topbar = document.getElementById('topbar-title');
+  if (topbar) topbar.textContent = 'My Hiring Dashboard';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading your dashboard...</div>';
+
+  var userId = currentUser ? currentUser.id : null;
+  var today = new Date();
+  var weekStr = new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0];
+  var todayStr = today.toISOString().split('T')[0];
+  var qStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1).toISOString();
+
+  var results = await Promise.allSettled([
+    sb.from('roles').select('id,title,department,status,created_at').eq('hiring_manager_id', userId).in('status',['open','filled']),
+    sb.from('applications').select('id,stage,created_at,updated_at,role_id,candidates(first_name,last_name,email)').not('stage','in','(rejected,withdrawn)'),
+    sb.from('interviews').select('id,scheduled_date,stage,applications(candidates(first_name,last_name),roles(title))').gte('scheduled_date', todayStr).lte('scheduled_date', weekStr).order('scheduled_date',{ascending:true}),
+    sb.from('evaluations').select('id,application_id,submitted_by,created_at').eq('submitted_by', userId),
+  ]);
+
+  function safe(i) { return (results[i].status === 'fulfilled' && results[i].value.data) ? results[i].value.data : []; }
+  var myRoles = safe(0);
+  var allApps = safe(1);
+  var myInterviews = safe(2);
+  var myEvals = safe(3);
+
+  var myRoleIds = new Set(myRoles.map(function(r){ return r.id; }));
+  var myOpenRoles = myRoles.filter(function(r){ return r.status === 'open'; });
+  var myFilledThisQ = myRoles.filter(function(r){ return r.status === 'filled' && r.created_at >= qStart; });
+
+  var myApps = allApps.filter(function(a){ return myRoleIds.has(a.role_id); });
+  var activeApps = myApps.filter(function(a){ return a.stage !== 'hired'; });
+  var inInterviewStage = activeApps.filter(function(a){ return ['interview_1','interview_2','final_interview','offer'].indexOf(a.stage) !== -1; });
+  var pendingOffers = activeApps.filter(function(a){ return a.stage === 'offer'; });
+
+  var evaledAppIds = new Set(myEvals.map(function(e){ return e.application_id; }));
+  var pendingEvals = inInterviewStage.filter(function(a){ return !evaledAppIds.has(a.id); });
+
+  // Stage pipeline for my open roles
+  var stageOrder = ['applied','shortlisted','phone_screen','interview_1','interview_2','final_interview','offer','hired'];
+  var stageLabels = {applied:'Applied',shortlisted:'Shortlisted',phone_screen:'Phone Screen',interview_1:'1st Interview',interview_2:'2nd Interview',final_interview:'Final',offer:'Offer',hired:'Hired'};
+  var stageCounts = {};
+  stageOrder.forEach(function(s){ stageCounts[s] = 0; });
+  activeApps.forEach(function(a){ if (stageCounts[a.stage] !== undefined) stageCounts[a.stage]++; });
+  var maxCount = Math.max(1, Math.max.apply(null, Object.values(stageCounts)));
+
+  var funnelHtml = stageOrder.map(function(s) {
+    var count = stageCounts[s] || 0;
+    var pct = Math.round(count / maxCount * 100);
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      + '<div style="min-width:110px;font-size:12px;color:var(--text-2);text-align:right">' + stageLabels[s] + '</div>'
+      + '<div style="flex:1;background:var(--surface-2);border-radius:4px;overflow:hidden;height:22px">'
+        + '<div style="width:' + pct + '%;background:var(--brand);height:100%;display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:700;color:#fff;min-width:' + (count?'28px':'0') + ';transition:width .3s">'
+          + (count ? count : '') + '</div>'
+      + '</div>'
+      + '<div style="min-width:24px;font-size:12px;font-weight:700;color:' + (count?'var(--text)':'var(--text-3)') + '">' + count + '</div>'
+      + '</div>';
+  }).join('');
+
+  // Upcoming interviews
+  var ivHtml = myInterviews.length ? myInterviews.slice(0,6).map(function(iv) {
+    var c = iv.applications && iv.applications.candidates ? iv.applications.candidates : {};
+    var role = iv.applications && iv.applications.roles ? iv.applications.roles : {};
+    var dt = iv.scheduled_date ? new Date(iv.scheduled_date) : null;
+    var dateStr = dt ? dt.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'}) : '—';
+    var time = dt ? dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border)">'
+      + '<div style="min-width:72px;font-size:12px;color:var(--text-2)">' + dateStr + '</div>'
+      + (time ? '<div style="font-size:12px;font-weight:600;color:var(--brand);min-width:40px">' + time + '</div>' : '')
+      + '<div style="flex:1;font-size:13px;font-weight:500">' + _escHtml((c.first_name||'') + ' ' + (c.last_name||'').trim()||'—') + '</div>'
+      + '<div style="font-size:12px;color:var(--text-3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _escHtml(role.title||'—') + '</div>'
+      + '</div>';
+  }).join('') : '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">No interviews this week</div>';
+
+  // Pending evaluations
+  var evalHtml = pendingEvals.length ? pendingEvals.slice(0,6).map(function(a) {
+    var c = a.candidates || {};
+    var role = myRoles.find(function(r){ return r.id === a.role_id; }) || {};
+    return '<div onclick="openCandidateDrawer(\'' + a.id + '\')" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'">'
+      + '<div style="flex:1;font-size:13px;font-weight:500">' + _escHtml((c.first_name||'') + ' ' + (c.last_name||'').trim()||'—') + '</div>'
+      + '<div style="font-size:12px;color:var(--text-3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _escHtml(role.title||'—') + '</div>'
+      + '<span style="font-size:11px;font-weight:600;color:var(--amber);background:rgba(245,158,11,.12);padding:2px 8px;border-radius:99px">⏳ Awaiting Feedback</span>'
+      + '</div>';
+  }).join('')
+    + (pendingEvals.length > 6 ? '<div style="padding:10px 14px;font-size:12px;color:var(--text-3)">' + (pendingEvals.length - 6) + ' more pending…</div>' : '')
+  : '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">All evaluations complete ✓</div>';
+
+  document.getElementById('content').innerHTML =
+    '<h2 style="font-size:20px;font-weight:700;margin-bottom:18px">My Hiring Dashboard</h2>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">'
+    + '<div class="card kpi" style="cursor:pointer" onclick="nav(\'hm_roles\',document.getElementById(\'nav-hm_roles\'))">'
+      + '<div class="kpi-val" style="color:var(--brand)">' + myOpenRoles.length + '</div><div class="kpi-label">My Open Roles</div><div style="font-size:10px;color:var(--text-3);margin-top:4px">View →</div>'
+    + '</div>'
+    + '<div class="card kpi"><div class="kpi-val">' + activeApps.length + '</div><div class="kpi-label">Active Candidates</div></div>'
+    + '<div class="card kpi"><div class="kpi-val" style="' + (pendingEvals.length?'color:var(--amber)':'') + '">' + pendingEvals.length + '</div><div class="kpi-label">Awaiting My Feedback</div></div>'
+    + '<div class="card kpi"><div class="kpi-val" style="' + (pendingOffers.length?'color:var(--green)':'') + '">' + pendingOffers.length + '</div><div class="kpi-label">Pending Offers</div></div>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">'
+    + '<div class="card"><div class="card-header"><div class="card-title">📊 My Pipeline</div>'
+      + '<button onclick="nav(\'hm_roles\',document.getElementById(\'nav-hm_roles\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">View Roles</button>'
+      + '</div><div class="card-body">' + funnelHtml + '</div></div>'
+    + '<div class="card"><div class="card-header"><div class="card-title">📅 My Interviews This Week</div>'
+      + '<button onclick="nav(\'hm_interviews\',document.getElementById(\'nav-hm_interviews\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">All Interviews</button>'
+      + '</div><div class="card-body" style="padding:0">' + ivHtml + '</div></div>'
+    + '</div>'
+    + '<div class="card"><div class="card-header"><div class="card-title">⏳ Pending My Feedback</div></div><div class="card-body" style="padding:0">' + evalHtml + '</div></div>';
+}
+
+// ── HR DASHBOARD ─────────────────────────────────────────────────
+async function renderHrDashboard() {
+  _pushHistory('dashboard', 'Dashboard', renderDashboard);
+  var topbar = document.getElementById('topbar-title');
+  if (topbar) topbar.textContent = 'HR Overview';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading HR overview...</div>';
+
+  var today = new Date();
+  var qStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1).toISOString();
+  var qEnd = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3 + 3, 0, 23, 59, 59).toISOString();
+  var weekAgo = new Date(today.getTime() - 7 * 86400000).toISOString();
+
+  var results = await Promise.allSettled([
+    sb.from('roles').select('id,title,department,status,created_at,updated_at,region').order('department'),
+    sb.from('applications').select('id,stage,role_id,created_at,candidates(first_name,last_name,email)').not('stage','in','(rejected,withdrawn)'),
+    sb.from('roles').select('id,title,department,updated_at').eq('status','filled').gte('updated_at', qStart).lte('updated_at', qEnd),
+    sb.from('applications').select('id,stage,role_id,updated_at,candidates(first_name,last_name,email)').eq('stage','hired').gte('updated_at', qStart),
+  ]);
+
+  function safe(i) { return (results[i].status === 'fulfilled' && results[i].value.data) ? results[i].value.data : []; }
+  var allRoles = safe(0);
+  var activeApps = safe(1);
+  var filledThisQ = safe(2);
+  var hiredThisQ = safe(3);
+
+  var openRoles = allRoles.filter(function(r){ return r.status === 'open'; });
+  var offersInFlight = activeApps.filter(function(a){ return a.stage === 'offer'; });
+
+  // Dept breakdown
+  var deptMap = {};
+  openRoles.forEach(function(r) {
+    var d = r.department || 'Unknown';
+    if (!deptMap[d]) deptMap[d] = { open:0, candidates:0, offers:0 };
+    deptMap[d].open++;
+  });
+  var openRoleIdToDept = {};
+  openRoles.forEach(function(r){ openRoleIdToDept[r.id] = r.department || 'Unknown'; });
+  activeApps.forEach(function(a) {
+    var dept = openRoleIdToDept[a.role_id];
+    if (!dept || !deptMap[dept]) return;
+    deptMap[dept].candidates++;
+    if (a.stage === 'offer') deptMap[dept].offers++;
+  });
+
+  var deptRows = Object.keys(deptMap).sort().map(function(d) {
+    var v = deptMap[d];
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:9px 14px;font-size:13px;font-weight:500">' + _escHtml(d) + '</td>'
+      + '<td style="padding:9px 14px;text-align:center;font-size:13px">' + v.open + '</td>'
+      + '<td style="padding:9px 14px;text-align:center;font-size:13px">' + v.candidates + '</td>'
+      + '<td style="padding:9px 14px;text-align:center;font-size:13px">' + (v.offers||'—') + '</td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--text-3)">No data</td></tr>';
+
+  // Recent hires this Q
+  var hiresHtml = hiredThisQ.length ? hiredThisQ.slice(0,8).map(function(a) {
+    var c = a.candidates || {};
+    var role = allRoles.find(function(r){ return r.id === a.role_id; }) || {};
+    var dateStr = a.updated_at ? new Date(a.updated_at).toLocaleDateString('en-GB',{month:'short',day:'numeric'}) : '—';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border)">'
+      + '<span style="width:30px;height:30px;border-radius:50%;background:var(--green);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'
+        + ((c.first_name||'?')[0] + (c.last_name||'?')[0]).toUpperCase()
+      + '</span>'
+      + '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + _escHtml((c.first_name||'') + ' ' + (c.last_name||'').trim()) + '</div>'
+        + '<div style="font-size:12px;color:var(--text-3)">' + _escHtml(role.title||'—') + ' · ' + _escHtml(role.department||'—') + '</div>'
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--text-3)">' + dateStr + '</div>'
+      + '</div>';
+  }).join('') : '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">No hires this quarter yet</div>';
+
+  // Offers in flight
+  var offersHtml = offersInFlight.length ? offersInFlight.map(function(a) {
+    var c = a.candidates || {};
+    var role = allRoles.find(function(r){ return r.id === a.role_id; }) || {};
+    return '<div onclick="openCandidateDrawer(\'' + a.id + '\')" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'">'
+      + '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + _escHtml((c.first_name||'') + ' ' + (c.last_name||'').trim()) + '</div>'
+        + '<div style="font-size:12px;color:var(--text-3)">' + _escHtml(role.title||'—') + '</div>'
+      + '</div>'
+      + '<span style="font-size:11px;font-weight:600;color:var(--green);background:rgba(16,185,129,.12);padding:2px 8px;border-radius:99px">Offer Out</span>'
+      + '</div>';
+  }).join('') : '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">No offers currently in flight</div>';
+
+  document.getElementById('content').innerHTML =
+    '<h2 style="font-size:20px;font-weight:700;margin-bottom:18px">HR Overview</h2>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">'
+    + '<div class="card kpi" style="cursor:pointer" onclick="nav(\'roles\',document.getElementById(\'nav-roles\'))">'
+      + '<div class="kpi-val" style="color:var(--brand)">' + openRoles.length + '</div><div class="kpi-label">Open Roles</div><div style="font-size:10px;color:var(--text-3);margin-top:4px">View all →</div>'
+    + '</div>'
+    + '<div class="card kpi"><div class="kpi-val">' + activeApps.length + '</div><div class="kpi-label">Active Candidates</div></div>'
+    + '<div class="card kpi" style="' + (offersInFlight.length?'cursor:pointer':'') + '">'
+      + '<div class="kpi-val" style="color:var(--green)">' + offersInFlight.length + '</div><div class="kpi-label">Offers in Flight</div>'
+    + '</div>'
+    + '<div class="card kpi"><div class="kpi-val" style="color:var(--green)">' + hiredThisQ.length + '</div><div class="kpi-label">Hires This Quarter</div></div>'
+    + '</div>'
+    + '<div class="card" style="margin-bottom:20px"><div class="card-header"><div class="card-title">🏢 Headcount by Department</div>'
+      + '<button onclick="nav(\'roles\',document.getElementById(\'nav-roles\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">All Roles</button>'
+      + '</div><div class="card-body" style="padding:0">'
+      + '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border)">'
+      + '<th style="padding:8px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Department</th>'
+      + '<th style="padding:8px 14px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Open Roles</th>'
+      + '<th style="padding:8px 14px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Candidates</th>'
+      + '<th style="padding:8px 14px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Offers Out</th>'
+      + '</tr></thead><tbody>' + deptRows + '</tbody></table>'
+      + '</div></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">'
+    + '<div class="card"><div class="card-header"><div class="card-title">🎉 Hires This Quarter</div></div><div class="card-body" style="padding:0">' + hiresHtml + '</div></div>'
+    + '<div class="card"><div class="card-header"><div class="card-title">📄 Offers in Flight</div>'
+      + '<button onclick="nav(\'candidates\',document.getElementById(\'nav-candidates\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">View All</button>'
+      + '</div><div class="card-body" style="padding:0">' + offersHtml + '</div></div>'
+    + '</div>';
+}
+
+// ── FP&A DASHBOARD ───────────────────────────────────────────────
+async function renderFpaDashboard() {
+  _pushHistory('dashboard', 'Dashboard', renderDashboard);
+  var topbar = document.getElementById('topbar-title');
+  if (topbar) topbar.textContent = 'Budget Overview';
+  document.getElementById('topbar-actions').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading budget overview...</div>';
+
+  var today = new Date();
+  var qStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1).toISOString();
+  var qEnd = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3 + 3, 0, 23, 59, 59).toISOString();
+  var qLabel = 'Q' + (Math.floor(today.getMonth() / 3) + 1) + ' ' + today.getFullYear();
+
+  var results = await Promise.allSettled([
+    sb.from('roles').select('id,title,department,status,created_at,updated_at,locations').eq('status','open'),
+    sb.from('roles').select('id,department,updated_at').eq('status','filled').gte('updated_at', qStart).lte('updated_at', qEnd),
+    sb.from('applications').select('id,stage,role_id').in('stage',['offer','hired']),
+    sb.from('requisitions').select('id,role_id,locations,status,approvers').eq('status','approved'),
+  ]);
+
+  function safe(i) { return (results[i].status === 'fulfilled' && results[i].value.data) ? results[i].value.data : []; }
+  var openRoles = safe(0);
+  var filledThisQ = safe(1);
+  var offerHired = safe(2);
+
+  var totalOpen = openRoles.length;
+  var offersOut = offerHired.filter(function(a){ return a.stage === 'offer'; }).length;
+  var hiresThisQ = filledThisQ.length;
+
+  // Vacancy cost estimate: avg days open × assumed avg daily cost
+  var avgDailyBudgetImpact = 0; // We can only show structure, not actual budget without salary data
+  var vacancyDays = openRoles.reduce(function(sum, r) {
+    var daysOpen = r.created_at ? Math.floor((today - new Date(r.created_at)) / 86400000) : 0;
+    return sum + daysOpen;
+  }, 0);
+  var avgDaysOpen = totalOpen ? Math.round(vacancyDays / totalOpen) : 0;
+
+  // Dept breakdown with salary from locations JSON
+  var deptMap = {};
+  openRoles.forEach(function(r) {
+    var d = r.department || 'Unknown';
+    if (!deptMap[d]) deptMap[d] = { open:0, totalSalaryAnnual:0, avgDays:0, daysArr:[] };
+    deptMap[d].open++;
+    // Parse salary from locations if available
+    var locs = [];
+    try { locs = typeof r.locations === 'string' ? JSON.parse(r.locations) : (r.locations || []); } catch(e) {}
+    if (locs.length) {
+      var sal = locs[0].salary_annual || locs[0].salary_min || 0;
+      if (sal) deptMap[d].totalSalaryAnnual += parseFloat(sal);
+    }
+    var daysOpen = r.created_at ? Math.floor((today - new Date(r.created_at)) / 86400000) : 0;
+    deptMap[d].daysArr.push(daysOpen);
+  });
+  Object.keys(deptMap).forEach(function(d) {
+    var v = deptMap[d];
+    v.avgDays = v.daysArr.length ? Math.round(v.daysArr.reduce(function(a,b){return a+b;},0) / v.daysArr.length) : 0;
+  });
+
+  function fmtK(n) { return n >= 1000 ? (n/1000).toFixed(0) + 'k' : n || '—'; }
+
+  var deptRows = Object.keys(deptMap).sort().map(function(d) {
+    var v = deptMap[d];
+    var color = v.avgDays > 60 ? 'color:var(--red)' : v.avgDays > 30 ? 'color:var(--amber)' : 'color:var(--text)';
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:9px 14px;font-size:13px;font-weight:500">' + _escHtml(d) + '</td>'
+      + '<td style="padding:9px 14px;text-align:center;font-size:13px">' + v.open + '</td>'
+      + '<td style="padding:9px 14px;text-align:center;font-size:13px;' + color + '">' + v.avgDays + 'd</td>'
+      + '<td style="padding:9px 14px;text-align:center;font-size:13px">' + (v.totalSalaryAnnual ? '~€' + fmtK(v.totalSalaryAnnual) : '—') + '</td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--text-3)">No data</td></tr>';
+
+  // Velocity bar
+  var velocityColor = avgDaysOpen > 60 ? 'var(--red)' : avgDaysOpen > 30 ? 'var(--amber)' : 'var(--green)';
+
+  document.getElementById('content').innerHTML =
+    '<h2 style="font-size:20px;font-weight:700;margin-bottom:4px">Budget Overview</h2>'
+    + '<div style="font-size:13px;color:var(--text-3);margin-bottom:18px">' + qLabel + ' · Numbers only view — no candidate details</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">'
+    + '<div class="card kpi"><div class="kpi-val" style="color:var(--brand)">' + totalOpen + '</div><div class="kpi-label">Open Headcount</div></div>'
+    + '<div class="card kpi"><div class="kpi-val" style="color:' + velocityColor + '">' + avgDaysOpen + 'd</div><div class="kpi-label">Avg Days Open</div></div>'
+    + '<div class="card kpi"><div class="kpi-val" style="color:var(--amber)">' + offersOut + '</div><div class="kpi-label">Offers Pending</div></div>'
+    + '<div class="card kpi"><div class="kpi-val" style="color:var(--green)">' + hiresThisQ + '</div><div class="kpi-label">Hires ' + qLabel + '</div></div>'
+    + '</div>'
+    + '<div class="card" style="margin-bottom:20px"><div class="card-header"><div class="card-title">💼 Open Headcount by Department</div>'
+      + '<button onclick="nav(\'reports\',document.getElementById(\'nav-reports\'))" style="background:none;border:1.5px solid var(--border);color:var(--text-2);border-radius:var(--r);padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">Full Reports</button>'
+      + '</div><div class="card-body" style="padding:0">'
+      + '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border)">'
+      + '<th style="padding:8px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Department</th>'
+      + '<th style="padding:8px 14px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Open Roles</th>'
+      + '<th style="padding:8px 14px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Avg Days Open</th>'
+      + '<th style="padding:8px 14px;text-align:center;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">Est. Annual Budget at Risk</th>'
+      + '</tr></thead><tbody>' + deptRows + '</tbody></table>'
+      + '</div></div>'
+    + '<div class="card"><div class="card-header"><div class="card-title">📊 Hiring Velocity</div></div><div class="card-body">'
+    + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
+      + '<div style="font-size:28px;font-weight:800;color:' + velocityColor + '">' + avgDaysOpen + '</div>'
+      + '<div><div style="font-size:13px;font-weight:600">Average days to fill</div><div style="font-size:12px;color:var(--text-3)">Across all open roles</div></div>'
+      + '<div style="margin-left:auto;padding:6px 14px;border-radius:var(--r);font-size:12px;font-weight:700;background:' + (avgDaysOpen>60?'rgba(239,68,68,.1)':avgDaysOpen>30?'rgba(245,158,11,.1)':'rgba(16,185,129,.1)') + ';color:' + velocityColor + '">'
+        + (avgDaysOpen > 60 ? '⚠ Needs Attention' : avgDaysOpen > 30 ? '⚡ In Range' : '✓ On Track') + '</div>'
+    + '</div>'
+    + '<div style="font-size:12px;color:var(--text-3);padding:8px 12px;background:var(--surface-2);border-radius:var(--r)">💡 Target: fill roles in under 30 days. Roles open 60+ days represent compounding budget and productivity risk.</div>'
+    + '</div></div>';
+}
+
+// ── LEADERSHIP / EXEC DASHBOARD ──────────────────────────────────
+async function renderLeadershipDashboard() {
   var topbar = document.getElementById('topbar-title');
   if (topbar) topbar.textContent = 'Executive Overview';
   var topbarActions = document.getElementById('topbar-actions');
@@ -2665,8 +3121,24 @@ async function renderExecDashboard() {
 async function renderDashboard() {
   _pushHistory('dashboard', 'Dashboard', renderDashboard);
   var userRole = currentUser ? (currentUser.role || '') : '';
-  if (userRole === 'exec' || userRole === 'fp_and_a') {
-    await renderExecDashboard();
+  if (userRole === 'leadership' || userRole === 'exec') {
+    await renderLeadershipDashboard();
+    return;
+  }
+  if (userRole === 'fpa' || userRole === 'fp_and_a') {
+    await renderFpaDashboard();
+    return;
+  }
+  if (userRole === 'coordinator') {
+    await renderCoordinatorDashboard();
+    return;
+  }
+  if (userRole === 'hr') {
+    await renderHrDashboard();
+    return;
+  }
+  if (userRole === 'manager') {
+    await renderHmDashboard();
     return;
   }
   var isAdminRole = currentUser && ['admin','manager'].includes(currentUser.role || '');
@@ -15468,7 +15940,7 @@ async function _settingsLoadTeam() {
       html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">';
       html += '<input id="_sett-inv-name" type="text" placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">';
       html += '<input id="_sett-inv-email" type="email" placeholder="email@sovos.com *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">';
-      html += '<select id="_sett-inv-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text)"><option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management</option><option value="admin">Admin</option></select>';
+      html += '<select id="_sett-inv-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text)"><option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="fpa">FP&A</option><option value="leadership">Leadership</option><option value="admin">Admin</option></select>';
       html += '</div>';
       html += '<div style="text-align:right;margin-bottom:8px">';
       html += '<button id="_sett-inv-btn" class="btn btn-primary btn-sm" onclick="_settSendInvite()">Send Magic Link</button>';
@@ -21039,7 +21511,7 @@ async function renderTeamUsers() {
     '<input id="tu-invite-name" type="text" placeholder="Full name *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
     '<input id="tu-invite-email" type="email" placeholder="email@sovos.com *" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">' +
     '<select id="tu-invite-role" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;background:var(--surface);color:var(--text)">' +
-    '<option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="management">Management</option><option value="admin">Admin</option>' +
+    '<option value="recruiter">Recruiter</option><option value="coordinator">Coordinator</option><option value="manager">Hiring Manager</option><option value="hr">HR</option><option value="fpa">FP&A</option><option value="leadership">Leadership</option><option value="admin">Admin</option>' +
     '</select>' +
     '</div>' +
     '<div style="text-align:right">' +
