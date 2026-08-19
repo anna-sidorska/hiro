@@ -18895,9 +18895,15 @@ async function _renderHtmlFrame(inner, url, title) {
     var resp = await fetch(url);
     if (!resp.ok) throw new Error('Could not fetch file (status ' + resp.status + ')');
     var html = await resp.text();
+    // Force white background in the rendered HTML
+    if (!html.includes('background:#fff') && !html.includes('background: #fff') && !html.includes('background:white')) {
+      var bgStyle = '<style>html,body{background:#fff!important;color:#111!important;}</style>';
+      html = html.replace('</head>', bgStyle + '</head>');
+      if (!html.includes(bgStyle)) html = bgStyle + html;
+    }
     // Use srcdoc to avoid iframe origin/CSP blocking
     var iframe = document.createElement('iframe');
-    iframe.style.cssText = 'width:100%;height:clamp(400px,75vh,780px);border:none;display:block;border-radius:var(--r)';
+    iframe.style.cssText = 'width:100%;height:clamp(400px,75vh,780px);border:none;display:block;border-radius:var(--r);background:#fff';
     iframe.title = title;
     iframe.sandbox = 'allow-same-origin';
     iframe.srcdoc = html;
