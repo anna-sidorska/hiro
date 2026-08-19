@@ -10028,9 +10028,11 @@ async function _showReqApprovalModal(roleId) {
           <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">${l.currency||'USD'}</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;font-size:12px">
-          <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Base Salary</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_min)||'—'} – ${fmt(l.salary_max)||'—'}</span></div>
-          ${l.bonus_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Bonus Target</span><span style="font-weight:600;color:#eef4ff">${l.bonus_pct}% of base</span></div>`:''}
-          ${l.commission_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Target</span><span style="font-weight:600;color:#eef4ff">${l.commission_pct}% of base</span></div>`:''}
+          ${(l.salary_annual||l.salary_min)?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Salary Annual</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_annual||l.salary_min)}</span></div>`:''}
+          ${l.salary_monthly?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Salary Monthly</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_monthly)}</span></div>`:''}
+          ${l.bonus_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Bonus Target</span><span style="font-weight:600;color:#eef4ff">${l.bonus_pct}%</span></div>`:''}
+          ${(l.commission_annual||l.commission_pct)?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Annual</span><span style="font-weight:600;color:#eef4ff">${l.commission_annual?fmt(l.commission_annual):l.commission_pct+'% of base'}</span></div>`:''}
+          ${l.commission_monthly?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Monthly</span><span style="font-weight:600;color:#eef4ff">${fmt(l.commission_monthly)}</span></div>`:''}
         </div>
       </div>`).join('')}
     </div>` : ''}
@@ -10679,16 +10681,6 @@ async function submitRequisition() {
       var toEmails = chainApprovers.map(a=>a.approver_email).filter(Boolean).join('; ');
       var hiroLink = window.location.origin + window.location.pathname + '?req_approval=' + role.id;
       var emailSubj = 'Requisition Approval Required — ' + reqTracking + ' · ' + reqTitle;
-      var emailBod =
-        'Hi,\n\n' +
-        'A new requisition has been submitted and requires your approval:\n\n' +
-        'Role:          ' + reqTitle + '\n' +
-        (reqDept ? 'Department:    ' + reqDept + '\n' : '') +
-        'Tracking #:    ' + reqTracking + '\n' +
-        'Submitted by:  ' + (currentUser?.full_name || 'TA Team') + '\n\n' +
-        'Please click the link below to review the full requisition details and approve or reject directly — you will need to log into Hiro if you are not already signed in.\n\n' +
-        '👉 Review & Approve: ' + hiroLink + '\n\n' +
-        'Thank you,\n' + (currentUser?.full_name || 'TA Team');
       var toEl = document.getElementById('oa-email-to');
       var subEl = document.getElementById('oa-email-subject');
       var linkEl = document.getElementById('oa-email-link');
@@ -10696,7 +10688,44 @@ async function submitRequisition() {
       if (toEl) toEl.value = toEmails;
       if (subEl) subEl.value = emailSubj;
       if (linkEl) linkEl.value = hiroLink;
-      if (bodyEl) bodyEl.value = emailBod;
+      if (bodyEl) bodyEl.value = '';
+
+      // Build Sovos-branded HTML email for req approval
+      var locRows = Array.isArray(role.location_salary_targets) ? role.location_salary_targets : [];
+      var salaryRows = locRows.map(function(l) {
+        var sal = l.salary_annual ? Number(l.salary_annual).toLocaleString() + '/yr' : (l.salary_min ? Number(l.salary_min).toLocaleString() + '/yr' : null);
+        var salMo = l.salary_monthly ? ' · ' + Number(l.salary_monthly).toLocaleString() + '/mo' : '';
+        var comm = l.commission_annual ? Number(l.commission_annual).toLocaleString() + '/yr' : (l.commission_pct ? l.commission_pct + '% of base' : null);
+        var commMo = l.commission_monthly ? ' · ' + Number(l.commission_monthly).toLocaleString() + '/mo' : '';
+        return '<tr><td style="padding:8px 0;font-size:12px;color:#6b7280;width:130px;border-bottom:1px solid #f1f5f9">' + (l.location||'') + ' <span style="color:#9ca3af">' + (l.currency||'') + '</span></td>'
+          + '<td style="padding:8px 0;font-size:12px;color:#1e2d45;border-bottom:1px solid #f1f5f9">'
+          + (sal ? '<span style="font-weight:600">Salary:</span> ' + sal + salMo + '<br>' : '')
+          + (l.bonus_pct ? '<span style="font-weight:600">Bonus:</span> ' + l.bonus_pct + '%<br>' : '')
+          + (comm ? '<span style="font-weight:600">Commission:</span> ' + comm + commMo : '')
+          + '</td></tr>';
+      }).join('');
+      var salaryTable = locRows.length ? '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:20px"><tr><td style="padding:16px 20px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#9ca3af;margin-bottom:10px">Location & Salary Targets</div><table width="100%" cellpadding="0" cellspacing="0">' + salaryRows + '</table></td></tr></table>' : '';
+
+      window._oaEmailHtml = buildSovosEmail({
+        greeting: 'Hi,',
+        intro: 'A new requisition has been submitted and requires your approval.',
+        details: [
+          ['Tracking #', reqTracking],
+          ['Role', reqTitle],
+          ['Department', role.department||null],
+          ['Region', role.careers_region||role.region||null],
+          ['Submitted by', currentUser?.full_name||'TA Team'],
+          ['Hiring Manager', role.hiring_manager_name||null],
+          ['Budgeted', role.is_budgeted===true?'Yes':role.is_budgeted===false?'No':null],
+        ],
+        bodyHtml: salaryTable + '<p style="margin:0 0 16px;font-size:13px;color:#4b5563">Please click the button below to review the full requisition details and approve or reject. No login required — you can act directly from the link.</p>',
+        ctaUrl: hiroLink,
+        ctaLabel: 'Review &amp; Approve Requisition &rarr;',
+        closing: 'Thanks in advance,',
+        senderName: (currentUser?.full_name||'TA Team') + ' &middot; Talent Acquisition, Sovos',
+        footerNote: 'No login required &mdash; approve directly from the link above. Sent via Hiro &middot; Sovos TA',
+      });
+
       // Update modal title for requisition context
       var modalTitle = document.querySelector('#modal-offer-approval-email .modal-title');
       if (modalTitle) modalTitle.textContent = '📧 Notify Approvers — ' + reqTracking;
