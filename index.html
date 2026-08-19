@@ -18210,11 +18210,8 @@ async function openCandidateFullPage(appId) {
 
   // CV pane (always visible)
   rightCol += '<div id="cfp-tab-cv" class="cfp-tab-pane" style="display:none">';
-  if (hasCv) {
-    rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:clamp(400px,75vh,780px);display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
-  } else {
-    rightCol += '<div style="padding:40px;text-align:center;color:var(--text-3);font-size:13px">No CV uploaded for this candidate.</div>';
-  }
+  rightCol += '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="_cfpCvTabLoaded=false;document.getElementById(\'cfp-cv-tab-inner\').innerHTML=\'<div class=\\\"spinner\\\"></div>\';_loadCfpCvTab()" style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r);background:transparent;color:var(--text-3);cursor:pointer">↺ Refresh CV</button></div>';
+  rightCol += '<div id="cfp-cv-tab-inner" style="width:100%;min-height:clamp(400px,75vh,780px);display:flex;align-items:center;justify-content:center;background:var(--surface-2);border-radius:var(--r);border:1px solid var(--border)"><div class="spinner"></div></div>';
   rightCol += '</div>';
 
   // Comms pane
@@ -18918,45 +18915,43 @@ async function _loadCfpCvTab() {
   if (!inner || _cfpCvTabLoaded) return;
   _cfpCvTabLoaded = true;
   var cvUrl = (document.getElementById('cfp-cv-url-data') || {}).dataset?.url || null;
-  var hasProfileHtml = (document.getElementById('cfp-profile-html-flag') || {}).dataset?.has === '1';
-  var hasCvBase64 = (document.getElementById('cfp-cv-base64-flag') || {}).dataset?.has === '1';
   if (!cvUrl) {
-    // Check profile_html saved by extension (LinkedIn profile captured as HTML)
-    if (hasProfileHtml && window._drawerCandidateId) {
+    // Always do a live DB fetch — covers cases where extension uploaded AFTER drawer opened
+    if (window._drawerCandidateId) {
       try {
-        var { data: _phRow } = await sb.from('candidates').select('profile_html').eq('id', window._drawerCandidateId).single();
-        if (_phRow?.profile_html) {
+        var { data: _cvRow } = await sb.from('candidates')
+          .select('cv_url, cv_base64, cv_filename, profile_html')
+          .eq('id', window._drawerCandidateId).single();
+        // Prefer cv_url if extension saved one after drawer opened
+        if (_cvRow?.cv_url) { cvUrl = _cvRow.cv_url; }
+        // LinkedIn HTML profile
+        else if (_cvRow?.profile_html) {
           inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading profile...</div>';
-          var _phBlob = new Blob([_phRow.profile_html], { type: 'text/html' });
+          var _phBlob = new Blob([_cvRow.profile_html], { type: 'text/html' });
           var _phUrl = URL.createObjectURL(_phBlob);
           await _renderHtmlFrame(inner, _phUrl, 'LinkedIn Profile');
           setTimeout(function(){ URL.revokeObjectURL(_phUrl); }, 120000);
           return;
         }
-      } catch(e) {}
-    }
-    // Check cv_base64 saved by extension (uploaded PDF/DOCX stored as base64)
-    if (hasCvBase64 && window._drawerCandidateId) {
-      try {
-        var { data: _b64Row } = await sb.from('candidates').select('cv_base64,cv_filename').eq('id', window._drawerCandidateId).single();
-        if (_b64Row?.cv_base64) {
+        // PDF/DOCX uploaded as base64
+        else if (_cvRow?.cv_base64) {
           inner.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:13px">Loading CV...</div>';
-          var _b64Mime = (_b64Row.cv_base64.match(/^data:([^;]+);base64,/) || [])[1] || 'application/pdf';
-          var _b64Raw = _b64Row.cv_base64.replace(/^data:[^;]+;base64,/, '');
+          var _b64Mime = (_cvRow.cv_base64.match(/^data:([^;]+);base64,/) || [])[1] || 'application/pdf';
+          var _b64Raw = _cvRow.cv_base64.replace(/^data:[^;]+;base64,/, '');
           var _b64Bytes = atob(_b64Raw);
           var _b64Ab = new ArrayBuffer(_b64Bytes.length);
           var _b64Ia = new Uint8Array(_b64Ab);
           for (var _bi = 0; _bi < _b64Bytes.length; _bi++) _b64Ia[_bi] = _b64Bytes.charCodeAt(_bi);
           var _b64Blob = new Blob([_b64Ab], { type: _b64Mime });
           var _b64Url = URL.createObjectURL(_b64Blob);
-          if (_isDocx(_b64Row.cv_filename || '')) { await _renderDocxFrame(inner, _b64Url, 'CV'); }
+          if (_isDocx(_cvRow.cv_filename || '')) { await _renderDocxFrame(inner, _b64Url, 'CV'); }
           else { _renderPdfFrame(inner, _b64Url, 'CV'); }
           setTimeout(function(){ URL.revokeObjectURL(_b64Url); }, 120000);
           return;
         }
       } catch(e) {}
     }
-    // No cv_url on record — check storage bucket for extension-uploaded files
+    // Nothing in DB — check storage bucket for any legacy extension-uploaded files
     var _storCandId = window._drawerCandidateId;
     if (_storCandId) {
       try {
