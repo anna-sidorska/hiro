@@ -21596,6 +21596,18 @@ window._tuUpdateRole = async function(userId, userName, newRole, selectEl) {
   }
   if (selectEl) selectEl.dataset.prev = newRole;
   toast(userName + ' role updated to ' + newRole + ' ✓');
+  // If the updated user is the currently logged-in user, update currentUser and re-render
+  if (currentUser && currentUser.id === userId) {
+    currentUser.role = newRole;
+    renderSidebarNav();
+    // Re-route to the appropriate default page for the new role
+    var _nr = newRole;
+    var defaultPage = (_nr === 'manager') ? 'hm_roles'
+      : (_nr === 'fpa' || _nr === 'fp_and_a' || _nr === 'leadership' || _nr === 'exec') ? 'reports'
+      : 'home';
+    nav(defaultPage, document.getElementById('nav-' + defaultPage));
+    if (_nr !== 'manager' && _nr !== 'fpa' && _nr !== 'fp_and_a' && _nr !== 'leadership' && _nr !== 'exec') loadSidebarCounts();
+  }
 };
 
 window._tuDeleteUser = async function(userId, userName) {
