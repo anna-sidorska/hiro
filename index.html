@@ -919,7 +919,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <div class="modal-title">Open Requisition</div>
         <div style="font-size:12px;color:var(--text-3);margin-top:2px">HR Generalist · Requires approval before recruiter is assigned</div>
       </div>
-      <button class="modal-close" onclick="closeModal('modal-hr-req')">✕</button>
+      <button class="modal-close" onclick="window._editReqId=null;closeModal('modal-hr-req')">✕</button>
     </div>
     <div class="modal-body">
 
@@ -11244,6 +11244,82 @@ function _fetchAdpEquity() {
   toast('ADP integration not yet connected — configure in Settings → Integrations', 'info');
 }
 
+// ── EDIT EXISTING REQUISITION ────────────────────────────────
+window._editReqId = null;
+
+async function _editReq(roleId) {
+  var {data:role, error} = await sb.from('roles').select('*').eq('id', roleId).maybeSingle();
+  if (error || !role) { toast('Could not load requisition','err'); return; }
+
+  // Open the modal fresh first
+  await openHrReqModal();
+
+  // Set edit mode
+  window._editReqId = roleId;
+  var modalTitle = document.querySelector('#modal-hr-req .modal-title');
+  if (modalTitle) modalTitle.textContent = 'Edit Requisition';
+  var submitBtn = document.querySelector('#modal-hr-req .btn-primary');
+  if (submitBtn) submitBtn.textContent = 'Save Changes';
+
+  // Populate simple fields
+  var set = (id, val) => { var el = document.getElementById(id); if (el && val != null) el.value = val; };
+  set('req-tracking',    role.tracking_number);
+  set('req-justification', role.justification);
+  set('req-replacing',   role.replacing_name);
+  set('req-last-day',    role.replacing_last_day);
+  set('req-associate-id', role.associate_id);
+  set('req-budgeted',    role.is_budgeted === true ? 'true' : role.is_budgeted === false ? 'false' : '');
+  set('req-one-time',    role.is_one_time_project === true ? 'true' : role.is_one_time_project === false ? 'false' : '');
+  set('req-function',    role.job_function);
+  set('req-title',       role.title);
+  set('req-dept',        role.department);
+  set('req-region',      role.careers_region || role.region);
+  set('req-hm-name',     role.hiring_manager_name);
+  set('req-dept-leader', role.department_leader);
+  set('req-dept-detail', role.department_detail);
+  set('req-fpa',         role.fp_and_a_partner);
+  set('req-head-ta',     role.head_of_ta);
+  set('req-head-hr',     role.head_of_hr);
+  set('req-hr-mgr',      role.hr_manager);
+
+  // Re-populate location rows
+  var locList = document.getElementById('req-locations-list');
+  if (locList) locList.innerHTML = '';
+  var locs = Array.isArray(role.location_salary_targets) ? role.location_salary_targets : [];
+  if (!locs.length) { _reqAddLocation(); }
+  else {
+    locs.forEach(function(l) {
+      _reqAddLocation();
+      var rows = document.getElementById('req-locations-list').querySelectorAll('[data-loc-row]');
+      var row = rows[rows.length - 1];
+      if (!row) return;
+      var setF = (f, v) => { var el = row.querySelector('[data-field="'+f+'"]'); if (el && v != null) el.value = v; };
+      setF('location',    l.location);
+      setF('currency',    l.currency);
+      setF('sal-annual',  l.salary_annual  || l.salary_min || '');
+      setF('sal-monthly', l.salary_monthly || '');
+      setF('bonus',       l.bonus_pct      || '');
+      setF('comm-annual', l.commission_annual || '');
+      setF('comm-monthly',l.commission_monthly || '');
+    });
+  }
+
+  // Re-populate approvers
+  var approverList = document.getElementById('req-approvers-list');
+  if (approverList) approverList.innerHTML = '';
+  var chain = Array.isArray(role.approval_chain) ? role.approval_chain : [];
+  chain.forEach(function(a) {
+    _reqAddApprover();
+    var rows = document.getElementById('req-approvers-list').children;
+    var row = rows[rows.length - 1];
+    if (!row) return;
+    var inputs = row.querySelectorAll('input');
+    if (inputs[0]) inputs[0].value = a.approver_name || '';
+    if (inputs[1]) inputs[1].value = a.approver_email || '';
+    if (inputs[2]) inputs[2].value = a.approver_title || '';
+  });
+}
+
 async function submitRequisition() {
   const errEl = document.getElementById('req-error');
   errEl.style.display = 'none';
@@ -11327,6 +11403,23 @@ async function submitRequisition() {
       opened_by_name:         currentUser?.full_name || null,
       opened_by_email:        currentUser?.email || null,
     };
+
+    // Edit mode: update existing role instead of inserting
+    if (window._editReqId) {
+      delete payload.req_status; // preserve existing approval status
+      delete payload.status;
+      delete payload.opened_by_id;
+      delete payload.opened_by_name;
+      delete payload.opened_by_email;
+      delete payload.current_approver_index;
+      const {error:upErr} = await sb.from('roles').update(payload).eq('id', window._editReqId);
+      if (upErr) { errEl.textContent = 'Error saving: ' + upErr.message; errEl.style.display = 'block'; const b2 = document.querySelector('#modal-hr-req .btn-primary'); if (b2) { b2.disabled=false; b2.textContent='Save Changes'; } return; }
+      toast('Requisition updated ✓');
+      window._editReqId = null;
+      closeModal('modal-hr-req');
+      renderHrPortal();
+      return;
+    }
 
     let {data:role, error} = await sb.from('roles').insert(payload).select().single();
 
@@ -18093,6 +18186,7 @@ async function renderHrPortal() {
       (_canEditHrPortal && (r.req_status==='pending_approval'||r.approval_status==='pending_approval') ? '<button class="btn btn-success btn-sm" style="margin-right:4px" onclick="_approveRequisition(\''+r.id+'\',\'approved\')">✅ Approve</button><button class="btn btn-danger btn-sm" style="margin-right:4px" onclick="_approveRequisition(\''+r.id+'\',\'rejected\')">❌ Reject</button>' : '') +
       (_canEditHrPortal && r.req_status==='approved' && !r.assigned_recruiter_id ? '<button class="btn btn-primary btn-sm" onclick="_assignRecruiter(\''+r.id+'\')">Assign Recruiter</button>' : '') +
       (r.assigned_recruiter_id ? '<span style="font-size:11px;color:var(--green-text)">✓ Assigned</span>' : '') +
+      (_canEditHrPortal ? '<button class="btn btn-outline btn-sm" style="margin-left:4px" onclick="_editReq(\''+r.id+'\')">✏️ Edit</button>' : '') +
       '</td></tr>';
   }).join('');
 
