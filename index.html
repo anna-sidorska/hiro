@@ -11454,8 +11454,8 @@ async function submitRequisition() {
     // Edit mode: update existing role instead of inserting
     if (window._editReqId) {
       payload.req_status = 'pending_approval'; // re-submit for approval
-      payload.approval_status = null; // clear previous decision (constraint only allows approved/rejected/changes_requested)
       payload.rejection_reason = null; // clear rejection reason on re-submit
+      delete payload.approval_status; // don't touch approval_status — DB constraint is strict; badge reads req_status
       delete payload.status;
       delete payload.opened_by_id;
       delete payload.opened_by_name;
