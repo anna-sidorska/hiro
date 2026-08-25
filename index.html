@@ -5553,16 +5553,20 @@ function _rdRenderTimeline() {
     {key:'s5', label:'Offer', icon:'💼'},
     {key:'s6', label:'Onboarding', icon:'🚀'},
   ];
+  const _isRejected = (_rdData.role?.req_status) === 'rejected';
   el.innerHTML=`<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;padding-bottom:0;scrollbar-width:none">`
     +stages.map(s=>{
       const st=_rdStageStatus(s.key);
       const isActive=s.key===cur;
       const isDone=st==='done';
       const isInProg=st==='active';
+      const isLocked = _isRejected && s.key !== 's0';
       const dot=isDone?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-left:5px;vertical-align:middle"></span>':isInProg?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brand);margin-left:5px;vertical-align:middle"></span>':'';
-      const tabStyle=isActive
-        ?'border-bottom:2px solid var(--brand);color:var(--brand);font-weight:700;background:var(--brand-light)'
-        :'border-bottom:2px solid transparent;color:var(--text-3);font-weight:500';
+      if (isLocked) {
+        return `<button disabled title="Requisition rejected — re-submit to unlock" style="display:flex;align-items:center;gap:5px;padding:10px 16px;font-size:13px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-3);font-weight:500;cursor:not-allowed;white-space:nowrap;opacity:.4;margin-bottom:-1px">
+          <span>${s.icon}</span><span>${s.label}</span><span style="font-size:9px;margin-left:2px">🔒</span>
+        </button>`;
+      }
       return `<button onclick="_rdStage('${s.key}')" style="display:flex;align-items:center;gap:5px;padding:10px 16px;font-size:13px;background:none;border:none;border-bottom:2px solid ${isActive?'var(--brand)':'transparent'};color:${isActive?'var(--brand)':isDone?'var(--text-2)':'var(--text-3)'};font-weight:${isActive?'700':'500'};cursor:pointer;white-space:nowrap;transition:color .15s;margin-bottom:-1px" onmouseover="if(!${isActive})this.style.color='var(--text)'" onmouseout="if(!${isActive})this.style.color='${isDone?'var(--text-2)':'var(--text-3)'}'">
         <span>${s.icon}</span><span>${s.label}</span>${dot}
       </button>`;
@@ -5571,6 +5575,10 @@ function _rdRenderTimeline() {
 }
 
 function _rdStage(key) {
+  if (key !== 's0' && _rdData.role?.req_status === 'rejected') {
+    toast('Requisition is rejected — re-submit and get approval before proceeding', 'err');
+    return;
+  }
   _rdData._stage=key;
   _rdRenderTimeline();
   const el=document.getElementById('rd-stage-content');
