@@ -5417,7 +5417,7 @@ async function viewRoleDetail(roleId) {
   const role=roleRes.data, apps=appsRes.data||[];
   if(!role){toast('Role not found','err');renderRoles();return;}
 
-  let roleJd=null,intake=null,wfSteps=[],jdApprovals=[],activityLog=[],interviews=[];
+  let roleJd=null,intake=null,wfSteps=[],jdApprovals=[],activityLog=[],interviews=[],reqApprovalLog=[];
   const ext=await Promise.allSettled([
     sb.from('job_descriptions').select('id,title,competencies,updated_at,department,level,region,summary,responsibilities,requirements').eq('role_id',roleId).order('updated_at',{ascending:false}).limit(1).maybeSingle(),
     sb.from('role_intake').select('*').eq('role_id',roleId).maybeSingle(),
@@ -5425,6 +5425,7 @@ async function viewRoleDetail(roleId) {
     sb.from('role_jd_approvals').select('*').eq('role_id',roleId).order('created_at',{ascending:false}),
     sb.from('role_activity_log').select('*').eq('role_id',roleId).order('created_at',{ascending:false}).limit(50),
     sb.from('interviews').select('*, profiles(full_name)').eq('applications.role_id',roleId),
+    sb.from('role_approvals').select('*').eq('role_id',roleId).order('decided_at',{ascending:false}),
   ]);
   if(ext[0].status==='fulfilled') roleJd=ext[0].value?.data||null;
   if(ext[1].status==='fulfilled') intake=ext[1].value?.data||null;
@@ -5432,12 +5433,13 @@ async function viewRoleDetail(roleId) {
   if(ext[3].status==='fulfilled') jdApprovals=ext[3].value?.data||[];
   if(ext[4].status==='fulfilled') activityLog=ext[4].value?.data||[];
   if(ext[5].status==='fulfilled') interviews=ext[5].value?.data||[];
+  if(ext[6].status==='fulfilled') reqApprovalLog=ext[6].value?.data||[];
 
   if(wfSteps.length===0&&ext[2].status==='fulfilled'){
     try{await sb.rpc('init_role_workflow',{p_role_id:roleId});const{data:ns}=await sb.from('role_workflow_steps').select('*').eq('role_id',roleId).order('created_at');if(ns)wfSteps=ns;}catch(e){}
   }
 
-  _rdData={roleId,role,apps,roleJd,intake,wfSteps,jdApprovals,activityLog,interviews};
+  _rdData={roleId,role,apps,roleJd,intake,wfSteps,jdApprovals,activityLog,interviews,reqApprovalLog};
 
   const fn=(function(rid){return function(){viewRoleDetail(rid);};})(roleId);
   _pushHistory('role:'+roleId,role.title,fn);
@@ -5451,7 +5453,7 @@ async function viewRoleDetail(roleId) {
   document.getElementById('topbar-actions').innerHTML=`
     <button class="btn btn-outline btn-sm" onclick="openEditRoleModal('${role.id}')">Edit Role</button>
     ${roleJd?`<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 JD</button>`:`<button class="btn btn-outline btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
-    ${(role.req_status==='rejected')?'<span style="font-size:12px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fca5a5;padding:4px 12px;border-radius:99px">❌ Requisition Rejected — No candidates can be added</span>':'<button class="btn btn-primary btn-sm" onclick="openAddCandidateModal(\''+role.id+'\')">+ Candidate</button>'}
+    ${(role.req_status==='rejected')?`<span style="font-size:12px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fca5a5;padding:4px 10px;border-radius:99px">❌ Rejected</span> <button class="btn btn-sm" style="background:#dc2626;color:#fff;border:none" onclick="_editReq('${role.id}')">✏️ Edit &amp; Re-submit</button> <button class="btn btn-outline btn-sm" style="color:#dc2626;border-color:#fca5a5" onclick="_deleteReq('${role.id}','${t}')">🗑 Delete</button>`:'<button class="btn btn-primary btn-sm" onclick="openAddCandidateModal(\''+role.id+'\')">+ Candidate</button>'}
     <div style="position:relative;display:inline-block">
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('role-more-menu-${role.id}').style.display=document.getElementById('role-more-menu-${role.id}').style.display==='block'?'none':'block';event.stopPropagation()" style="padding:5px 10px;font-size:16px;line-height:1">···</button>
       <div id="role-more-menu-${role.id}" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;min-width:160px;padding:4px 0" onclick="event.stopPropagation()">
@@ -5683,14 +5685,27 @@ function _rdS0Html(d) {
       </div>
     </div>
 
-    ${_reqStatus==='rejected'?`<div style="background:#fef2f2;border:2px solid #f87171;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:flex-start;gap:12px">
-      <div style="font-size:28px;flex-shrink:0">❌</div>
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:700;color:#dc2626">This requisition was rejected</div>
-        <div style="font-size:12px;color:#b91c1c;margin-top:2px">${role.rejection_reason?`<em>"${role.rejection_reason}"</em> — `:``}No candidates can be added until re-submitted and approved.</div>
-        ${['admin','hr','recruiter'].includes(currentUser?.role)?`<button onclick="_editReq('${roleId}')" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">✏️ Edit &amp; Re-submit for Approval</button>`:''}
-      </div>
-    </div>`:''}
+    ${_reqStatus==='rejected'?(()=>{
+      const _rejHistory = (d.reqApprovalLog||[]).filter(a=>a.action==='rejected');
+      const _histHtml = _rejHistory.length ? _rejHistory.map(r=>`<div style="padding:6px 0;border-bottom:1px solid #fecaca">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:600;color:#b91c1c">${r.approver_name||r.approver_email||'Unknown'}</span>
+          <span style="font-size:10px;color:#ef4444">${r.decided_at?new Date(r.decided_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}</span>
+        </div>
+        ${r.notes?`<div style="font-size:11px;color:#dc2626;font-style:italic;margin-top:2px">"${r.notes}"</div>`:''}
+      </div>`).join('') : (role.rejection_reason?`<div style="font-size:12px;color:#b91c1c;font-style:italic">"${role.rejection_reason}"</div>`:'<div style="font-size:11px;color:#ef4444;opacity:.6">No reason recorded</div>');
+      return `<div style="background:#fef2f2;border:2px solid #f87171;border-radius:10px;padding:14px 18px;margin-bottom:14px">
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:${_rejHistory.length?'10':'0'}px">
+          <div style="font-size:24px;flex-shrink:0">❌</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:#dc2626">Requisition Rejected — ${_rejHistory.length} time${_rejHistory.length!==1?'s':''}</div>
+            <div style="font-size:11px;color:#b91c1c;margin-top:2px">No candidates can be added until re-submitted and approved.</div>
+          </div>
+          ${['admin','hr','recruiter'].includes(currentUser?.role)?`<button onclick="_editReq('${roleId}')" style="flex-shrink:0;padding:6px 14px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">✏️ Edit &amp; Re-submit</button>`:''}
+        </div>
+        ${_rejHistory.length?`<div style="border-top:1px solid #fecaca;padding-top:8px">${_histHtml}</div>`:''}
+      </div>`;
+    })():''}
 
     ${_trackingVal||_justVal||_openedBy?`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap">
       ${_trackingVal?`<div><span style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase">Req #</span><div style="font-size:13px;font-weight:600;color:var(--text)">${_trackingVal}</div></div>`:''}
@@ -11293,6 +11308,24 @@ function _fetchAdpEquity() {
 
 // ── EDIT EXISTING REQUISITION ────────────────────────────────
 window._editReqId = null;
+
+async function _deleteReq(roleId, title) {
+  if (!confirm('Delete requisition "' + title + '"?\n\nThis will permanently remove the req and all associated approval history. This cannot be undone.')) return;
+  // Delete related records first
+  await Promise.allSettled([
+    sb.from('role_approvals').delete().eq('role_id', roleId),
+    sb.from('role_activity_log').delete().eq('role_id', roleId),
+  ]);
+  var {error} = await sb.from('roles').delete().eq('id', roleId);
+  if (error) { toast('Error deleting: ' + error.message, 'err'); return; }
+  toast('Requisition deleted');
+  renderHrPortal();
+  if (typeof renderRoles === 'function') renderRoles();
+  // Navigate back if in role detail view
+  if (document.getElementById('topbar-actions')?.innerHTML?.includes('Rejected')) {
+    nav('roles');
+  }
+}
 
 async function _editReq(roleId) {
   var {data:role, error} = await sb.from('roles').select('*').eq('id', roleId).maybeSingle();
@@ -18256,7 +18289,8 @@ async function renderHrPortal() {
       (_canEditHrPortal && (r.req_status==='pending_approval'||r.approval_status==='pending_approval') ? '<button class="btn btn-success btn-sm" style="margin-right:4px" onclick="_approveRequisition(\''+r.id+'\',\'approved\')">✅ Approve</button><button class="btn btn-danger btn-sm" style="margin-right:4px" onclick="_approveRequisition(\''+r.id+'\',\'rejected\')">❌ Reject</button>' : '') +
       (_canEditHrPortal && r.req_status==='approved' && !r.assigned_recruiter_id ? '<button class="btn btn-primary btn-sm" onclick="_assignRecruiter(\''+r.id+'\')">Assign Recruiter</button>' : '') +
       (r.assigned_recruiter_id ? '<span style="font-size:11px;color:var(--green-text)">✓ Assigned</span>' : '') +
-      (_canEditHrPortal ? '<button class="btn btn-outline btn-sm" style="margin-left:4px" onclick="_editReq(\''+r.id+'\')">✏️ Edit</button>' : '') +
+      (_canEditHrPortal && r.req_status==='rejected' ? '<button class="btn btn-sm" style="margin-left:4px;background:#dc2626;color:#fff;border:none" onclick="_editReq(\''+r.id+'\')">✏️ Re-submit</button>' : (_canEditHrPortal ? '<button class="btn btn-outline btn-sm" style="margin-left:4px" onclick="_editReq(\''+r.id+'\')">✏️ Edit</button>' : '')) +
+      (_canEditHrPortal && r.req_status==='rejected' ? '<button class="btn btn-outline btn-sm" style="margin-left:4px;color:#dc2626;border-color:#fca5a5" onclick="_deleteReq(\''+r.id+'\',\''+r.title.replace(/'/g,"\\'")+'\')" title="Delete rejected req">🗑</button>' : '') +
       '</td></tr>';
   }).join('');
 
