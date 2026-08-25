@@ -2467,7 +2467,7 @@ function nav(page, el) {
     email_templates:'Email Templates', jd_library:'JD Library',
     hm_roles:'My Roles', hm_interviews:'My Interviews', team:'Team',
     communications:'Communications', integrations:'Integrations', gdpr:'GDPR',
-    hr_portal:'HR Portal', business_portal:'Business Portal', offer_outcomes:'Offer Outcomes', post_offer:'Post-Offer Engagement', probation:'Probation Tracker', fpa_report:'FP&A Report', recruiter_dashboard:'Recruiter Performance', agencies:'Agency Tracker', hm_satisfaction:'HM Satisfaction',
+    hr_portal:'HR Portal', business_portal:'Business Portal', offer_outcomes:'Offer Outcomes', post_offer:'Post-Offer Engagement', probation:'Probation Tracker', fpa_report:'FP&A Report', fpa_hires:'FP&A Hires Report', fpa_open_roles:'FP&A Open Roles', recruiter_dashboard:'Recruiter Performance', agencies:'Agency Tracker', hm_satisfaction:'HM Satisfaction',
     home:'Home', team_users:'Team & Users', management_view:'Overview', scheduling_hub:'Scheduling Hub', recruiter_stats:'Recruiter Stats', roles_tracker:'Roles Tracker', hiring_dashboard:'Hiring Dashboard',
   };
   document.getElementById('page-title').textContent = titles[page]||page;
@@ -2502,6 +2502,8 @@ function nav(page, el) {
     post_offer: renderPostOffer,
     probation: renderProbationDashboard,
     fpa_report: renderFpaReport,
+    fpa_hires: renderFpaHiresReport,
+    fpa_open_roles: renderFpaOpenRolesReport,
     recruiter_dashboard: renderRecruiterDashboard,
     agencies: renderAgencies,
     hm_satisfaction: renderHmSatisfaction,
@@ -10264,6 +10266,169 @@ async function renderBusinessPortal() {
         </table></div>
       </div>`;
   }
+}
+
+// ── FP&A HIRES REPORT ─────────────────────────────────────────
+async function renderFpaHiresReport() {
+  _pushHistory('fpa_hires','FP&A Hires Report',renderFpaHiresReport);
+  document.getElementById('page-title').textContent = 'FP&A Hires Report';
+  document.getElementById('page-sub').textContent = 'New starters — department, location, hire type';
+  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-outline btn-sm" onclick="_exportFpaHiresCSV()">Export CSV</button>';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+
+  var [appsRes, rolesRes, candsRes, hmsRes] = await Promise.all([
+    sb.from('applications').select('*').in('stage', ['offer','hired']).order('updated_at', {ascending: false}),
+    sb.from('roles').select('id,title,department,location,job_code,reason,is_project,hiring_manager_id,headcount'),
+    sb.from('candidates').select('id,first_name,last_name,location,candidate_type'),
+    sb.from('profiles').select('id,full_name'),
+  ]);
+
+  var apps = appsRes.data || [];
+  var roles = rolesRes.data || [];
+  var cands = candsRes.data || [];
+  var hms = hmsRes.data || [];
+
+  var rolesMap = Object.fromEntries(roles.map(r=>[r.id,r]));
+  var candsMap = Object.fromEntries(cands.map(c=>[c.id,c]));
+  var hmsMap   = Object.fromEntries(hms.map(h=>[h.id,h]));
+
+  var rows = apps.map(a => {
+    var role = rolesMap[a.role_id] || {};
+    var cand = candsMap[a.candidate_id] || {};
+    var hm   = hmsMap[role.hiring_manager_id] || {};
+    var name = [cand.first_name, cand.last_name].filter(Boolean).join(' ') || '—';
+    var hireType = cand.candidate_type === 'internal' ? 'Internal Transfer' : 'External – New Hire';
+    var reason = role.reason || '—';
+    var startDate = a.start_date || a.offer_date || '—';
+    var offerStatus = a.stage === 'hired' ? 'Accepted' : 'Extended';
+    var isProject = role.is_project ? 'Yes' : 'No';
+    return `<tr>
+      <td>${_escHtml(role.department||'—')}</td>
+      <td style="font-size:12px">${_escHtml(hireType)}</td>
+      <td style="font-size:12px">${_escHtml(role.location||cand.location||'—')}</td>
+      <td style="font-size:12px;color:var(--text-3)">${_escHtml(role.job_code||'—')}</td>
+      <td style="font-weight:500">${_escHtml(role.title||'—')}</td>
+      <td style="font-weight:600">${_escHtml(name)}</td>
+      <td style="font-size:12px">${_escHtml(hm.full_name||'—')}</td>
+      <td style="font-size:12px;text-transform:capitalize">${_escHtml(reason)}</td>
+      <td style="font-size:12px">${_escHtml(startDate)}</td>
+      <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:${offerStatus==='Accepted'?'#dcfce7':'#fef9c3'};color:${offerStatus==='Accepted'?'#16a34a':'#b45309'}">${offerStatus}</span></td>
+      <td style="font-size:12px;text-align:center">${isProject}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text-3)">No hires or offers found</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div class="card" style="overflow-x:auto">
+      <div class="card-header"><div class="card-title">Hires & Active Offers (${apps.length})</div></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--surface-2);font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">
+          <th style="padding:10px 14px;text-align:left">Department</th>
+          <th style="padding:10px 14px;text-align:left">Hire Type</th>
+          <th style="padding:10px 14px;text-align:left">Location</th>
+          <th style="padding:10px 14px;text-align:left">Int #</th>
+          <th style="padding:10px 14px;text-align:left">Job Title</th>
+          <th style="padding:10px 14px;text-align:left">Name</th>
+          <th style="padding:10px 14px;text-align:left">Supervisor</th>
+          <th style="padding:10px 14px;text-align:left">Reason</th>
+          <th style="padding:10px 14px;text-align:left">Start Date</th>
+          <th style="padding:10px 14px;text-align:left">Offer Status</th>
+          <th style="padding:10px 14px;text-align:center">Project?</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  window._exportFpaHiresCSV = function() {
+    var hdrs = ['Department','Hire Type','Location','Int #','Job Title','Name','Supervisor','Reason','Start Date','Offer Status','Project?'];
+    var csvRows = apps.map(a => {
+      var role = rolesMap[a.role_id]||{};
+      var cand = candsMap[a.candidate_id]||{};
+      var hm   = hmsMap[role.hiring_manager_id]||{};
+      var name = [cand.first_name,cand.last_name].filter(Boolean).join(' ')||'';
+      var hireType = cand.candidate_type==='internal'?'Internal Transfer':'External – New Hire';
+      return [role.department||'',hireType,role.location||cand.location||'',role.job_code||'',role.title||'',name,hm.full_name||'',role.reason||'',a.start_date||a.offer_date||'',a.stage==='hired'?'Accepted':'Extended',role.is_project?'Yes':'No'];
+    });
+    var csv = [hdrs, ...csvRows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+    var a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download='fpa_hires.csv'; a.click();
+  };
+}
+
+// ── FP&A OPEN ROLES REPORT ────────────────────────────────────
+async function renderFpaOpenRolesReport() {
+  _pushHistory('fpa_open_roles','FP&A Open Roles',renderFpaOpenRolesReport);
+  document.getElementById('page-title').textContent = 'FP&A Open Roles';
+  document.getElementById('page-sub').textContent = 'Open headcount with pipeline metrics';
+  document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-outline btn-sm" onclick="_exportFpaOpenCSV()">Export CSV</button>';
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+
+  var [rolesRes, appsRes, hmsRes] = await Promise.all([
+    sb.from('roles').select('*').eq('status','open').order('created_at',{ascending:false}),
+    sb.from('applications').select('role_id,stage'),
+    sb.from('profiles').select('id,full_name'),
+  ]);
+
+  var roles = rolesRes.data || [];
+  var apps  = appsRes.data || [];
+  var hms   = hmsRes.data || [];
+  var hmsMap = Object.fromEntries(hms.map(h=>[h.id,h]));
+
+  var today = new Date();
+
+  var rows = roles.map(r => {
+    var hm = hmsMap[r.hiring_manager_id] || {};
+    var roleApps = apps.filter(a=>a.role_id===r.id);
+    var candidateCount = roleApps.length;
+    var interviewCount = roleApps.filter(a=>['phone_screen','interview','final_interview','assessment'].includes(a.stage)).length;
+    var offerCount     = roleApps.filter(a=>a.stage==='offer').length;
+    var daysOpen = r.created_at ? Math.floor((today - new Date(r.created_at)) / 86400000) : '—';
+    var isProject = r.is_project ? 'Yes' : 'No';
+    return `<tr>
+      <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#16a34a">Open</span></td>
+      <td style="font-weight:500">${_escHtml(r.department||'—')}</td>
+      <td style="font-size:12px">${_escHtml(r.location||'—')}</td>
+      <td style="font-size:12px;color:var(--text-3)">${_escHtml(r.job_code||'—')}</td>
+      <td style="font-weight:500">${_escHtml(r.title||'—')}</td>
+      <td style="font-size:12px">${_escHtml(hm.full_name||'—')}</td>
+      <td style="font-size:12px;text-align:center;font-weight:${daysOpen>60?'700':'400'};color:${daysOpen>60?'#dc2626':daysOpen>30?'#d97706':'inherit'}">${daysOpen}</td>
+      <td style="text-align:center">${candidateCount}</td>
+      <td style="text-align:center">${interviewCount}</td>
+      <td style="text-align:center;font-weight:${offerCount?'700':'400'};color:${offerCount?'var(--brand)':'inherit'}">${offerCount}</td>
+      <td style="font-size:12px;text-align:center">${isProject}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text-3)">No open roles</td></tr>';
+
+  document.getElementById('content').innerHTML = `
+    <div class="card" style="overflow-x:auto">
+      <div class="card-header"><div class="card-title">Open Roles (${roles.length})</div></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--surface-2);font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px">
+          <th style="padding:10px 14px;text-align:left">Status</th>
+          <th style="padding:10px 14px;text-align:left">Department</th>
+          <th style="padding:10px 14px;text-align:left">Job Location</th>
+          <th style="padding:10px 14px;text-align:left">Int #</th>
+          <th style="padding:10px 14px;text-align:left">Job Title</th>
+          <th style="padding:10px 14px;text-align:left">Hiring Manager</th>
+          <th style="padding:10px 14px;text-align:center">Days Open</th>
+          <th style="padding:10px 14px;text-align:center">Candidates</th>
+          <th style="padding:10px 14px;text-align:center">Interview</th>
+          <th style="padding:10px 14px;text-align:center">Offers</th>
+          <th style="padding:10px 14px;text-align:center">Project?</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  window._exportFpaOpenCSV = function() {
+    var hdrs = ['Status','Department','Job Location','Int #','Job Title','Hiring Manager','Days Open','Candidates','Interview','Offers','Project?'];
+    var csvRows = roles.map(r => {
+      var hm = hmsMap[r.hiring_manager_id]||{};
+      var roleApps = apps.filter(a=>a.role_id===r.id);
+      var daysOpen = r.created_at ? Math.floor((today-new Date(r.created_at))/86400000) : '';
+      return ['Open',r.department||'',r.location||'',r.job_code||'',r.title||'',hm.full_name||'',daysOpen,roleApps.length,roleApps.filter(a=>['phone_screen','interview','final_interview','assessment'].includes(a.stage)).length,roleApps.filter(a=>a.stage==='offer').length,r.is_project?'Yes':'No'];
+    });
+    var csv = [hdrs,...csvRows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+    var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='fpa_open_roles.csv';a.click();
+  };
 }
 
 // ── RECRUITER PERFORMANCE DASHBOARD ──────────────────────────
@@ -18226,6 +18391,8 @@ async function renderReports() {
     {id: 'offer_outcomes', label: 'Offer Outcomes', desc: 'Acceptance rates, declines, and reasons', icon: '✅', roles: ['admin','hr','recruiter','fpa','fp_and_a','leadership','exec']},
     {id: 'hm_satisfaction', label: 'HM Feedback', desc: 'Hiring manager satisfaction scores', icon: '\u{1F4AC}', roles: ['admin','hr','leadership','exec']},
     {id: 'fpa_report', label: 'FP&A / Headcount', desc: 'Headcount by department, budget, cost tracking', icon: '\u{1F4B0}', roles: ['admin','hr','fpa','fp_and_a','leadership','exec']},
+    {id: 'fpa_hires', label: 'FP&A Hires Report', desc: 'New starters by department, location, hire type and start date', icon: '👥', roles: ['admin','hr','fpa','fp_and_a','leadership','exec']},
+    {id: 'fpa_open_roles', label: 'FP&A Open Roles', desc: 'Open headcount with pipeline metrics — candidates, interviews, offers', icon: '📋', roles: ['admin','hr','fpa','fp_and_a','leadership','exec']},
     {id: 'roles_tracker', label: 'Roles Tracker', desc: 'All roles status, aging, and history', icon: '\u{1F4CB}', roles: ['admin']},
     {id: 'business_portal', label: 'Business Portal', desc: 'Cross-functional view for business partners', icon: '\u{1F3E2}', roles: ['admin','hr','recruiter','manager']},
   ].filter(function(r){ return !r.roles || r.roles.includes(userRole); });
