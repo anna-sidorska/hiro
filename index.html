@@ -5683,11 +5683,12 @@ function _rdS0Html(d) {
       </div>
     </div>
 
-    ${_reqStatus==='rejected'?`<div style="background:#fef2f2;border:2px solid #f87171;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
-      <div style="font-size:28px">❌</div>
-      <div>
+    ${_reqStatus==='rejected'?`<div style="background:#fef2f2;border:2px solid #f87171;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:flex-start;gap:12px">
+      <div style="font-size:28px;flex-shrink:0">❌</div>
+      <div style="flex:1">
         <div style="font-size:14px;font-weight:700;color:#dc2626">This requisition was rejected</div>
-        <div style="font-size:12px;color:#b91c1c;margin-top:2px">No candidates can be added or assigned to this role until the requisition is re-submitted and approved.</div>
+        <div style="font-size:12px;color:#b91c1c;margin-top:2px">${role.rejection_reason?`<em>"${role.rejection_reason}"</em> — `:``}No candidates can be added until re-submitted and approved.</div>
+        ${['admin','hr','recruiter'].includes(currentUser?.role)?`<button onclick="_editReq('${roleId}')" style="margin-top:10px;padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">✏️ Edit &amp; Re-submit for Approval</button>`:''}
       </div>
     </div>`:''}
 
@@ -10721,6 +10722,25 @@ async function _showReqApprovalModal(roleId) {
     return;
   }
 
+  // Load rejection history from role_approvals
+  const {data:rejHistory} = await sb.from('role_approvals')
+    .select('approver_name,approver_email,action,notes,decided_at')
+    .eq('role_id', roleId)
+    .eq('action', 'rejected')
+    .order('decided_at', {ascending: false});
+
+  const rejHistoryHtml = (rejHistory && rejHistory.length) ? `
+    <div style="background:rgba(239,68,68,.1);border:1.5px solid rgba(239,68,68,.35);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">⚠️ Previously Rejected — ${rejHistory.length} time${rejHistory.length>1?'s':''}</div>
+      ${rejHistory.map(r=>`<div style="padding:8px 0;border-bottom:1px solid rgba(239,68,68,.2);last-child:border-none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:12px;font-weight:600;color:#fca5a5">${r.approver_name||r.approver_email||'Unknown'}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,.35)">${r.decided_at?new Date(r.decided_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}</span>
+        </div>
+        ${r.notes?`<div style="font-size:12px;color:rgba(255,255,255,.55);font-style:italic">"${r.notes}"</div>`:'<div style="font-size:11px;color:rgba(255,255,255,.3)">No reason provided</div>'}
+      </div>`).join('')}
+    </div>` : '';
+
   // Read approval chain & location salary data
   const chain = Array.isArray(role.approval_chain) ? role.approval_chain : [];
   const locs  = Array.isArray(role.location_salary_targets) ? role.location_salary_targets : [];
@@ -10728,6 +10748,7 @@ async function _showReqApprovalModal(roleId) {
   const row = (label, value) => value ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);gap:12px"><span style="color:rgba(255,255,255,.45);font-size:13px;flex-shrink:0">${label}</span><span style="font-weight:600;font-size:13px;color:#eef4ff;text-align:right">${value}</span></div>` : '';
 
   body.innerHTML = `
+    ${rejHistoryHtml}
     <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px;margin-bottom:16px">
       ${row('Tracking #', role.tracking_number||'—')}
       ${row('Job Title', role.title||'—')}
@@ -17162,6 +17183,23 @@ async function _initReqApprovalPage(roleId) {
   if (role.req_status === 'approved') { body.innerHTML = '<div style="text-align:center;padding:60px"><div style="font-size:56px;margin-bottom:16px">✅</div><div style="font-size:20px;font-weight:700;color:#34d399">This requisition has already been approved.</div></div>'; return; }
   if (role.req_status === 'rejected') { body.innerHTML = `<div style="text-align:center;padding:60px"><div style="font-size:56px;margin-bottom:16px">❌</div><div style="font-size:20px;font-weight:700;color:#f87171">This requisition was rejected.</div>${role.rejection_reason?`<div style="color:rgba(255,255,255,.5);margin-top:8px">${role.rejection_reason}</div>`:''}</div>`; return; }
 
+  // Load rejection history for this req
+  var {data:rejHistPage} = await sb.from('role_approvals')
+    .select('approver_name,approver_email,action,notes,decided_at')
+    .eq('role_id', roleId).eq('action','rejected')
+    .order('decided_at', {ascending: false});
+
+  var rejHistPageHtml = (rejHistPage && rejHistPage.length) ? `<div class="ra-card" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.08)">
+    <div style="font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">⚠️ Previously Rejected — ${rejHistPage.length} time${rejHistPage.length>1?'s':''}</div>
+    ${rejHistPage.map(function(r){return `<div style="padding:8px 0;border-bottom:1px solid rgba(239,68,68,.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-size:12px;font-weight:600;color:#fca5a5">${r.approver_name||r.approver_email||'Unknown'}</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.35)">${r.decided_at?new Date(r.decided_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}</span>
+      </div>
+      ${r.notes?`<div style="font-size:12px;color:rgba(255,255,255,.55);font-style:italic">"${r.notes}"</div>`:'<div style="font-size:11px;color:rgba(255,255,255,.3)">No reason provided</div>'}
+    </div>`;}).join('')}
+  </div>` : '';
+
   var chain = Array.isArray(role.approval_chain) ? role.approval_chain : [];
   var locs = Array.isArray(role.location_salary_targets) ? role.location_salary_targets : [];
   var fmt = v => v ? Number(v).toLocaleString() : null;
@@ -17190,6 +17228,8 @@ async function _initReqApprovalPage(roleId) {
       <h1>Requisition Approval</h1>
       <p>${role.title||'—'}${role.department?' · '+role.department:''}</p>
     </div>
+
+    ${rejHistPageHtml}
 
     <div class="ra-card">
       ${row('Tracking #', role.tracking_number||null)}
