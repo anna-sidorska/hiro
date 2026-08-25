@@ -5451,7 +5451,7 @@ async function viewRoleDetail(roleId) {
   document.getElementById('topbar-actions').innerHTML=`
     <button class="btn btn-outline btn-sm" onclick="openEditRoleModal('${role.id}')">Edit Role</button>
     ${roleJd?`<button class="btn btn-outline btn-sm" onclick="openJdEditor('${roleJd.id}',null,'${role.id}')">📋 JD</button>`:`<button class="btn btn-outline btn-sm" onclick="openJdEditor(null,null,'${role.id}')">📋 Add JD</button>`}
-    <button class="btn btn-primary btn-sm" onclick="openAddCandidateModal('${role.id}')">+ Candidate</button>
+    ${(role.req_status==='rejected')?'<span style="font-size:12px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fca5a5;padding:4px 12px;border-radius:99px">❌ Requisition Rejected — No candidates can be added</span>':'<button class="btn btn-primary btn-sm" onclick="openAddCandidateModal(\''+role.id+'\')">+ Candidate</button>'}
     <div style="position:relative;display:inline-block">
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('role-more-menu-${role.id}').style.display=document.getElementById('role-more-menu-${role.id}').style.display==='block'?'none':'block';event.stopPropagation()" style="padding:5px 10px;font-size:16px;line-height:1">···</button>
       <div id="role-more-menu-${role.id}" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;min-width:160px;padding:4px 0" onclick="event.stopPropagation()">
@@ -5671,9 +5671,17 @@ function _rdS0Html(d) {
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         ${_reqStatusBadge}
-        <button class="btn btn-outline btn-sm" onclick="_s0SaveApprovals('${roleId}')">Save</button>
+        ${_reqStatus!=='rejected'?`<button class="btn btn-outline btn-sm" onclick="_s0SaveApprovals('${roleId}')">Save</button>`:''}
       </div>
     </div>
+
+    ${_reqStatus==='rejected'?`<div style="background:#fef2f2;border:2px solid #f87171;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+      <div style="font-size:28px">❌</div>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#dc2626">This requisition was rejected</div>
+        <div style="font-size:12px;color:#b91c1c;margin-top:2px">No candidates can be added or assigned to this role until the requisition is re-submitted and approved.</div>
+      </div>
+    </div>`:''}
 
     ${_trackingVal||_justVal||_openedBy?`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap">
       ${_trackingVal?`<div><span style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase">Req #</span><div style="font-size:13px;font-weight:600;color:var(--text)">${_trackingVal}</div></div>`:''}
@@ -6391,8 +6399,8 @@ function _rdS3Html(d) {
       </div>
       <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <input id="s3-filter" placeholder="🔍 Search candidates..." oninput="document.querySelectorAll('#s3-cand-table tbody tr').forEach(function(tr){tr.style.display=tr.textContent.toLowerCase().indexOf(this.value.toLowerCase())>-1?'':'none'},this)" style="flex:1;min-width:160px;padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:12px;font-family:inherit;background:var(--surface);color:var(--text)">
-        <button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add</button>
-        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">🗄 Database</button>
+        ${role.req_status!=='rejected'?`<button class="btn btn-primary btn-sm" style="font-size:11px" onclick="openAddCandidateModal('${roleId}')">+ Add</button>`:''}
+        ${role.req_status!=='rejected'?`<button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openSourceModal('${roleId}')">🗄 Database</button>`:'<span style="font-size:11px;color:#dc2626;font-weight:600">❌ Rejected — candidates blocked</span>'}
         <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="openRediscoveryModal('${roleId}','${role.title.replace(/'/g,"\\'")}')">🕐 Previous</button>
         <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_openGoogleSearch('${roleId}')">🌐 Google</button>
         <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="_s2OpenLinkedInRecruiter('${roleId}')">💼 LI Recruiter</button>
@@ -8080,11 +8088,21 @@ function _oaOpenOutlook() {
   var htmlBody = window._oaEmailHtml || document.getElementById('oa-email-body')?.value || '';
   if (_outlookAccount && typeof _outlookSendMail === 'function') {
     _outlookSendMail(to, subject, htmlBody).then(function(sent) {
-      if (sent) { toast('Offer approval email sent via Outlook ✓', 'ok'); closeModal('modal-offer-approval-email'); }
+      if (sent) { toast('Email sent via Outlook ✓', 'ok'); closeModal('modal-offer-approval-email'); }
       else { toast('Could not send — check Outlook connection', 'err'); }
     }).catch(function(e) { toast('Send error: ' + (e.message||'unknown'), 'err'); });
   } else {
-    showOutlookSendHelper(to, subject, htmlBody);
+    // Copy HTML to clipboard, then open Outlook Web compose
+    var copy = navigator.clipboard ? navigator.clipboard.writeText(htmlBody) : Promise.resolve();
+    copy.catch(function(){
+      var ta = document.createElement('textarea');
+      ta.value = htmlBody; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }).finally ? copy.finally(open) : open();
+    function open() {
+      window.open('https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(to) + '&subject=' + encodeURIComponent(subject), '_blank');
+      toast('Outlook opened · HTML email copied to clipboard — paste (Ctrl+V) into the body', 'info');
+    }
+    copy.then(open).catch(open);
   }
 }
 
