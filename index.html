@@ -10839,8 +10839,8 @@ async function _approveRequisition(roleId, action) {
     notes = prompt(action==='rejected'?'Reason for rejection:':'What changes are needed?');
     if (notes === null) return; // cancelled
   }
-  var newStatus = action === 'approved' ? 'approved' : action === 'rejected' ? 'rejected' : 'draft';
-  var update = {req_status: newStatus};
+  var newStatus = action === 'approved' ? 'approved' : action === 'rejected' ? 'rejected' : 'changes_requested';
+  var update = {req_status: newStatus, approval_status: newStatus};
   if (action === 'approved') update.approved_at = new Date().toISOString();
   if (action === 'rejected') update.rejected_at = new Date().toISOString();
   if (notes) update.rejection_reason = notes;
@@ -11432,7 +11432,8 @@ async function submitRequisition() {
 
     // Edit mode: update existing role instead of inserting
     if (window._editReqId) {
-      delete payload.req_status; // preserve existing approval status
+      payload.req_status = 'pending_approval'; // re-submit for approval
+      payload.approval_status = 'pending_approval';
       delete payload.status;
       delete payload.opened_by_id;
       delete payload.opened_by_name;
@@ -11440,7 +11441,7 @@ async function submitRequisition() {
       delete payload.current_approver_index;
       const {error:upErr} = await sb.from('roles').update(payload).eq('id', window._editReqId);
       if (upErr) { errEl.textContent = 'Error saving: ' + upErr.message; errEl.style.display = 'block'; const b2 = document.querySelector('#modal-hr-req .btn-primary'); if (b2) { b2.disabled=false; b2.textContent='Save Changes'; } return; }
-      toast('Requisition updated ✓');
+      toast('Requisition updated and re-submitted for approval ✓');
       window._editReqId = null;
       closeModal('modal-hr-req');
       renderHrPortal();
@@ -18178,10 +18179,12 @@ async function renderHrPortal() {
   var totalBudget = roles.filter(function(r) { return r.status==='open'; }).length;
   var totalHired = roles.reduce(function(sum, r) { return sum + (r.applications?.[0]?.count||0); }, 0);
 
-  var approvalStatusTag = function(s) {
-    var map = {draft:'tag-gray',pending_approval:'tag-amber',approved:'tag-blue',live:'tag-green'};
-    var label = {draft:'Draft',pending_approval:'Pending Approval',approved:'Approved',live:'Live'};
-    return '<span class="tag ' + (map[s]||'tag-gray') + '">' + (label[s]||s||'Unknown') + '</span>';
+  var approvalStatusTag = function(r) {
+    // req_status is the authoritative field; fall back to approval_status
+    var s = r.req_status || r.approval_status || 'unknown';
+    var map = {draft:'tag-gray',pending_approval:'tag-amber',approved:'tag-blue',live:'tag-green',rejected:'tag-red',changes_requested:'tag-amber'};
+    var label = {draft:'Draft',pending_approval:'Pending Approval',approved:'Approved',live:'Live',rejected:'Rejected',changes_requested:'Changes Requested'};
+    return '<span class="tag ' + (map[s]||'tag-gray') + '">' + (label[s]||s) + '</span>';
   };
 
   var fmtSal = function(r) {
@@ -18205,7 +18208,7 @@ async function renderHrPortal() {
       '<td>' + (_showSalary ? fmtSal(r) : '<span class="text-muted" style="font-size:11px">Hidden</span>') + '</td>' +
       '<td>' + (r.profiles && r.profiles.full_name ? r.profiles.full_name : '—') + '</td>' +
       '<td>' + appCount + ' / ' + (r.headcount||1) + '</td>' +
-      '<td>' + approvalStatusTag(r.approval_status||'approved') + '</td>' +
+      '<td>' + approvalStatusTag(r) + '</td>' +
       '<td>' + (r.tth_target_days?r.tth_target_days+'d':'—') + '</td>' +
       '<td>' + fmtDate(r.created_at) + '</td>' +
       '<td>' +
