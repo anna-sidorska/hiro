@@ -18210,7 +18210,7 @@ async function renderReports() {
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading reports…</div>';
 
   var userRole = currentUser?.role || '';
-  var canBuild = ['admin','hr','recruiter'].includes(userRole);
+  var canBuild = ['admin','hr','recruiter','fpa','fp_and_a','leadership','exec'].includes(userRole);
 
   // Load any saved reports from Supabase
   var savedReports = [];
@@ -18221,11 +18221,11 @@ async function renderReports() {
 
   // Standard built-in reports list
   var builtInReports = [
-    {id: 'hiring_dashboard', label: 'Hiring Dashboard', desc: 'Open roles, pipeline health, time-to-hire', icon: '\u{1F4CA}', roles: ['admin','hr','recruiter','coordinator']},
-    {id: 'recruiter_dashboard', label: 'Recruiter Performance', desc: 'Activity, conversions, and speed per recruiter', icon: '\u{1F464}', roles: ['admin','hr']},
-    {id: 'offer_outcomes', label: 'Offer Outcomes', desc: 'Acceptance rates, declines, and reasons', icon: '✅', roles: ['admin','hr','recruiter']},
-    {id: 'hm_satisfaction', label: 'HM Feedback', desc: 'Hiring manager satisfaction scores', icon: '\u{1F4AC}', roles: ['admin','hr']},
-    {id: 'fpa_report', label: 'FP&A / Headcount', desc: 'Headcount by department, budget, cost tracking', icon: '\u{1F4B0}', roles: ['admin','hr','fp_and_a','exec']},
+    {id: 'hiring_dashboard', label: 'Hiring Dashboard', desc: 'Open roles, pipeline health, time-to-hire', icon: '\u{1F4CA}', roles: ['admin','hr','recruiter','coordinator','fpa','fp_and_a','leadership','exec']},
+    {id: 'recruiter_dashboard', label: 'Recruiter Performance', desc: 'Activity, conversions, and speed per recruiter', icon: '\u{1F464}', roles: ['admin','hr','leadership','exec']},
+    {id: 'offer_outcomes', label: 'Offer Outcomes', desc: 'Acceptance rates, declines, and reasons', icon: '✅', roles: ['admin','hr','recruiter','fpa','fp_and_a','leadership','exec']},
+    {id: 'hm_satisfaction', label: 'HM Feedback', desc: 'Hiring manager satisfaction scores', icon: '\u{1F4AC}', roles: ['admin','hr','leadership','exec']},
+    {id: 'fpa_report', label: 'FP&A / Headcount', desc: 'Headcount by department, budget, cost tracking', icon: '\u{1F4B0}', roles: ['admin','hr','fpa','fp_and_a','leadership','exec']},
     {id: 'roles_tracker', label: 'Roles Tracker', desc: 'All roles status, aging, and history', icon: '\u{1F4CB}', roles: ['admin']},
     {id: 'business_portal', label: 'Business Portal', desc: 'Cross-functional view for business partners', icon: '\u{1F3E2}', roles: ['admin','hr','recruiter','manager']},
   ].filter(function(r){ return !r.roles || r.roles.includes(userRole); });
