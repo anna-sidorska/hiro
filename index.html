@@ -21587,10 +21587,10 @@ window._tuUpdateRole = async function(userId, userName, newRole, selectEl) {
     if (selectEl) selectEl.value = prev; // revert
     return;
   }
-  // Verify it actually saved (RLS silently blocks without error)
+  // Verify it actually saved (RLS can silently block without returning an error)
   var check = await sb.from('profiles').select('role').eq('id', userId).maybeSingle();
-  if (check.data && check.data.role !== newRole) {
-    toast('Role change blocked by database policy — run the admin RLS fix in Supabase SQL editor', 'err');
+  if (!check.data || check.data.role !== newRole) {
+    toast('Role not saved — RLS policy is blocking the update. Ask Anna to run the admin RLS fix in Supabase SQL editor.', 'err');
     if (selectEl) selectEl.value = prev;
     return;
   }
