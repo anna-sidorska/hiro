@@ -859,6 +859,7 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <div class="form-group"><label>Department</label><input id="r-dept" placeholder="Engineering"></div>
         <div class="form-group"><label>Location</label><input id="r-loc" placeholder="Remote - EU"></div>
       </div>
+      <div class="form-group"><label>Department Detail <span style="font-size:11px;color:var(--text-3);font-weight:400">(cost allocation code, e.g. G&amp;A Business Systems-ALL-ALL)</span></label><input id="r-dept-detail" placeholder="e.g. Revenue Ops-ALL-ALL"></div>
       <div class="form-grid">
         <div class="form-group"><label>Region</label>
           <select id="r-region">
@@ -9340,6 +9341,7 @@ async function submitRole() {
   const {data:role,error}=await sb.from('roles').insert({
     title,
     department:document.getElementById('r-dept').value.trim()||null,
+    department_detail:document.getElementById('r-dept-detail')?.value.trim()||null,
     location:document.getElementById('r-loc').value.trim()||null,
     region:document.getElementById('r-region').value||null,
     work_type:document.getElementById('r-worktype').value||null,
@@ -10278,7 +10280,7 @@ async function renderFpaHiresReport() {
 
   var [appsRes, rolesRes, candsRes, hmsRes] = await Promise.all([
     sb.from('applications').select('*').in('stage', ['offer','hired']).order('updated_at', {ascending: false}),
-    sb.from('roles').select('id,title,department,location,job_code,reason,is_project,hiring_manager_id,headcount'),
+    sb.from('roles').select('id,title,department,department_detail,location,job_code,reason,is_project,hiring_manager_id,headcount'),
     sb.from('candidates').select('id,first_name,last_name,location,candidate_type'),
     sb.from('profiles').select('id,full_name'),
   ]);
@@ -10310,6 +10312,7 @@ async function renderFpaHiresReport() {
       <td style="font-weight:500">${_escHtml(role.title||'—')}</td>
       <td style="font-weight:600">${_escHtml(name)}</td>
       <td style="font-size:12px">${_escHtml(hm.full_name||'—')}</td>
+      <td style="font-size:12px;color:var(--text-3)">${_escHtml(role.department_detail||'—')}</td>
       <td style="font-size:12px;text-transform:capitalize">${_escHtml(reason)}</td>
       <td style="font-size:12px">${_escHtml(startDate)}</td>
       <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:${offerStatus==='Accepted'?'#dcfce7':'#fef9c3'};color:${offerStatus==='Accepted'?'#16a34a':'#b45309'}">${offerStatus}</span></td>
@@ -10329,6 +10332,7 @@ async function renderFpaHiresReport() {
           <th style="padding:10px 14px;text-align:left">Job Title</th>
           <th style="padding:10px 14px;text-align:left">Name</th>
           <th style="padding:10px 14px;text-align:left">Supervisor</th>
+          <th style="padding:10px 14px;text-align:left">Dept Detail</th>
           <th style="padding:10px 14px;text-align:left">Reason</th>
           <th style="padding:10px 14px;text-align:left">Start Date</th>
           <th style="padding:10px 14px;text-align:left">Offer Status</th>
@@ -10339,14 +10343,14 @@ async function renderFpaHiresReport() {
     </div>`;
 
   window._exportFpaHiresCSV = function() {
-    var hdrs = ['Department','Hire Type','Location','Int #','Job Title','Name','Supervisor','Reason','Start Date','Offer Status','Project?'];
+    var hdrs = ['Department','Hire Type','Location','Int #','Job Title','Name','Supervisor','Dept Detail','Reason','Start Date','Offer Status','Project?'];
     var csvRows = apps.map(a => {
       var role = rolesMap[a.role_id]||{};
       var cand = candsMap[a.candidate_id]||{};
       var hm   = hmsMap[role.hiring_manager_id]||{};
       var name = [cand.first_name,cand.last_name].filter(Boolean).join(' ')||'';
       var hireType = cand.candidate_type==='internal'?'Internal Transfer':'External – New Hire';
-      return [role.department||'',hireType,role.location||cand.location||'',role.job_code||'',role.title||'',name,hm.full_name||'',role.reason||'',a.start_date||a.offer_date||'',a.stage==='hired'?'Accepted':'Extended',role.is_project?'Yes':'No'];
+      return [role.department||'',hireType,role.location||cand.location||'',role.job_code||'',role.title||'',name,hm.full_name||'',role.department_detail||'',role.reason||'',a.start_date||a.offer_date||'',a.stage==='hired'?'Accepted':'Extended',role.is_project?'Yes':'No'];
     });
     var csv = [hdrs, ...csvRows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
     var a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download='fpa_hires.csv'; a.click();
@@ -10362,7 +10366,7 @@ async function renderFpaOpenRolesReport() {
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
 
   var [rolesRes, appsRes, hmsRes] = await Promise.all([
-    sb.from('roles').select('*').eq('status','open').order('created_at',{ascending:false}),
+    sb.from('roles').select('*,department_detail').eq('status','open').order('created_at',{ascending:false}),
     sb.from('applications').select('role_id,stage'),
     sb.from('profiles').select('id,full_name'),
   ]);
@@ -10389,6 +10393,7 @@ async function renderFpaOpenRolesReport() {
       <td style="font-size:12px;color:var(--text-3)">${_escHtml(r.job_code||'—')}</td>
       <td style="font-weight:500">${_escHtml(r.title||'—')}</td>
       <td style="font-size:12px">${_escHtml(hm.full_name||'—')}</td>
+      <td style="font-size:12px;color:var(--text-3)">${_escHtml(r.department_detail||'—')}</td>
       <td style="font-size:12px;text-align:center;font-weight:${daysOpen>60?'700':'400'};color:${daysOpen>60?'#dc2626':daysOpen>30?'#d97706':'inherit'}">${daysOpen}</td>
       <td style="text-align:center">${candidateCount}</td>
       <td style="text-align:center">${interviewCount}</td>
@@ -10408,6 +10413,7 @@ async function renderFpaOpenRolesReport() {
           <th style="padding:10px 14px;text-align:left">Int #</th>
           <th style="padding:10px 14px;text-align:left">Job Title</th>
           <th style="padding:10px 14px;text-align:left">Hiring Manager</th>
+          <th style="padding:10px 14px;text-align:left">Dept Detail</th>
           <th style="padding:10px 14px;text-align:center">Days Open</th>
           <th style="padding:10px 14px;text-align:center">Candidates</th>
           <th style="padding:10px 14px;text-align:center">Interview</th>
@@ -10419,12 +10425,12 @@ async function renderFpaOpenRolesReport() {
     </div>`;
 
   window._exportFpaOpenCSV = function() {
-    var hdrs = ['Status','Department','Job Location','Int #','Job Title','Hiring Manager','Days Open','Candidates','Interview','Offers','Project?'];
+    var hdrs = ['Status','Department','Job Location','Int #','Job Title','Hiring Manager','Dept Detail','Days Open','Candidates','Interview','Offers','Project?'];
     var csvRows = roles.map(r => {
       var hm = hmsMap[r.hiring_manager_id]||{};
       var roleApps = apps.filter(a=>a.role_id===r.id);
       var daysOpen = r.created_at ? Math.floor((today-new Date(r.created_at))/86400000) : '';
-      return ['Open',r.department||'',r.location||'',r.job_code||'',r.title||'',hm.full_name||'',daysOpen,roleApps.length,roleApps.filter(a=>['phone_screen','interview','final_interview','assessment'].includes(a.stage)).length,roleApps.filter(a=>a.stage==='offer').length,r.is_project?'Yes':'No'];
+      return ['Open',r.department||'',r.location||'',r.job_code||'',r.title||'',hm.full_name||'',r.department_detail||'',daysOpen,roleApps.length,roleApps.filter(a=>['phone_screen','interview','final_interview','assessment'].includes(a.stage)).length,roleApps.filter(a=>a.stage==='offer').length,r.is_project?'Yes':'No'];
     });
     var csv = [hdrs,...csvRows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
     var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='fpa_open_roles.csv';a.click();
