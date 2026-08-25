@@ -10861,8 +10861,8 @@ async function _approveRequisition(roleId, action) {
     if (notes === null) return; // cancelled
   }
   var newStatus = action === 'approved' ? 'approved' : action === 'rejected' ? 'rejected' : 'changes_requested';
-  var update = {req_status: newStatus, approval_status: newStatus};
-  if (action === 'approved') update.approved_at = new Date().toISOString();
+  var update = {req_status: newStatus};
+  if (action === 'approved') { update.approval_status = 'approved'; update.approved_at = new Date().toISOString(); }
   if (action === 'rejected') update.rejected_at = new Date().toISOString();
   if (notes) update.rejection_reason = notes;
   var {error} = await sb.from('roles').update(update).eq('id', roleId);
