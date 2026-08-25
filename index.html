@@ -17055,9 +17055,11 @@ async function _initReqApprovalPage(roleId) {
         <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px">${l.currency||'USD'}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;font-size:12px">
-        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Base Salary</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_min)||'—'} – ${fmt(l.salary_max)||'—'}</span></div>
-        ${l.bonus_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Bonus Target</span><span style="font-weight:600;color:#eef4ff">${l.bonus_pct}% of base</span></div>`:''}
-        ${l.commission_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Target</span><span style="font-weight:600;color:#eef4ff">${l.commission_pct}% of base</span></div>`:''}
+        ${(l.salary_annual||l.salary_min)?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Salary Annual</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_annual||l.salary_min)}</span></div>`:''}
+        ${l.salary_monthly?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Salary Monthly</span><span style="font-weight:600;color:#eef4ff">${fmt(l.salary_monthly)}</span></div>`:''}
+        ${l.bonus_pct?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Bonus Target</span><span style="font-weight:600;color:#eef4ff">${l.bonus_pct}%</span></div>`:''}
+        ${(l.commission_annual||l.commission_pct)?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Annual</span><span style="font-weight:600;color:#eef4ff">${l.commission_annual?fmt(l.commission_annual):l.commission_pct+'% of base'}</span></div>`:''}
+        ${l.commission_monthly?`<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Commission Monthly</span><span style="font-weight:600;color:#eef4ff">${fmt(l.commission_monthly)}</span></div>`:''}
       </div>
     </div>`).join('')}
   </div>` : '';
@@ -17073,8 +17075,10 @@ async function _initReqApprovalPage(roleId) {
       ${row('Tracking #', role.tracking_number||null)}
       ${row('Job Title', role.title||'—')}
       ${row('Department', role.department||null)}
+      ${row('Dept Detail', role.department_detail||null)}
       ${row('Job Function', role.job_function||null)}
       ${row('Region', role.careers_region||role.region||null)}
+      ${row('Justification', role.justification ? role.justification.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : null)}
       ${row('Submitted by', role.opened_by_name||null)}
       ${row('Hiring Manager', role.hiring_manager_name||null)}
       ${row('Dept Leader', role.department_leader||null)}
@@ -17084,15 +17088,12 @@ async function _initReqApprovalPage(roleId) {
       ${row('HR Manager', role.hr_manager||null)}
       ${row('Is Budgeted', role.is_budgeted===true?'Yes':role.is_budgeted===false?'No':null)}
       ${row('One-Time Project', role.is_one_time_project===true?'Yes':role.is_one_time_project===false?'No':null)}
-      ${role.replacing_name ? row('Replacing', role.replacing_name+(role.replacing_last_day?' · Last day: '+role.replacing_last_day:'')) : ''}
+      ${role.replacing_name ? row('Replacing', role.replacing_name) : ''}
+      ${role.replacing_last_day ? row('Exiting Last Day', role.replacing_last_day) : ''}
+      ${row('Associate ID', role.associate_id||null)}
     </div>
 
     ${locsHtml}
-
-    ${role.justification ? `<div class="ra-card">
-      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Business Justification</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.75);line-height:1.6">${role.justification}</div>
-    </div>` : ''}
 
     ${chain.length ? `<div class="ra-card">
       <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Approval Chain</div>
