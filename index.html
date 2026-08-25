@@ -1030,6 +1030,10 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <input id="req-dept-leader" placeholder="e.g. VP Sales" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
       </div>
 
+      <div class="form-group"><label>Department Detail <span style="font-size:11px;color:var(--text-3);font-weight:400">(cost allocation code)</span></label>
+        <input id="req-dept-detail" placeholder="e.g. G&A Business Systems-ALL-ALL" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text)">
+      </div>
+
       <!-- Section: Locations & Salary Targets -->
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">
         Locations & Salary Targets
@@ -10879,7 +10883,7 @@ async function openHrReqModal() {
   // Reset form
   ['req-tracking','req-justification','req-replacing','req-last-day','req-associate-id',
    'req-budgeted','req-one-time','req-function','req-title','req-dept','req-region',
-   'req-hm-name','req-dept-leader','req-fpa','req-head-ta','req-head-hr','req-hr-mgr'].forEach(id => {
+   'req-hm-name','req-dept-leader','req-dept-detail','req-fpa','req-head-ta','req-head-hr','req-hr-mgr'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('req-locations-list').innerHTML = '';
@@ -11310,6 +11314,7 @@ async function submitRequisition() {
       job_function:           document.getElementById('req-function').value,
       careers_region:         document.getElementById('req-region').value,
       department_leader:      document.getElementById('req-dept-leader').value.trim(),
+      department_detail:      document.getElementById('req-dept-detail')?.value.trim() || null,
       fp_and_a_partner:       document.getElementById('req-fpa').value.trim(),
       head_of_ta:             document.getElementById('req-head-ta').value.trim(),
       head_of_hr:             document.getElementById('req-head-hr').value.trim(),
