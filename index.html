@@ -8745,7 +8745,7 @@ async function openCandidateDrawerLegacy(appId) {
     <div class="drawer-section">
       <div class="drawer-section-title">Actions</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="openTaskModal('${appId}')">✓ Add Task</button>
+        <button class="btn btn-outline btn-sm" onclick="openTaskModal('${appId}','${c.first_name} ${c.last_name}','${app.roles?.title||''}')">✓ Add Task</button>
         <button class="btn btn-outline btn-sm" style="color:var(--amber);border-color:var(--amber)" onclick="openOfferModal('${appId}','${c.first_name} ${c.last_name}')">💰 Record Offer</button>
         <button class="btn btn-danger btn-sm" onclick="rejectApplication('${appId}')">✕ Reject</button>
       </div>
@@ -11762,11 +11762,19 @@ async function loadTaskSelects() {
 
 var _currentTaskAppId = null;
 
-function openTaskModal(appId) {
+function openTaskModal(appId, candidateName, roleTitle) {
   _currentTaskAppId = appId || null;
   loadTaskSelects().then(()=>{
     const titleEl = document.getElementById('t-title');
-    if (titleEl) titleEl.value = '';
+    if (titleEl) {
+      if (candidateName && roleTitle) {
+        titleEl.value = 'Re: ' + candidateName + ' — ' + roleTitle + ' ';
+      } else if (candidateName) {
+        titleEl.value = 'Re: ' + candidateName + ' ';
+      } else {
+        titleEl.value = '';
+      }
+    }
     const descEl = document.getElementById('t-desc');
     if (descEl) descEl.value = '';
     const dueEl = document.getElementById('t-due');
@@ -19151,7 +19159,7 @@ async function openCandidateFullPage(appId) {
   window._drawerCandidateName = fullName;
   var _isOfferStage = app.stage === 'offer';
   document.getElementById('topbar-actions').innerHTML =
-    '<button class="btn btn-outline btn-sm" onclick="openTaskModal(\'' + appId + '\')">✓ Add Task</button>' +
+    '<button class="btn btn-outline btn-sm" onclick="openTaskModal(\'' + appId + '\',\'' + fullName.replace(/'/g,"\\'") + '\',\'' + (app.roles ? app.roles.title.replace(/'/g,"\\'") : '') + '\')">✓ Add Task</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openApplyModal(\'' + c.id + '\')">+ Apply to Role</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openComposeModal(\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✉ Email</button>' +
     (_cfpRoleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + c.id + '\',\'' + _cfpRoleId + '\',\'' + _cfpJdId + '\')">🔗 Eval Link</button>' : '') +
@@ -19364,7 +19372,7 @@ async function openCandidateFullPage(appId) {
 
   // Tasks pane
   rightCol += '<div id="cfp-tab-tasks" class="cfp-tab-pane" style="display:none">';
-  rightCol += '<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openTaskModal(\'' + appId + '\')">+ Add Task</button></div>';
+  rightCol += '<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openTaskModal(\'' + appId + '\',\'' + fullName.replace(/'/g,"\\'") + '\',\'' + (app.roles ? app.roles.title.replace(/'/g,"\\'") : '') + '\')">+ Add Task</button></div>';
   rightCol += '<div id="cfp-tasks-wrap"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
 
