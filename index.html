@@ -1265,6 +1265,44 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
   </div>
 </div>
 
+<!-- TASK DETAIL MODAL -->
+<div class="modal-overlay" id="modal-task-detail">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="td-title">Task</div>
+      <button class="modal-close" onclick="closeModal('modal-task-detail')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="td-candidate-link" style="display:none;background:var(--brand-light);border:1px solid #bfdbfe;border-radius:var(--r);padding:10px 12px;font-size:12px;color:var(--brand-dark);margin-bottom:16px;font-weight:500"></div>
+      <div class="form-group"><label>Description</label><textarea id="td-desc" rows="3"></textarea></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Status</label>
+          <select id="td-status">
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="done">Done</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Priority</label>
+          <select id="td-priority">
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Due Date</label><input id="td-due" type="datetime-local"></div>
+      <div class="form-group"><label>Assigned To</label><select id="td-assignee"></select></div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="closeModal('modal-task-detail')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTaskDetail()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-add-task">
   <div class="modal">
     <div class="modal-header">
@@ -11722,13 +11760,19 @@ async function loadTaskSelects() {
   if(sel) sel.innerHTML='<option value="">Unassigned</option>'+(profs||[]).map(p=>`<option value="${p.id}">${p.full_name}</option>`).join('');
 }
 
+var _currentTaskAppId = null;
+
 function openTaskModal(appId) {
+  _currentTaskAppId = appId || null;
   loadTaskSelects().then(()=>{
-    // Pre-clear title; optionally store appId for future linking
     const titleEl = document.getElementById('t-title');
     if (titleEl) titleEl.value = '';
     const descEl = document.getElementById('t-desc');
     if (descEl) descEl.value = '';
+    const dueEl = document.getElementById('t-due');
+    if (dueEl) dueEl.value = '';
+    const sel = document.getElementById('t-assignee');
+    if (sel && currentUser) sel.value = currentUser.id;
     openModal('modal-add-task');
   });
 }
@@ -11743,11 +11787,58 @@ async function submitTask() {
     priority:document.getElementById('t-priority').value,
     due_date:document.getElementById('t-due').value?new Date(document.getElementById('t-due').value).toISOString():null,
     created_by:currentUser?.id||null,
+    application_id:_currentTaskAppId||null,
   }).select().single();
   if(error){toast('Error adding task','err');return;}
   await auditLog('create','task',task.id,{title});
+  _currentTaskAppId = null;
   toast('Task added'); closeModal('modal-add-task');
   document.getElementById('t-title').value=''; document.getElementById('t-desc').value='';
+  loadSidebarCounts();
+  if(currentPage==='tasks') renderTasks();
+}
+
+var _currentTaskId = null;
+
+async function openTaskDetail(taskId) {
+  _currentTaskId = taskId;
+  const {data:t,error} = await sb.from('tasks')
+    .select('*, applications(id, candidates(first_name,last_name), roles(title))')
+    .eq('id', taskId).single();
+  if(error||!t){toast('Could not load task','err');return;}
+  document.getElementById('td-title').textContent = t.title;
+  document.getElementById('td-desc').value = t.description||'';
+  document.getElementById('td-status').value = t.status;
+  document.getElementById('td-priority').value = t.priority||'normal';
+  document.getElementById('td-due').value = t.due_date ? new Date(t.due_date).toISOString().slice(0,16) : '';
+  const link = document.getElementById('td-candidate-link');
+  if(t.applications?.candidates) {
+    const c = t.applications.candidates;
+    link.style.display='block';
+    link.innerHTML='📋 Linked to: <strong>'+c.first_name+' '+c.last_name+'</strong>'+(t.applications.roles?' — '+t.applications.roles.title:'');
+  } else { link.style.display='none'; }
+  const {data:profs} = await sb.from('profiles').select('id,full_name').order('full_name');
+  const sel = document.getElementById('td-assignee');
+  sel.innerHTML='<option value="">Unassigned</option>'+(profs||[]).map(p=>`<option value="${p.id}"${p.id===t.assigned_to?' selected':''}>${p.full_name}</option>`).join('');
+  openModal('modal-task-detail');
+}
+
+async function saveTaskDetail() {
+  if(!_currentTaskId) return;
+  const status = document.getElementById('td-status').value;
+  const {error} = await sb.from('tasks').update({
+    description: document.getElementById('td-desc').value.trim()||null,
+    status,
+    priority: document.getElementById('td-priority').value,
+    due_date: document.getElementById('td-due').value ? new Date(document.getElementById('td-due').value).toISOString() : null,
+    assigned_to: document.getElementById('td-assignee').value||null,
+    completed_at: status==='done' ? new Date().toISOString() : null,
+  }).eq('id', _currentTaskId);
+  if(error){toast('Error saving task','err');return;}
+  await auditLog('update','task',_currentTaskId,{status});
+  toast('Task updated');
+  closeModal('modal-task-detail');
+  _currentTaskId = null;
   loadSidebarCounts();
   if(currentPage==='tasks') renderTasks();
 }
@@ -13576,6 +13667,11 @@ document.addEventListener('keydown',e=>{
     document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
     closeDrawer();
   }
+});
+
+document.addEventListener('click', function(e) {
+  var row = e.target.closest('.task-row');
+  if(row && row.dataset.taskId) openTaskDetail(row.dataset.taskId);
 });
 
 // ── GLOBAL SEARCH ─────────────────────────────
@@ -21068,7 +21164,7 @@ async function renderTasks() {
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
   var {data, error} = await sb.from('tasks')
-    .select('*, profiles!assigned_to(full_name)')
+    .select('*, profiles!assigned_to(full_name), applications(id, candidates(first_name,last_name), roles(title))')
     .order('due_date',{ascending:true,nullsFirst:false});
 
   if (error) {
@@ -21150,25 +21246,29 @@ async function renderTasks() {
       var ownerBadge = isMine && isCreated ? '<span class="tag tag-blue" style="font-size:10px">Mine</span>'
         : isMine ? '<span class="tag tag-gray" style="font-size:10px">Assigned</span>'
         : isCreated ? '<span class="tag tag-purple" style="font-size:10px">Created</span>' : '';
-      return '<tr>' +
+      var candLink = t.applications && t.applications.candidates
+        ? '<div class="text-muted" style="font-size:11px">👤 ' + t.applications.candidates.first_name + ' ' + t.applications.candidates.last_name + (t.applications.roles ? ' · ' + t.applications.roles.title : '') + '</div>'
+        : '';
+      return '<tr class="task-row" data-task-id="' + t.id + '" style="cursor:pointer">' +
         '<td><div class="fw-600" style="' + (overdue ? 'color:var(--red)' : '') + '">' + t.title + '</div>' +
-        (t.description ? '<div class="text-muted">' + t.description + '</div>' : '') +
+        candLink +
+        (t.description && !candLink ? '<div class="text-muted">' + t.description + '</div>' : '') +
         (ownerBadge && !isAdmin ? '<div style="margin-top:3px">' + ownerBadge + '</div>' : '') +
         '</td>' +
         '<td>' + (t.profiles && t.profiles.full_name ? t.profiles.full_name : 'Unassigned') + '</td>' +
         '<td><span class="tag ' + pclass + '">' + (t.priority||'normal') + '</span></td>' +
         '<td>' + (t.due_date ? '<span style="' + (overdue ? 'color:var(--red);font-weight:600' : '') + '">' + fmtDate(t.due_date) + '</span>' : '—') + '</td>' +
-        '<td>' + (t.status==='done' ? '<span class="tag tag-green">Done</span>' : t.status==='in_progress' ? '<span class="tag tag-blue">In Progress</span>' : '<span class="tag tag-gray">Open</span>') + '</td>' +
-        '<td>' + (t.status !== 'done' ? '<button class="btn btn-sm btn-outline" onclick="completeTask(\'' + t.id + '\')">✓ Done</button>' : '') + '</td></tr>';
+        '<td>' + (t.status==='done' ? '<span class="tag tag-green">Done</span>' : t.status==='in_progress' ? '<span class="tag tag-blue">In Progress</span>' : overdue ? '<span class="tag tag-red">Overdue</span>' : '<span class="tag tag-gray">Open</span>') + '</td>' +
+        '</tr>';
     }).join('');
     var tbody = document.getElementById('tasks-tbody');
-    if (tbody) tbody.innerHTML = tableRows || '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">No tasks found</td></tr>';
+    if (tbody) tbody.innerHTML = tableRows || '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px">No tasks found</td></tr>';
   }
 
   document.getElementById('content').innerHTML = filterHtml +
     '<div class="card"><div class="card-header"><div class="card-title">Tasks</div>' +
     (isAdmin ? '<span class="text-muted" style="font-size:12px">Showing all team tasks</span>' : '<span class="text-muted" style="font-size:12px">Tasks involving you</span>') + '</div>' +
-    '<table><thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th><th></th></tr></thead>' +
+    '<table><thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th></tr></thead>' +
     '<tbody id="tasks-tbody"></tbody></table></div>';
 
   // Default: show assigned-to-me open tasks
