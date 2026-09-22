@@ -19325,6 +19325,7 @@ async function openCandidateFullPage(appId) {
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-comms" onclick="switchCfpTab(this,\'cfp-tab-comms\')">✉️ Comms</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-interviews" onclick="switchCfpTab(this,\'cfp-tab-interviews\')">📅 Interviews</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-evals" onclick="switchCfpTab(this,\'cfp-tab-evals\')">📋 Evaluations</button>';
+  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-tasks" onclick="switchCfpTab(this,\'cfp-tab-tasks\');loadCfpTasks(\'' + appId + '\')">✓ Tasks</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-activity" onclick="switchCfpTab(this,\'cfp-tab-activity\')">⏱ Activity</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-apps" onclick="switchCfpTab(this,\'cfp-tab-apps\')">📁 Applications</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-notes" onclick="switchCfpTab(this,\'cfp-tab-notes\')">📝 Notes</button>';
@@ -19359,6 +19360,12 @@ async function openCandidateFullPage(appId) {
   // Evaluations pane
   rightCol += '<div id="cfp-tab-evals" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-evals"><div class="loading"><div class="spinner"></div></div></div>';
+  rightCol += '</div>';
+
+  // Tasks pane
+  rightCol += '<div id="cfp-tab-tasks" class="cfp-tab-pane" style="display:none">';
+  rightCol += '<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openTaskModal(\'' + appId + '\')">+ Add Task</button></div>';
+  rightCol += '<div id="cfp-tasks-wrap"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
 
   // Activity pane
@@ -20279,6 +20286,47 @@ async function addNoteCfp(appId) {
   document.getElementById('cfp-note-input').value = '';
   toast('Note added');
   loadCfpNotes(appId);
+}
+
+async function loadCfpTasks(appId) {
+  var el = document.getElementById('cfp-tasks-wrap');
+  if (!el) return;
+  var {data, error} = await sb.from('tasks')
+    .select('*, profiles!assigned_to(full_name)')
+    .eq('application_id', appId)
+    .order('due_date',{ascending:true,nullsFirst:false});
+  if (error) { el.innerHTML = '<div class="text-muted">Could not load tasks</div>'; return; }
+  if (!data || !data.length) {
+    el.innerHTML = '<div class="empty" style="padding:32px;text-align:center"><div style="font-size:28px;margin-bottom:8px">✓</div><div style="font-weight:600;color:var(--text-2)">No tasks yet</div><div class="text-muted">Add a task using the button above</div></div>';
+    return;
+  }
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+    '<thead><tr><th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Task</th>' +
+    '<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Assigned</th>' +
+    '<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Due</th>' +
+    '<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Status</th>' +
+    '<th style="border-bottom:1px solid var(--border)"></th></tr></thead><tbody>' +
+    data.map(function(t) {
+      var overdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done';
+      var statusTag = t.status==='done' ? '<span class="tag tag-green">Done</span>' :
+        t.status==='in_progress' ? '<span class="tag tag-blue">In Progress</span>' :
+        overdue ? '<span class="tag tag-red">Overdue</span>' : '<span class="tag tag-gray">Open</span>';
+      return '<tr class="task-row" data-task-id="' + t.id + '" style="cursor:pointer;border-bottom:1px solid var(--border)">' +
+        '<td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;' + (overdue?'color:var(--red)':'') + '">' + t.title + '</div>' +
+        (t.description ? '<div class="text-muted">' + t.description + '</div>' : '') + '</td>' +
+        '<td style="padding:10px 12px;font-size:13px">' + (t.profiles&&t.profiles.full_name?t.profiles.full_name:'—') + '</td>' +
+        '<td style="padding:10px 12px;font-size:13px;' + (overdue?'color:var(--red);font-weight:600':'') + '">' + (t.due_date?fmtDate(t.due_date):'—') + '</td>' +
+        '<td style="padding:10px 12px">' + statusTag + '</td>' +
+        '<td style="padding:10px 12px">' + (t.status!=='done'?'<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();quickDoneTask(\''+t.id+'\',\''+appId+'\')">✓ Done</button>':'') + '</td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+async function quickDoneTask(taskId, appId) {
+  await sb.from('tasks').update({status:'done',completed_at:new Date().toISOString()}).eq('id',taskId);
+  toast('Task completed');
+  loadSidebarCounts();
+  loadCfpTasks(appId);
 }
 
 async function loadCfpEvaluations(candidateId) {
@@ -21258,6 +21306,7 @@ async function renderTasks() {
         '<td><span class="tag ' + pclass + '">' + (t.priority||'normal') + '</span></td>' +
         '<td>' + (t.due_date ? '<span style="' + (overdue ? 'color:var(--red);font-weight:600' : '') + '">' + fmtDate(t.due_date) + '</span>' : '—') + '</td>' +
         '<td>' + (t.status==='done' ? '<span class="tag tag-green">Done</span>' : t.status==='in_progress' ? '<span class="tag tag-blue">In Progress</span>' : overdue ? '<span class="tag tag-red">Overdue</span>' : '<span class="tag tag-gray">Open</span>') + '</td>' +
+        '<td>' + (t.status!=='done' ? '<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();completeTask(\''+t.id+'\')">✓ Done</button>' : '') + '</td>' +
         '</tr>';
     }).join('');
     var tbody = document.getElementById('tasks-tbody');
@@ -21267,7 +21316,7 @@ async function renderTasks() {
   document.getElementById('content').innerHTML = filterHtml +
     '<div class="card"><div class="card-header"><div class="card-title">Tasks</div>' +
     (isAdmin ? '<span class="text-muted" style="font-size:12px">Showing all team tasks</span>' : '<span class="text-muted" style="font-size:12px">Tasks involving you</span>') + '</div>' +
-    '<table><thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th></tr></thead>' +
+    '<table><thead><tr><th>Task</th><th>Assigned To</th><th>Priority</th><th>Due</th><th>Status</th><th></th></tr></thead>' +
     '<tbody id="tasks-tbody"></tbody></table></div>';
 
   // Default: show assigned-to-me open tasks
