@@ -19151,6 +19151,7 @@ async function openCandidateFullPage(appId) {
   window._drawerCandidateName = fullName;
   var _isOfferStage = app.stage === 'offer';
   document.getElementById('topbar-actions').innerHTML =
+    '<button class="btn btn-outline btn-sm" onclick="openTaskModal(\'' + appId + '\')">✓ Add Task</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openApplyModal(\'' + c.id + '\')">+ Apply to Role</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openComposeModal(\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✉ Email</button>' +
     (_cfpRoleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + c.id + '\',\'' + _cfpRoleId + '\',\'' + _cfpJdId + '\')">🔗 Eval Link</button>' : '') +
@@ -21186,11 +21187,9 @@ async function renderTasks() {
   var _taskTab = 'assigned'; // 'assigned' | 'created' | 'all'
 
   function getFilteredByTab(rows, tab) {
-    if (!isAdmin) {
-      if (tab === 'assigned') return rows.filter(function(t){ return t.assigned_to === profileId; });
-      if (tab === 'created') return rows.filter(function(t){ return t.created_by === profileId; });
-    }
-    return rows; // 'all' or admin
+    if (tab === 'assigned') return rows.filter(function(t){ return t.assigned_to === profileId; });
+    if (tab === 'created') return rows.filter(function(t){ return t.created_by === profileId; });
+    return rows; // 'all' tab - admins see everything
   }
 
   var tabHtml = '<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:16px">' +
