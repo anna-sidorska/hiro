@@ -918,7 +918,7 @@ function renderP5() {
 function renderAll(){renderP1();renderP2();renderP3();renderP4();renderP5();}
 
 // ── INIT ──
-document.getElementById('as-of-label').textContent=DATA.as_of;
+var aol=document.getElementById('as-of-label');if(aol)aol.textContent=DATA.as_of;
 var nd=document.getElementById('notice-date');if(nd)nd.textContent=DATA.as_of;
 initAuth();
 </script>
