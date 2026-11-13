@@ -372,11 +372,11 @@ tr:hover td{background:#fafbfe}
       <div class="filter-bar" id="p2-dept-bar"></div>
       <div class="filter-bar" id="p2-rag-bar">
         <span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">RAG</span>
-        <span class="filter-chip active" onclick="setRagFilter('all',this)">All</span>
-        <span class="filter-chip" onclick="setRagFilter('green',this)">🟢 On track</span>
-        <span class="filter-chip" onclick="setRagFilter('amber',this)">🟡 Watch</span>
-        <span class="filter-chip" onclick="setRagFilter('red',this)">🔴 At risk</span>
-        <span class="filter-chip" style="margin-left:8px" onclick="setRagFilter('over_ttf',this)">⚠ Over avg TTF</span>
+        <span class="filter-chip active" onclick="setRagFilter(\'all\',this)">All</span>
+        <span class="filter-chip" onclick="setRagFilter(\'green\',this)">🟢 On track</span>
+        <span class="filter-chip" onclick="setRagFilter(\'amber\',this)">🟡 Watch</span>
+        <span class="filter-chip" onclick="setRagFilter(\'red\',this)">🔴 At risk</span>
+        <span class="filter-chip" style="margin-left:8px" onclick="setRagFilter(\'over_ttf\',this)">⚠ Over avg TTF</span>
       </div>
       <div class="filter-bar" id="p2-region-bar"></div>
       <div class="card"><div class="card-head"><div class="card-title" id="p2-roles-title">All active roles</div><div class="card-note" id="p2-roles-count"></div></div>
@@ -811,9 +811,9 @@ function renderP1() {
 function buildP2Filters() {
   var fd=filteredData||DATA;
   var depts=[...new Set(fd.open_reqs.map(function(r){return r.function;}))].sort();
-  document.getElementById('p2-dept-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">DEPT</span><span class="filter-chip active" onclick="setDeptFilter('all',this)">All</span>'+depts.map(function(d){return'<span class="filter-chip" onclick="setDeptFilter(this.dataset.d,this)" data-d="'+d+'">'+d+'</span>';}).join('');
+  document.getElementById('p2-dept-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">DEPT</span><span class="filter-chip active" onclick="setDeptFilter(\'all\',this)">All</span>'+depts.map(function(d){return'<span class="filter-chip" onclick="setDeptFilter(this.dataset.d,this)" data-d="'+d+'">'+d+'</span>';}).join('');
   var regions=[...new Set(fd.open_reqs.map(function(r){return r.region;}))].sort();
-  document.getElementById('p2-region-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">REGION</span><span class="filter-chip active" onclick="setRegionFilter('all',this)">All</span>'+regions.map(function(r){return'<span class="filter-chip" onclick="setRegionFilter(this.dataset.r,this)" data-r="'+r+'">'+r+'</span>';}).join('');
+  document.getElementById('p2-region-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">REGION</span><span class="filter-chip active" onclick="setRegionFilter(\'all\',this)">All</span>'+regions.map(function(r){return'<span class="filter-chip" onclick="setRegionFilter(this.dataset.r,this)" data-r="'+r+'">'+r+'</span>';}).join('');
 }
 function setDeptFilter(dept,el){p2DeptFilter=dept;document.querySelectorAll('#p2-dept-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
 function setRagFilter(rag,el){p2RagFilter=rag;document.querySelectorAll('#p2-rag-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
