@@ -758,7 +758,7 @@ function renderRegionCards() {
   var regions=['EUR','US','APAC','ARG','SSA','BRA','TRY'].filter(function(r){return regionData[r];});
   document.getElementById('region-cards').innerHTML=regions.map(function(r){
     var d=regionData[r];
-    return'<div class="region-card'+(selectedRegion===r?' selected':'')+'" onclick="clickRegion(''+r+'')"><div class="region-card-num">'+d.total+'</div><div class="region-card-label">'+r+'</div><div class="region-card-rag"><span style="color:var(--green)">'+d.green+' green</span><span style="color:var(--amber)">'+d.amber+' amber</span><span style="color:var(--red)">'+d.red+' red</span></div></div>';
+    return'<div class="region-card'+(selectedRegion===r?' selected':'')+ '" onclick="clickRegion(this.dataset.r)" data-r="'+r+'"><div class="region-card-num">'+d.total+'</div><div class="region-card-label">'+r+'</div><div class="region-card-rag"><span style="color:var(--green)">'+d.green+' green</span><span style="color:var(--amber)">'+d.amber+' amber</span><span style="color:var(--red)">'+d.red+' red</span></div></div>';
   }).join('');
 }
 function clickRegion(region) {
