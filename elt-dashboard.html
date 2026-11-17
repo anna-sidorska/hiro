@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hiro Reporting · Sovos TA</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0a0f1e;
+  --ink-2:#3d4461;
+  --ink-3:#8891b0;
+  --rule:#e4e7f0;
+  --bg:#f5f6fa;
+  --surface:#ffffff;
+  --surface-raised:#ffffff;
+  --brand:#1a56db;
+  --brand-soft:#eef3fd;
+  --green:#0d7a4e;
+  --green-bg:#e6f7f0;
+  --amber:#a05c00;
+  --amber-bg:#fff3e0;
+  --red:#c0272d;
+  --red-bg:#fdeaea;
+  --nav-w:220px;
+  --header-h:56px;
+}
+html,body{height:100%;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* ── LAYOUT ── */
+.shell{display:flex;height:100vh;overflow:hidden}
+.nav{width:var(--nav-w);flex-shrink:0;background:var(--ink);display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.header{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 28px;gap:16px;flex-shrink:0}
+.content{flex:1;overflow-y:auto;padding:28px}
+
+/* ── NAV ── */
+.nav-brand{padding:18px 18px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
+.nav-logo{display:flex;align-items:center;gap:10px}
+.nav-logomark{width:32px;height:32px;border-radius:8px;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;letter-spacing:-.5px;flex-shrink:0}
+.nav-name{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.3px}
+.nav-sub{font-size:10px;color:rgba(255,255,255,.35);margin-top:1px;letter-spacing:.3px;text-transform:uppercase}
+.nav-section{padding:16px 12px 4px;font-size:10px;font-weight:600;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:.8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:1px 6px;border-radius:6px;cursor:pointer;color:rgba(255,255,255,.5);font-size:13px;font-weight:500;border:none;background:none;width:calc(100% - 12px);text-align:left;transition:background .15s,color .15s}
+.nav-item:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.85)}
+.nav-item.active{background:rgba(26,86,219,.25);color:#fff}
+.nav-item svg{flex-shrink:0;opacity:.6}
+.nav-item.active svg{opacity:1}
+.nav-footer{margin-top:auto;padding:14px 18px;border-top:1px solid rgba(255,255,255,.07)}
+.data-badge{display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.35)}
+.data-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0}
+.sp-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 8px;background:rgba(26,86,219,.15);color:rgba(100,160,255,.9);border-radius:4px;font-weight:600;letter-spacing:.3px}
+
+/* ── HEADER ── */
+.header-title{font-size:15px;font-weight:600;letter-spacing:-.2px}
+.header-meta{font-size:12px;color:var(--ink-3);margin-left:4px}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.header-asof{font-size:11px;color:var(--ink-3);background:var(--bg);padding:4px 10px;border-radius:5px;border:1px solid var(--rule)}
+.connect-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity .15s}
+.connect-btn:hover{opacity:.88}
+.connect-btn.connected{background:#e6f7f0;color:#0d7a4e;cursor:default}
+
+/* ── PAGE ── */
+.page{display:none}
+.page.active{display:block}
+.page-title{font-size:20px;font-weight:700;letter-spacing:-.4px;margin-bottom:4px}
+.page-desc{font-size:13px;color:var(--ink-3);margin-bottom:24px}
+
+/* ── KPI GRID ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:18px 20px}
+.kpi-val{font-size:30px;font-weight:700;letter-spacing:-.8px;line-height:1}
+.kpi-label{font-size:11px;color:var(--ink-3);margin-top:5px;font-weight:500;text-transform:uppercase;letter-spacing:.4px}
+.kpi-sub{font-size:12px;color:var(--ink-2);margin-top:3px}
+.kpi.highlight{background:var(--brand);border-color:var(--brand)}
+.kpi.highlight .kpi-val{color:#fff}
+.kpi.highlight .kpi-label{color:rgba(255,255,255,.65)}
+.kpi.highlight .kpi-sub{color:rgba(255,255,255,.8)}
+
+/* ── RAG SUMMARY ── */
+.rag-row{display:flex;gap:12px;margin-bottom:24px}
+.rag-pill{flex:1;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px}
+.rag-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.rag-num{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.rag-text{font-size:12px;color:var(--ink-3);margin-top:1px}
+.rag-pill.green .rag-num{color:var(--green)}
+.rag-pill.amber .rag-num{color:var(--amber)}
+.rag-pill.red .rag-num{color:var(--red)}
+
+/* ── TABLE ── */
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.card-head{padding:14px 20px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600;letter-spacing:-.1px}
+.card-note{font-size:11px;color:var(--ink-3)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:9px 16px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;background:var(--bg);border-bottom:1px solid var(--rule)}
+td{padding:11px 16px;border-bottom:1px solid var(--rule);font-size:13px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafbfe}
+.func-name{font-weight:500}
+.oldest-num{font-family:'DM Mono',monospace;font-size:12px;color:var(--ink-2)}
+
+/* ── RAG BARS ── */
+.rag-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;min-width:80px}
+.rag-seg{border-radius:2px}
+
+/* ── TAGS ── */
+.tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:600;letter-spacing:.1px}
+.tag-green{background:var(--green-bg);color:var(--green)}
+.tag-amber{background:var(--amber-bg);color:var(--amber)}
+.tag-red{background:var(--red-bg);color:var(--red)}
+.tag-blue{background:var(--brand-soft);color:var(--brand)}
+
+/* ── CHARTS ── */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.chart-wrap{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:20px}
+.chart-wrap.full{grid-column:1/-1}
+.chart-title{font-size:13px;font-weight:600;margin-bottom:4px;letter-spacing:-.1px}
+.chart-sub{font-size:11px;color:var(--ink-3);margin-bottom:16px}
+.chart-canvas-wrap{position:relative}
+
+/* ── STAGE CHIPS ── */
+.stage-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:var(--bg);color:var(--ink-2);border:1px solid var(--rule)}
+
+/* ── STARTS TABLE ── */
+.starts-row{display:flex;gap:16px;margin-bottom:20px}
+.starts-month{flex:1;background:var(--surface);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.starts-month-head{padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:8px}
+.starts-month-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-2)}
+.starts-month-count{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.5px}
+.starts-month-body{padding:12px 16px}
+.starts-func-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--rule);font-size:12px}
+.starts-func-row:last-child{border-bottom:none}
+.starts-func-name{color:var(--ink-2)}
+.starts-func-num{font-weight:600;font-family:'DM Mono',monospace;font-size:12px}
+
+/* ── TTF TABLE ── */
+.ttf-avg-line{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:10px 14px;background:var(--brand-soft);border-radius:8px;border:1px solid #c7d9f9}
+.ttf-avg-val{font-size:18px;font-weight:700;color:var(--brand);letter-spacing:-.3px}
+.ttf-avg-label{font-size:12px;color:var(--brand)}
+.ttf-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.ttf-func-name{font-size:12px;width:200px;flex-shrink:0;color:var(--ink-2)}
+.ttf-bar-track{flex:1;height:10px;background:var(--bg);border-radius:5px;overflow:hidden;position:relative}
+.ttf-bar-fill{height:100%;border-radius:5px;transition:width .4s cubic-bezier(.4,0,.2,1)}
+.ttf-bar-label{font-size:11px;font-family:'DM Mono',monospace;width:38px;text-align:right;flex-shrink:0}
+.ttf-bar-n{font-size:10px;color:var(--ink-3);width:30px;text-align:right;flex-shrink:0}
+
+/* ── VELOCITY ── */
+.vel-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px}
+.vel-month{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px;text-align:center}
+.vel-num{font-size:28px;font-weight:700;letter-spacing:-.5px}
+.vel-label{font-size:11px;color:var(--ink-3);margin-top:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:500}
+.vel-note{font-size:10px;color:var(--ink-3);margin-top:3px}
+.vel-month.current{border-color:var(--brand);background:var(--brand-soft)}
+.vel-month.current .vel-num{color:var(--brand)}
+
+/* ── OPEN REQS TABLE ── */
+.aging-cell{font-family:'DM Mono',monospace;font-size:12px}
+
+/* ── SP NOTICE ── */
+.sp-notice{background:var(--brand-soft);border:1px solid #c7d9f9;border-radius:8px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px;font-size:13px;color:var(--brand)}
+.sp-notice strong{font-weight:600}
+
+/* scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px}
+
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.filter-chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);transition:all .15s;white-space:nowrap}
+.filter-chip:hover{border-color:var(--brand);color:var(--brand)}
+.filter-chip.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.over-ttf{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;background:var(--red-bg);color:var(--red);margin-left:4px;vertical-align:middle}
+.near-ttf{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;background:var(--amber-bg);color:var(--amber);margin-left:4px;vertical-align:middle}
+.kpi{cursor:pointer;transition:box-shadow .15s,transform .1s}
+.kpi:hover{box-shadow:0 4px 16px rgba(0,0,0,.12);transform:translateY(-1px)}
+.drill-panel{background:var(--surface);border:1px solid var(--rule);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.drill-panel-head{padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center}
+.drill-panel-title{font-size:13px;font-weight:600}
+.drill-panel-close{background:none;border:none;cursor:pointer;font-size:16px;color:var(--ink-3);padding:0 4px;line-height:1}
+.matrix-table{width:100%;border-collapse:collapse;font-size:12px}
+.matrix-table th{padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px;background:var(--bg);border:1px solid var(--rule)}
+.matrix-table th:first-child{text-align:left}
+.matrix-table td{padding:7px 10px;text-align:center;border:1px solid var(--rule)}
+.matrix-table td:first-child{text-align:left;font-weight:500;font-size:12px}
+.matrix-cell{display:inline-flex;flex-direction:column;align-items:center;gap:1px}
+.matrix-avg{font-weight:600;font-size:12px}
+.matrix-n{font-size:9px;color:var(--ink-3)}
+.matrix-cell.fast .matrix-avg{color:var(--green)}
+.matrix-cell.watch .matrix-avg{color:var(--amber)}
+.matrix-cell.slow .matrix-avg{color:var(--red)}
+.region-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.region-card{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;cursor:pointer;transition:border-color .15s}
+.region-card:hover,.region-card.selected{border-color:var(--brand);background:var(--brand-soft)}
+.region-card-num{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.region-card-label{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.region-card-rag{display:flex;gap:6px;margin-top:6px;font-size:10px}
+.hm-count{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-size:11px;font-weight:700}
+</style>
+</head>
+<body>
+<!-- AUTH GATE -->
+<div id="auth-gate" style="position:fixed;inset:0;background:#0a0f1e;display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px">
+  <div style="width:100%;max-width:400px">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="display:inline-flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="width:40px;height:40px;border-radius:10px;background:#1a56db;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">HR</div>
+        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-.4px">Hiro Reporting</div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.35);letter-spacing:.3px">Sovos Talent Acquisition · FY27</div>
+    </div>
+
+    <!-- Password login -->
+    <div id="auth-password-view">
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Email</label>
+        <input id="auth-email" type="email" placeholder="you@sovos.com" style="width:100%;padding:10px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:#fff;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='rgba(26,86,219,.8)'" onblur="this.style.borderColor='rgba(255,255,255,.12)'">
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Password</label>
+        <input id="auth-password" type="password" placeholder="••••••••" style="width:100%;padding:10px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:#fff;font-size:14px;font-family:inherit;outline:none" onfocus="this.style.borderColor='rgba(26,86,219,.8)'" onblur="this.style.borderColor='rgba(255,255,255,.12)'" onkeydown="if(event.key==='Enter')signIn()">
+      </div>
+      <button onclick="signIn()" id="signin-btn" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity .15s" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">Sign In</button>
+      <div style="text-align:center;margin-top:12px">
+        <button onclick="showMagicLink()" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;font-family:inherit;padding:4px">Use magic link instead</button>
+      </div>
+    </div>
+
+    <!-- Magic link -->
+    <div id="auth-magic-view" style="display:none">
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Email</label>
+        <input id="magic-email" type="email" placeholder="you@sovos.com" style="width:100%;padding:10px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:#fff;font-size:14px;font-family:inherit;outline:none">
+      </div>
+      <button onclick="sendMagicLink()" style="width:100%;padding:11px;background:#1a56db;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Send magic link</button>
+      <div style="text-align:center;margin-top:12px">
+        <button onclick="showPassword()" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;font-family:inherit;padding:4px">Use password instead</button>
+      </div>
+    </div>
+
+    <!-- Magic link sent -->
+    <div id="auth-sent-view" style="display:none;text-align:center;padding:24px 0">
+      <div style="font-size:32px;margin-bottom:12px">📧</div>
+      <div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:8px">Check your email</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.4)">We sent a sign-in link to your email. Click it to continue.</div>
+    </div>
+
+    <div id="auth-error" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(192,39,45,.15);border:1px solid rgba(192,39,45,.3);border-radius:8px;color:#fca5a5;font-size:12px;text-align:center"></div>
+
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:rgba(255,255,255,.25);text-align:center;line-height:1.6">
+      Access restricted to authorised Sovos employees.<br>
+      This report contains aggregate recruitment data only.
+      <button onclick="showGdprNotice()" style="background:none;border:none;color:rgba(100,160,255,.6);font-size:11px;cursor:pointer;font-family:inherit;padding:0;margin-left:4px">Privacy notice</button>
+    </div>
+  </div>
+</div>
+
+<!-- ELT PROFILE SELECTOR (shown after auth) -->
+<div id="elt-login" style="position:fixed;inset:0;background:#0a0f1e;display:none;align-items:center;justify-content:center;z-index:9998;overflow-y:auto;padding:24px">
+  <div style="width:100%;max-width:900px">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="display:inline-flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="width:40px;height:40px;border-radius:10px;background:#1a56db;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">HR</div>
+        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-.4px">Hiro Reporting</div>
+      </div>
+      <div style="font-size:13px;color:rgba(255,255,255,.4);letter-spacing:.3px">Select your view to continue · FY27</div>
+      <div id="auth-user-email" style="font-size:11px;color:rgba(255,255,255,.25);margin-top:4px"></div>
+    </div>
+    <div id="elt-profiles-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"></div>
+    <div style="text-align:center;margin-top:20px">
+      <button onclick="authSignOut()" style="background:none;border:none;color:rgba(255,255,255,.25);font-size:12px;cursor:pointer;font-family:inherit">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<!-- GDPR NOTICE MODAL -->
+<div id="gdpr-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;display:none;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border-radius:12px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;padding:28px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:700;color:#0a0f1e">Privacy Notice · Hiro Reporting</div>
+      <button onclick="hideGdprNotice()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#8891b0;padding:4px">✕</button>
+    </div>
+    <div style="font-size:13px;color:#3d4461;line-height:1.7">
+      <p style="margin-bottom:14px"><strong style="color:#0a0f1e">What this tool shows</strong><br>
+      Hiro Reporting displays aggregate recruitment metrics for the Sovos Talent Acquisition function. Data includes open requisition counts, hiring stages, time-to-fill averages by function, upcoming start dates by role and department, and monthly hiring velocity.</p>
+
+      <p style="margin-bottom:14px"><strong style="color:#0a0f1e">Personal data included</strong><br>
+      This report contains the names of Sovos hiring managers and recruiters in their professional capacity. No candidate personal data is included — no names, email addresses, CVs, or assessment results.</p>
+
+      <p style="margin-bottom:14px"><strong style="color:#0a0f1e">Legal basis</strong><br>
+      Processing is conducted under legitimate interest (Article 6(1)(f) GDPR) for internal workforce planning and recruitment management purposes.</p>
+
+      <p style="margin-bottom:14px"><strong style="color:#0a0f1e">Access controls</strong><br>
+      This report is accessible only to authenticated Sovos employees with an approved account. Access is role-based and limited to relevant business functions.</p>
+
+      <p style="margin-bottom:14px"><strong style="color:#0a0f1e">Data source & freshness</strong><br>
+      Data is sourced from Sovos SharePoint recruitment tracking lists and is embedded at the point of publication. The report is refreshed periodically and labelled with the data-as-of date.</p>
+
+      <p style="margin-bottom:14px"><strong style="color:#0a0f1e">Data location</strong><br>
+      Authentication is managed via Supabase (EU Frankfurt region). No candidate data is stored in this system. Report data is static and embedded in the page.</p>
+
+      <p style="margin-bottom:0"><strong style="color:#0a0f1e">Your rights & contact</strong><br>
+      For questions about this report or to exercise your data rights, contact the Sovos Talent Acquisition team at <a href="mailto:anna.sidorska@sovos.com" style="color:#1a56db">anna.sidorska@sovos.com</a>. For broader data privacy enquiries, contact the Sovos DPO.</p>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="display:none" id="app-shell">
+<nav class="nav">
+  <div class="nav-brand"><div class="nav-logo"><div class="nav-logomark">HR</div><div><div class="nav-name">Hiro Reporting</div><div class="nav-sub">Talent Acquisition · FY27</div></div></div></div>
+  <div class="nav-section">Views</div>
+  <button class="nav-item active" onclick="showPage('p1',this)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Portfolio Health</button>
+  <button class="nav-item" onclick="showPage('p2',this)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Open Roles</button>
+  <button class="nav-item" onclick="showPage('p3',this)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Upcoming Starts</button>
+  <button class="nav-item" onclick="showPage('p4',this)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Time to Fill</button>
+  <button class="nav-item" onclick="showPage('p5',this)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>FY27 Velocity</button>
+  <div class="nav-footer"><div class="data-badge"><div class="data-dot"></div><span>Embedded data</span></div></div>
+</nav>
+<div class="main">
+  <div class="header">
+    <span class="header-title" id="page-title">Portfolio Health</span>
+    <div class="header-right">
+      <div id="scope-banner" style="display:none;font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid var(--rule);color:var(--ink-3);background:var(--bg)"></div>
+      <div class="header-asof">FY27 · Data as of <strong id="as-of-label">13 Nov 2026</strong></div>
+      <div id="user-pill" style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--bg);border:1px solid var(--rule);border-radius:6px;cursor:pointer" onclick="doSignOut()">
+        <div id="user-avatar" style="width:22px;height:22px;border-radius:50%;background:#1a56db;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0"></div>
+        <span id="user-name" style="font-size:12px;font-weight:500"></span>
+        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--ink-3)"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </div>
+      <button class="connect-btn" onclick="alert('SharePoint live connection requires Azure AD app registration. Contact IT for the client ID.')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Live data
+      </button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="page active" id="p1">
+      <div class="page-title">Portfolio Health</div>
+      <div class="page-desc">Click any KPI or RAG pill to drill into those roles</div>
+      <div class="kpi-grid">
+        <div class="kpi highlight" onclick="drillFromKpi('all')"><div class="kpi-val" id="k-active">—</div><div class="kpi-label">Active Roles</div><div class="kpi-sub" id="k-active-sub">—</div></div>
+        <div class="kpi" onclick="showPage('p4',document.querySelectorAll('.nav-item')[3])"><div class="kpi-val" id="k-ttf">—</div><div class="kpi-label">Avg Time to Fill</div><div class="kpi-sub">FY27 to date</div></div>
+        <div class="kpi" onclick="showPage('p3',document.querySelectorAll('.nav-item')[2])"><div class="kpi-val" id="k-starts30">—</div><div class="kpi-label">Starts this month</div><div class="kpi-sub">Confirmed · Nov 2026</div></div>
+        <div class="kpi" onclick="showPage('p3',document.querySelectorAll('.nav-item')[2])"><div class="kpi-val" id="k-starts60">—</div><div class="kpi-label">Starts next 60 days</div><div class="kpi-sub">Nov + Dec confirmed</div></div>
+        <div class="kpi" onclick="showPage('p5',document.querySelectorAll('.nav-item')[4])"><div class="kpi-val" id="k-filled">—</div><div class="kpi-label">Filled FY27</div><div class="kpi-sub">Jul → Nov 2026</div></div>
+      </div>
+      <div class="rag-row">
+        <div class="rag-pill green" style="cursor:pointer" onclick="drillFromRag('green')"><div class="rag-dot" style="background:#0d7a4e"></div><div><div class="rag-num" id="rag-green">—</div><div class="rag-text">On track · under 45 days</div></div></div>
+        <div class="rag-pill amber" style="cursor:pointer" onclick="drillFromRag('amber')"><div class="rag-dot" style="background:#a05c00"></div><div><div class="rag-num" id="rag-amber">—</div><div class="rag-text">Watch · 45–90 days</div></div></div>
+        <div class="rag-pill red" style="cursor:pointer" onclick="drillFromRag('red')"><div class="rag-dot" style="background:#c0272d"></div><div><div class="rag-num" id="rag-red">—</div><div class="rag-text">At risk · over 90 days</div></div></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Pipeline by region <span style="font-size:11px;font-weight:400;color:var(--ink-3)">· click to see breakdown</span></div>
+      <div class="region-cards" id="region-cards"></div>
+      <div id="region-drill-panel" style="display:none" class="drill-panel">
+        <div class="drill-panel-head"><div class="drill-panel-title" id="region-drill-title"></div><button class="drill-panel-close" onclick="closeRegionDrill()">✕</button></div>
+        <div id="region-drill-content" style="padding:16px"></div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-wrap"><div class="chart-title">Pipeline stage breakdown</div><div class="chart-sub">Active roles by stage</div><div style="position:relative;height:220px"><canvas id="chart-stage"></canvas></div></div>
+        <div class="chart-wrap"><div class="chart-title">Roles over average TTF</div><div class="chart-sub">By function</div><div style="position:relative;height:220px"><canvas id="chart-over-ttf"></canvas></div></div>
+      </div>
+      <div class="card" id="drill-roles-card" style="display:none">
+        <div class="card-head"><div class="card-title" id="drill-roles-title">Roles</div><button onclick="closeDrill()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--ink-3)">✕ Close</button></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Req ID</th><th>Title</th><th>HM</th><th>Function</th><th>Stage</th><th>Aging</th></tr></thead><tbody id="drill-roles-tbody"></tbody></table></div>
+      </div>
+    </div>
+    <div class="page" id="p2">
+      <div class="page-title">Open Roles</div>
+      <div class="page-desc">Filter by department, region or RAG status</div>
+      <div class="filter-bar" id="p2-dept-bar"></div>
+      <div class="filter-bar" id="p2-rag-bar">
+        <span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">RAG</span>
+        <span class="filter-chip active" onclick="setRagFilter(\'all\',this)">All</span>
+        <span class="filter-chip" onclick="setRagFilter(\'green\',this)">🟢 On track</span>
+        <span class="filter-chip" onclick="setRagFilter(\'amber\',this)">🟡 Watch</span>
+        <span class="filter-chip" onclick="setRagFilter(\'red\',this)">🔴 At risk</span>
+        <span class="filter-chip" style="margin-left:8px" onclick="setRagFilter(\'over_ttf\',this)">⚠ Over avg TTF</span>
+      </div>
+      <div class="filter-bar" id="p2-region-bar"></div>
+      <div class="card"><div class="card-head"><div class="card-title" id="p2-roles-title">All active roles</div><div class="card-note" id="p2-roles-count"></div></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Req ID</th><th>Title</th><th>HM</th><th>Function</th><th>Region</th><th>Stage</th><th>Aging</th><th>Avg TTF</th><th>Status</th></tr></thead><tbody id="p2-tbody"></tbody></table></div>
+      </div>
+      <div class="card" style="margin-top:16px"><div class="card-head"><div class="card-title">Open roles per hiring manager</div><div class="card-note" id="hm-count-note"></div></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Hiring Manager</th><th>Open</th><th>Offered</th><th>Total</th><th>Oldest</th><th>Functions</th></tr></thead><tbody id="hm-tbody"></tbody></table></div>
+      </div>
+    </div>
+    <div class="page" id="p3">
+      <div class="page-title">Upcoming Starts</div>
+      <div class="page-desc">Confirmed new hires from the FY27 New Hire Tracker</div>
+      <div class="starts-row" id="starts-months-row"></div>
+      <div class="card"><div class="card-head"><div class="card-title">All confirmed upcoming starters</div></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Start Date</th><th>Job Title</th><th>Function</th><th>Location</th><th>Hire Type</th><th>Hiring Manager</th><th>Recruiter</th></tr></thead><tbody id="starts-tbody"></tbody></table></div>
+      </div>
+    </div>
+    <div class="page" id="p4">
+      <div class="page-title">Time to Fill</div>
+      <div class="page-desc">FY27 closed roles · 244 roles with TTF data · excludes recruiter breakdown</div>
+      <div class="ttf-avg-line"><div class="ttf-avg-val" id="ttf-avg-display">37.6 days</div><div class="ttf-avg-label" id="ttf-avg-label">FY27 average across all functions</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div class="card" style="padding:20px"><div class="card-title" style="margin-bottom:16px">By function</div><div id="ttf-bars"></div></div>
+        <div class="card" style="padding:20px"><div class="card-title" style="margin-bottom:4px">By region</div><div class="card-note" style="margin-bottom:16px">Avg days · all functions</div><div id="ttf-region-bars"></div></div>
+      </div>
+      <div class="card" style="padding:20px">
+        <div class="card-title" style="margin-bottom:4px">Function × Region matrix</div>
+        <div class="card-note" style="margin-bottom:16px">Avg TTF in days · <span style="color:var(--green);font-weight:600">fast</span> below avg · <span style="color:var(--amber);font-weight:600">watch</span> 1–1.5× · <span style="color:var(--red);font-weight:600">slow</span> over 1.5×</div>
+        <div style="overflow-x:auto"><table class="matrix-table" id="ttf-matrix"></table></div>
+      </div>
+    </div>
+    <div class="page" id="p5">
+      <div class="page-title">FY27 Velocity</div>
+      <div class="page-desc">Monthly fills from Closed Reqs Archive · November is a partial month</div>
+      <div class="vel-grid" id="vel-months"></div>
+      <div class="chart-wrap"><div class="chart-title">Monthly hiring velocity</div><div class="chart-sub">Roles filled per month FY27</div><div style="position:relative;height:260px"><canvas id="chart-vel"></canvas></div></div>
+      <div class="chart-grid" style="margin-top:16px">
+        <div class="chart-wrap"><div class="chart-title">Fills by function FY27</div><div class="chart-sub">Top functions by volume</div><div style="position:relative;height:260px"><canvas id="chart-func-fills"></canvas></div></div>
+        <div class="chart-wrap"><div class="chart-title">Hire type breakdown</div><div class="chart-sub">External vs internal vs conversion</div><div style="position:relative;height:260px"><canvas id="chart-hire-type"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><script>
+// ── SUPABASE AUTH ─────────────────────────────
+const SUPA_URL = 'https://zgecauwahfszpeungbfb.supabase.co';
+const SUPA_KEY = 'sb_publishable_YiPRVuvAwEgXcpMpRv6eZg_4BeiXKQo';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+async function initAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    onAuthenticated(session.user.email);
+  }
+  // Listen for auth changes (magic link return)
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      onAuthenticated(session.user.email);
+    }
+  });
+}
+
+function onAuthenticated(email) {
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('auth-user-email').textContent = 'Signed in as ' + email;
+  document.getElementById('elt-login').style.display = 'flex';
+  buildLoginScreen();
+}
+
+async function signIn() {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) { showAuthError('Enter your email and password.'); return; }
+  const btn = document.getElementById('signin-btn');
+  btn.textContent = 'Signing in…'; btn.disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  btn.textContent = 'Sign In'; btn.disabled = false;
+  if (error) showAuthError(error.message);
+}
+
+async function sendMagicLink() {
+  const email = document.getElementById('magic-email').value.trim();
+  if (!email) { showAuthError('Enter your email address.'); return; }
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  if (error) { showAuthError(error.message); return; }
+  document.getElementById('auth-magic-view').style.display = 'none';
+  document.getElementById('auth-sent-view').style.display = 'block';
+}
+
+async function authSignOut() {
+  await sb.auth.signOut();
+  document.getElementById('elt-login').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('auth-gate').style.display = 'flex';
+  document.getElementById('auth-password-view').style.display = 'block';
+  document.getElementById('auth-magic-view').style.display = 'none';
+  document.getElementById('auth-sent-view').style.display = 'none';
+  document.getElementById('auth-error').style.display = 'none';
+  window._ttfChartRendered = false;
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+function showMagicLink() {
+  document.getElementById('auth-password-view').style.display = 'none';
+  document.getElementById('auth-magic-view').style.display = 'block';
+  document.getElementById('auth-error').style.display = 'none';
+}
+function showPassword() {
+  document.getElementById('auth-magic-view').style.display = 'none';
+  document.getElementById('auth-password-view').style.display = 'block';
+  document.getElementById('auth-error').style.display = 'none';
+}
+function showGdprNotice() {
+  document.getElementById('gdpr-modal').style.display = 'flex';
+}
+function hideGdprNotice() {
+  document.getElementById('gdpr-modal').style.display = 'none';
+}
+
+
+const ELT_PROFILES = [
+  {
+    id:'ceo', name:'Chief Executive Officer', title:'Full access · all functions & regions', initials:'CE', color:'#1a56db',
+    functions:'ALL', regions:'ALL', badge:'CEO'
+  },
+  {
+    id:'chro', name:'Chief Human Resources Officer', title:'Full access · all functions & regions', initials:'HR', color:'#7c3aed',
+    functions:'ALL', regions:'ALL', badge:'CHRO'
+  },
+  {
+    id:'vpta', name:'VP, Global Talent Acquisition', title:'Full access · all functions & regions', initials:'TA', color:'#0d7a4e',
+    functions:'ALL', regions:'ALL', badge:'TA'
+  },
+  {
+    id:'revenue', name:'President, Revenue', title:'Sales · BD · CS/Renewals · Sales Engineering · Revenue Ops · all regions', initials:'PR', color:'#059669',
+    // Alice Katwan: Ann-Christel Graham (CRO global), Eileen Earl (CCO global), Baptiste Carrère (Sales Innovation), Hitesh Setpal (Revenue Ops)
+    // ALL Sales - Direct globally (incl. APAC, EUR etc.) tracks through Alice's GTM org
+    functions:['Sales - Direct','Business Development','Customer Success/Renewals','Sales Engineering','Revenue Operations'],
+    regions:'ALL', badge:'Revenue'
+  },
+  {
+    id:'coo', name:'Chief Operating Officer', title:'Professional Services · Client Support · Transformation · Reg & Design', initials:'CO', color:'#d97706',
+    // Eva Krauss: Brian Sas (Prof Services), Samuel Hur (Managed Services), Mark McKercher (Client Support), Filippa Jornstedt (Reg & Design), Jennifer Misra (Transformation)
+    functions:['Professional/Managed Services','Client Support','Transformation','Regulatory Analysis & Design'],
+    regions:'ALL', badge:'COO'
+  },
+  {
+    id:'cfo', name:'Chief Financial Officer', title:'Finance · Accounting · Business Apps', initials:'CF', color:'#0891b2',
+    // David Woodworth: Danielle Berriochoa (Accounting), David Bataille (Finance Ops), Venu Martha (Business Apps), Jaydeep Wakankar (Finance)
+    functions:['Finance/Accounting/Business Apps'],
+    regions:'ALL', badge:'CFO'
+  },
+  {
+    id:'cmo', name:'Chief Marketing Officer', title:'Corporate Marketing · Enablement · eCommerce', initials:'CM', color:'#be185d',
+    // Chris Lynch: Anne Catambay (Growth Marketing), Mark Christenson (eCommerce RegTech), Parth Mukherjee (Product Marketing), Tariq Sharif (Enablement)
+    functions:['Corporate Marketing/Enablement','eCommerce'],
+    regions:'ALL', badge:'CMO'
+  },
+  {
+    id:'product', name:'President, Back Office Operations', title:'Product · IT/InfoSec · Regulatory Affairs', initials:'PB', color:'#6d28d9',
+    // Gregg Spratto: David McCann (CTO), Jeff/John/Lisa/Ryan Ostilly (Product Mgmt), Peter Gaffney (CISO), Christiaan Van Der Valk (Regulatory Affairs)
+    functions:['Product Development','Product Management','IT Operations/InfoSec','Regulatory Analysis & Design'],
+    regions:'ALL', badge:'Product'
+  },
+  {
+    id:'legal', name:'General Counsel', title:'Legal', initials:'GC', color:'#374151',
+    // Justin Pentz: Adriana Machado (Privacy & DPO), Javier Carreras (Commercial Legal), Lori Bradshaw (Corporate Legal)
+    functions:['Legal'],
+    regions:'ALL', badge:'Legal'
+  },
+  {
+    id:'cco', name:'CCO, International', title:'Alliances · all regions', initials:'CC', color:'#1a56db',
+    // James Buckley: Chris Clinton (Chief Partner Officer), Claire Hulett (VP Strategic Alliances EMEA)
+    // Sales - Direct, BD, CS all track through Alice's GTM org regardless of region
+    functions:['Alliances'],
+    regions:'ALL', badge:'International'
+  },
+  {
+    id:'cso', name:'Chief Strategy Officer', title:'Market Strategy · R&D Market Strategy', initials:'CS', color:'#374151',
+    // Steve Sprague: VP Market Strategy, Strategic Programs Manager Market Strategy, Client Transformation Lead VAT
+    // Note: current reqs are Submitted (pending approval) so will not yet appear in live data
+    functions:['Market Strategy','R&D Market Strategy'],
+    regions:'ALL', badge:'Strategy'
+  },
+  {
+    id:'cos', name:'Chief of Staff & Sustainability Officer', title:'Full access · all functions & regions', initials:'CoS', color:'#0d7a4e',
+    functions:'ALL', regions:'ALL', badge:'CoS'
+  },
+];
+function buildLoginScreen() {
+  const grid = document.getElementById('elt-profiles-grid');
+  grid.innerHTML = ELT_PROFILES.map(p => `
+    <div onclick="login('${p.id}')" style="
+      background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;
+      padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;
+      transition:background .15s,border-color .15s;
+    " onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.borderColor='rgba(255,255,255,.18)'"
+       onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.borderColor='rgba(255,255,255,.08)'">
+      <div style="width:38px;height:38px;border-radius:50%;background:${p.color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${p.initials}</div>
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title}</div>
+      </div>
+      <span style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 7px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);border-radius:4px;letter-spacing:.5px;flex-shrink:0">${p.badge}</span>
+    </div>
+  `).join('');
+}
+
+
+let currentUser = null;
+let filteredData = null;
+let p2DeptFilter='all', p2RagFilter='all', p2RegionFilter='all';
+
+function login(profileId) {
+  currentUser = ELT_PROFILES.find(p => p.id === profileId);
+  filteredData = filterDataForUser(currentUser);
+  document.getElementById('user-avatar').textContent = currentUser.initials;
+  document.getElementById('user-avatar').style.background = currentUser.color;
+  document.getElementById('user-name').textContent = currentUser.badge + ' view';
+  const banner = document.getElementById('scope-banner');
+  if (currentUser.functions === 'ALL') { banner.style.display = 'none'; }
+  else { banner.style.display = ''; banner.textContent = currentUser.functions.length + ' functions' + (currentUser.regions !== 'ALL' ? ' · ' + currentUser.regions.join(', ') : ''); }
+  document.getElementById('elt-login').style.display = 'none';
+  document.getElementById('app-shell').style.display = '';
+  p2DeptFilter='all'; p2RagFilter='all'; p2RegionFilter='all';
+  renderAll();
+}
+
+function doSignOut() {
+  currentUser = null; filteredData = null;
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('elt-login').style.display = 'flex';
+  ['chart-stage','chart-over-ttf','chart-vel','chart-func-fills','chart-hire-type'].forEach(id => { const c = Chart.getChart(id); if(c) c.destroy(); });
+}
+
+function filterDataForUser(user) {
+  if (user.functions === 'ALL' && user.regions === 'ALL') return DATA;
+  const allowedFuncs = user.functions === 'ALL' ? null : user.functions;
+  const allowedRegions = user.regions === 'ALL' ? null : user.regions;
+  function funcOk(f) { return !allowedFuncs || allowedFuncs.includes(f); }
+  function regionOk(r) { return !allowedRegions || allowedRegions.includes(r); }
+  const open_reqs = DATA.open_reqs.filter(r => funcOk(r.function) && regionOk(r.region));
+  const dept_rag = DATA.dept_rag.filter(d => funcOk(d.function));
+  const ttf_by_function = DATA.ttf_by_function.filter(d => funcOk(d.function));
+  const upcoming_hires = DATA.upcoming_hires.filter(r => funcOk(r.function));
+  const total_open = open_reqs.filter(r => r.status === 'Open').length;
+  const total_offered = open_reqs.filter(r => r.status === 'Offered').length;
+  const green = open_reqs.filter(r => r.aging < 45).length;
+  const amber = open_reqs.filter(r => r.aging >= 45 && r.aging <= 90).length;
+  const red = open_reqs.filter(r => r.aging > 90).length;
+  const upcoming_starts_30d = upcoming_hires.filter(r => r.start.startsWith('11/')).length;
+  const upcoming_starts_60d = upcoming_hires.filter(r => r.start.startsWith('11/') || r.start.startsWith('12/')).length;
+  const ttf_n = ttf_by_function.reduce((s,d) => s+d.n, 0);
+  const avg_ttf = ttf_n ? Math.round(ttf_by_function.reduce((s,d) => s+d.avg_ttf*d.n, 0) / ttf_n * 10) / 10 : DATA.kpis.avg_ttf;
+  return { ...DATA, kpis: { total_active:81, total_open:67, total_offered:14, green:57, amber:13, red:11, avg_ttf:37.6, upcoming_starts_30d:9, upcoming_starts_60d:25, total_filled_fy:311 }, dept_rag, ttf_by_function, open_reqs, upcoming_hires, _scoped: true };
+}
+
+const DATA = {
+  as_of: '17 Nov 2026', fy_start: '1 Jul 2026',
+  kpis: { total_active:81, total_open:67, total_offered:14, green:57, amber:13, red:11, avg_ttf:37.6, upcoming_starts_30d:9, upcoming_starts_60d:25, total_filled_fy:311 },
+  dept_rag: [{function:"Alliances",total:2,green:2,amber:0,red:0,oldest:25},{function:"Business Development",total:4,green:2,amber:1,red:1,oldest:94},{function:"Client Support",total:2,green:2,amber:0,red:0,oldest:16},{function:"Corporate Marketing/Enablement",total:3,green:1,amber:2,red:0,oldest:56},{function:"Customer Success/Renewals",total:3,green:2,amber:1,red:0,oldest:46},{function:"Finance/Accounting/Business Apps",total:9,green:8,amber:1,red:0,oldest:66},{function:"IT Operations/InfoSec",total:4,green:2,amber:1,red:1,oldest:113},{function:"Legal",total:1,green:0,amber:1,red:0,oldest:55},{function:"Product Development",total:4,green:1,amber:3,red:0,oldest:89},{function:"Product Management",total:6,green:6,amber:0,red:0,oldest:44},{function:"Professional/Managed Services",total:13,green:8,amber:2,red:3,oldest:117},{function:"Regulatory Analysis & Design",total:2,green:2,amber:0,red:0,oldest:16},{function:"Sales - Direct",total:17,green:10,amber:1,red:6,oldest:170},{function:"Sales Engineering",total:5,green:5,amber:0,red:0,oldest:29},{function:"Talent",total:2,green:2,amber:0,red:0,oldest:25},{function:"Transformation",total:4,green:4,amber:0,red:0,oldest:31}],
+  ttf_by_function: [{function:'Finance/Accounting/Business Apps',avg_ttf:24,n:26},{function:'Product Development',avg_ttf:28,n:39},{function:'Professional/Managed Services',avg_ttf:31,n:45},{function:'Customer Success/Renewals',avg_ttf:33,n:4},{function:'Client Support',avg_ttf:39,n:43},{function:'Alliances',avg_ttf:41,n:5},{function:'Revenue Operations',avg_ttf:41,n:5},{function:'Sales - Direct',avg_ttf:43,n:22},{function:'Business Development',avg_ttf:45,n:10},{function:'IT Operations/InfoSec',avg_ttf:49,n:18},{function:'Product Management',avg_ttf:53,n:5},{function:'Corporate Marketing/Enablement',avg_ttf:53,n:9},{function:'Sales Engineering',avg_ttf:99,n:5}],
+  ttf_by_region: {"EUR":{"avg":47.8,"n":55},"SSA":{"avg":34.6,"n":55},"ARG":{"avg":33.0,"n":44},"APAC":{"avg":22.7,"n":38},"US":{"avg":48.3,"n":32},"BRA":{"avg":37.1,"n":13},"TRY":{"avg":42.7,"n":7}},
+  ttf_by_func_region: {"Alliances":{"EUR":{"avg":45.2,"n":4},"TRY":{"avg":23.0,"n":1}},"Business Development":{"US":{"avg":79.0,"n":1},"EUR":{"avg":37.6,"n":5},"APAC":{"avg":15.5,"n":2},"BRA":{"avg":74.0,"n":2}},"Client Support":{"US":{"avg":61.0,"n":2},"EUR":{"avg":14.5,"n":2},"ARG":{"avg":50.8,"n":12},"SSA":{"avg":32.6,"n":18},"BRA":{"avg":35.0,"n":7},"TRY":{"avg":49.5,"n":2}},"Corporate Marketing/Enablement":{"US":{"avg":43.7,"n":3},"EUR":{"avg":65.0,"n":3},"APAC":{"avg":53.5,"n":2},"BRA":{"avg":46.0,"n":1}},"Customer Success/Renewals":{"US":{"avg":37.3,"n":3},"ARG":{"avg":21.0,"n":1}},"Executive Office/Strategy":{"APAC":{"avg":20.0,"n":1},"SSA":{"avg":68.0,"n":1}},"Finance":{"US":{"avg":93.0,"n":1}},"Finance/Accounting/Business Apps":{"US":{"avg":88.0,"n":5},"APAC":{"avg":10.6,"n":17},"SSA":{"avg":4.3,"n":3},"BRA":{"avg":1.0,"n":1}},"IT Operations/InfoSec":{"APAC":{"avg":37.4,"n":7},"ARG":{"avg":4.0,"n":1},"SSA":{"avg":62.1,"n":10}},"Product Development":{"US":{"avg":32.0,"n":1},"EUR":{"avg":37.3,"n":7},"APAC":{"avg":31.0,"n":2},"ARG":{"avg":30.5,"n":15},"SSA":{"avg":20.2,"n":13},"BRA":{"avg":6.0,"n":1}},"Product Management":{"US":{"avg":64.0,"n":1},"APAC":{"avg":50.0,"n":2},"ARG":{"avg":50.0,"n":2}},"Professional/Managed Services":{"US":{"avg":23.0,"n":8},"EUR":{"avg":40.9,"n":18},"APAC":{"avg":20.0,"n":5},"ARG":{"avg":20.0,"n":10},"BRA":{"avg":36.0,"n":1},"TRY":{"avg":43.3,"n":3}},"Revenue Operations":{"US":{"avg":48.0,"n":1},"SSA":{"avg":37.0,"n":3},"TRY":{"avg":47.0,"n":1}},"Sales - Direct":{"US":{"avg":40.0,"n":5},"EUR":{"avg":51.3,"n":12},"SSA":{"avg":27.0,"n":5}},"Sales Engineering":{"EUR":{"avg":106.0,"n":4},"SSA":{"avg":71.0,"n":1}},"Talent":{"ARG":{"avg":15.5,"n":2}},"Transformation":{"ARG":{"avg":27.0,"n":1}},"eCommerce":{"US":{"avg":40.0,"n":1},"SSA":{"avg":37.0,"n":1}}},
+  monthly_fills: [{month:'Jul 26',fills:76},{month:'Aug 26',fills:63},{month:'Sep 26',fills:70},{month:'Oct 26',fills:79},{month:'Nov 26',fills:23}],
+  open_reqs: [{"req_id":"US-837","status":"Open","title":"Strategic Account Executive","aging":170,"function":"Sales - Direct","location":"US-Remote","stage":"Sourcing/Screening","region":"US","hm":"Brian Paterson"},{"req_id":"APAC-092","status":"Open","title":"Strategic Account Executive","aging":164,"function":"Sales - Direct","location":"Malaysia","stage":"Department Interviews","region":"APAC","hm":"Ann-Christel Graham"},{"req_id":"EUR-334","status":"Offered","title":"Strategic Account Executive","aging":137,"function":"Sales - Direct","location":"Spain","stage":"Offered","region":"EUR","hm":"Nazaret Gonzalez"},{"req_id":"US-845","status":"Offered","title":"Strategic Account Manager","aging":131,"function":"Sales - Direct","location":"US-Remote","stage":"Offered","region":"US","hm":"Tim Wittbrod"},{"req_id":"US-846","status":"Offered","title":"Regulatory Education Director","aging":117,"function":"Professional/Managed Services","location":"US-Remote","stage":"Offered","region":"US","hm":"Sarah Stubbs"},{"req_id":"SSA-362","status":"Open","title":"Senior Director, Platform Services","aging":113,"function":"IT Operations/InfoSec","location":"Mexico","stage":"","region":"SSA","hm":"Peter Gaffney"},{"req_id":"US-854","status":"Open","title":"Enterprise Account Manager","aging":100,"function":"Sales - Direct","location":"US-Remote","stage":"","region":"US","hm":"Anton Cashin"},{"req_id":"US-852","status":"Offered","title":"Senior Enterprise Account Manager","aging":97,"function":"Sales - Direct","location":"US-Remote","stage":"Offered","region":"US","hm":"Anton Cashin"},{"req_id":"EUR-366","status":"Open","title":"Technical Account Manager","aging":99,"function":"Professional/Managed Services","location":"Portugal","stage":"Department Interviews","region":"EUR","hm":"Nicolas Fasolis"},{"req_id":"APAC-118","status":"Open","title":"Compliance Services Representative","aging":94,"function":"Professional/Managed Services","location":"India","stage":"Department Interviews","region":"APAC","hm":"Pallavi Bhosale"},{"req_id":"BRA-141","status":"Offered","title":"Business Development Representative","aging":94,"function":"Business Development","location":"Brazil","stage":"Offered","region":"BRA","hm":"Wesley Barros"},{"req_id":"BRA-142","status":"Offered","title":"SAP Software Developer III","aging":89,"function":"Professional/Managed Services","location":"Brazil","stage":"Offered","region":"BRA","hm":"Abdullah Umar"},{"req_id":"EUR-372","status":"Offered","title":"Technical Lead","aging":89,"function":"Product Development","location":"Portugal","stage":"Offered","region":"EUR","hm":"Ignacio Cisternas"},{"req_id":"EUR-382","status":"Open","title":"Senior Embedded Account Executive","aging":77,"function":"Sales - Direct","location":"UK","stage":"Department Interviews","region":"EUR","hm":"Petter Karlsson"},{"req_id":"TRY-120","status":"Open","title":"Corporate IT Support Specialist II","aging":73,"function":"IT Operations/InfoSec","location":"Turkey","stage":"Department Interviews","region":"TRY","hm":"Judith Duarte"},{"req_id":"EUR-383","status":"Open","title":"Compliance Services Associate","aging":71,"function":"Professional/Managed Services","location":"Portugal","stage":"","region":"EUR","hm":"Manuella HornerLocko"},{"req_id":"APAC-132","status":"Open","title":"Senior Manager, Order to Cash","aging":66,"function":"Finance/Accounting/Business Apps","location":"India","stage":"Department Interviews","region":"APAC","hm":"Jaydeep Wakankar"},{"req_id":"EUR-371","status":"Offered","title":"Triage Engineer","aging":61,"function":"Product Development","location":"Portugal","stage":"Offered","region":"EUR","hm":"Alexandre Ferri"},{"req_id":"SSA-379","status":"Offered","title":"Counsel","aging":55,"function":"Legal","location":"Mexico","stage":"Offered","region":"SSA","hm":"Christine Colmey"},{"req_id":"EUR-386","status":"Open","title":"Senior Software Engineer","aging":56,"function":"Product Development","location":"Portugal","stage":"Department Interviews","region":"EUR","hm":"David Dango"},{"req_id":"US-867","status":"Open","title":"Senior Product Marketing Manager","aging":56,"function":"Corporate Marketing/Enablement","location":"US-Remote","stage":"","region":"US","hm":"Parth Mukherjee"},{"req_id":"APAC-139","status":"Open","title":"Product Marketing Specialist","aging":52,"function":"Corporate Marketing/Enablement","location":"India","stage":"Department Interviews","region":"APAC","hm":"Parth Mukherjee"},{"req_id":"US-873","status":"Open","title":"Business Development Representative II","aging":49,"function":"Business Development","location":"US-Atlanta","stage":"Department Interviews","region":"US","hm":"John Nelson"},{"req_id":"US-874","status":"Open","title":"Renewals Manager","aging":46,"function":"Customer Success/Renewals","location":"US-Remote","stage":"Department Interviews","region":"US","hm":"Rony Edri"},{"req_id":"APAC-141","status":"Open","title":"VP, Sales - APAC","aging":44,"function":"Sales - Direct","location":"Singapore","stage":"","region":"APAC","hm":"Ann-Christel Graham"},{"req_id":"EUR-394","status":"Open","title":"Product Transformation Manager","aging":44,"function":"Product Management","location":"Portugal","stage":"Department Interviews","region":"EUR","hm":"Lisa Holmquest"},{"req_id":"EUR-395","status":"Open","title":"Platform Product Manager","aging":44,"function":"Product Management","location":"Portugal","stage":"Department Interviews","region":"EUR","hm":"Tracy Mainville"},{"req_id":"US-876","status":"Open","title":"Senior Manager, Business Applications","aging":44,"function":"Finance/Accounting/Business Apps","location":"US-Remote","stage":"Department Interviews","region":"US","hm":"Venu Martha"},{"req_id":"APAC-143","status":"Open","title":"Senior NOC Analyst","aging":39,"function":"IT Operations/InfoSec","location":"India","stage":"Department Interviews","region":"APAC","hm":"Durgesh Jha"},{"req_id":"APAC-144","status":"Open","title":"Strategic Account Executive","aging":39,"function":"Sales - Direct","location":"Malaysia","stage":"Department Interviews","region":"APAC","hm":"Ann-Christel Graham"},{"req_id":"EUR-396","status":"Open","title":"Business Development Representative","aging":39,"function":"Business Development","location":"UK","stage":"","region":"EUR","hm":"Ryan Person"},{"req_id":"ARG-672","status":"Offered","title":"Senior DevOps Engineer","aging":21,"function":"Product Development","location":"Argentina","stage":"Offered","region":"ARG","hm":"Nick Miller"},{"req_id":"ARG-674","status":"Offered","title":"Compliance Services Associate","aging":33,"function":"Professional/Managed Services","location":"Argentina","stage":"Offered","region":"ARG","hm":"Virginia Ragone"},{"req_id":"APAC-145","status":"Open","title":"Commercial Account Manager","aging":36,"function":"Sales - Direct","location":"India","stage":"Department Interviews","region":"APAC","hm":"Hemalatha Saptarshi"},{"req_id":"EUR-398","status":"Open","title":"Senior Services Partnerships Rep","aging":36,"function":"Professional/Managed Services","location":"UK","stage":"Department Interviews","region":"EUR","hm":"Siret Pulsford"},{"req_id":"US-877","status":"Open","title":"AI Technical Lead","aging":31,"function":"Transformation","location":"US-Remote","stage":"Department Interviews","region":"US","hm":"Jennifer Misra"},{"req_id":"US-878","status":"Open","title":"AI Technical Director","aging":31,"function":"Transformation","location":"US-Remote","stage":"Department Interviews","region":"US","hm":"Jennifer Misra"},{"req_id":"US-879","status":"Open","title":"AI Transformation Director","aging":31,"function":"Transformation","location":"US-Remote","stage":"Department Interviews","region":"US","hm":"Jennifer Misra"},{"req_id":"US-880","status":"Open","title":"Transformation Program Manager","aging":31,"function":"Transformation","location":"US-Remote","stage":"Department Interviews","region":"US","hm":"Jennifer Misra"},{"req_id":"US-884","status":"Offered","title":"Senior Strategic Account Executive","aging":14,"function":"Sales - Direct","location":"US-Remote","stage":"Offered","region":"US","hm":"Tim Wittbrod"},{"req_id":"APAC-146","status":"Open","title":"Salesforce Application Architect","aging":31,"function":"Finance/Accounting/Business Apps","location":"India","stage":"Department Interviews","region":"APAC","hm":"Venu Martha"},{"req_id":"US-886","status":"Open","title":"Alliances Account Director","aging":16,"function":"Alliances","location":"US-Remote","stage":"Intake Meeting","region":"US","hm":"Emily Cripe"},{"req_id":"ARG-679","status":"Open","title":"Renewals Specialist","aging":24,"function":"Customer Success/Renewals","location":"Argentina","stage":"","region":"ARG","hm":"Paula Graneros"},{"req_id":"ARG-680","status":"Open","title":"Renewals Specialist","aging":24,"function":"Customer Success/Renewals","location":"Argentina","stage":"","region":"ARG","hm":"Paula Graneros"},{"req_id":"EUR-405","status":"Open","title":"Senior Technical Writer","aging":28,"function":"Product Management","location":"Portugal","stage":"Sourcing/Screening","region":"EUR","hm":"Anne Waite"},{"req_id":"EUR-408","status":"Open","title":"Sales Account Director","aging":25,"function":"Sales - Direct","location":"France","stage":"Sourcing/Screening","region":"EUR","hm":"Baptiste Carrere"},{"req_id":"EUR-409","status":"Open","title":"Sales Account Director","aging":25,"function":"Sales - Direct","location":"Portugal","stage":"Sourcing/Screening","region":"EUR","hm":"Baptiste Carrere"},{"req_id":"US-887","status":"Open","title":"Sales Account Director","aging":25,"function":"Sales - Direct","location":"US-Remote","stage":"Sourcing/Screening","region":"US","hm":"Baptiste Carrere"},{"req_id":"EUR-410","status":"Open","title":"Senior HR Operations Specialist","aging":25,"function":"Talent","location":"Portugal","stage":"Sourcing/Screening","region":"EUR","hm":"Ana Fava"},{"req_id":"SSA-385","status":"Open","title":"Sales Account Director","aging":25,"function":"Sales - Direct","location":"Mexico","stage":"Department Interviews","region":"SSA","hm":"Baptiste Carrere"},{"req_id":"SSA-386","status":"Open","title":"Senior Solutions Engineer","aging":28,"function":"Sales Engineering","location":"France","stage":"Awaiting HM Feedback","region":"SSA","hm":"Remi Legorrec"},{"req_id":"US-888","status":"Open","title":"Senior Solutions Engineer","aging":25,"function":"Sales Engineering","location":"US-Remote","stage":"Sourcing/Screening","region":"US","hm":"Baptiste Carrere"},{"req_id":"EUR-411","status":"Open","title":"Senior Solutions Engineer","aging":24,"function":"Sales Engineering","location":"France","stage":"Sourcing/Screening","region":"EUR","hm":"Baptiste Carrere"},{"req_id":"EUR-412","status":"Open","title":"Alliances Account Director","aging":25,"function":"Alliances","location":"Spain","stage":"Department Interviews","region":"EUR","hm":"Claire Hulett"},{"req_id":"EUR-414","status":"Open","title":"Senior HR Advisor","aging":25,"function":"Talent","location":"France","stage":"Sourcing/Screening","region":"EUR","hm":"Gail Sampson"},{"req_id":"EUR-364","status":"Offered","title":"BDR II","aging":27,"function":"Business Development","location":"UK","stage":"Offered","region":"EUR","hm":"Ryan Person"},{"req_id":"EUR-308","status":"Open","title":"Senior Sales Engineer","aging":29,"function":"Sales Engineering","location":"Portugal","stage":"Department Interviews","region":"EUR","hm":"Gonzalo Villaescusa"},{"req_id":"APAC-147","status":"Open","title":"Associate Product Manager","aging":24,"function":"Product Management","location":"India","stage":"Department Interviews","region":"APAC","hm":"Mayank Sharma"},{"req_id":"EUR-417","status":"Open","title":"Compliance Services Associate","aging":22,"function":"Professional/Managed Services","location":"Portugal","stage":"Sourcing/Screening","region":"EUR","hm":"Hooda Greig"},{"req_id":"EUR-418","status":"Open","title":"Business Analyst III","aging":22,"function":"Product Management","location":"Portugal","stage":"Intake Meeting","region":"EUR","hm":"Jorge Ribeiro"},{"req_id":"BRA-145","status":"Open","title":"Senior Technical Support Analyst","aging":16,"function":"Client Support","location":"Brazil","stage":"","region":"BRA","hm":"Mauricio Pedroza Vazquez"},{"req_id":"US-889","status":"Offered","title":"Compliance Services Representative","aging":9,"function":"Professional/Managed Services","location":"US-Remote","stage":"Offered","region":"US","hm":"Carla Boudreau"},{"req_id":"US-890","status":"Open","title":"Compliance Services Associate","aging":18,"function":"Professional/Managed Services","location":"US-Minneapolis","stage":"Sourcing/Screening","region":"US","hm":"Brandon Anderson"},{"req_id":"US-891","status":"Open","title":"Compliance Services Associate","aging":18,"function":"Professional/Managed Services","location":"US-Minneapolis","stage":"Sourcing/Screening","region":"US","hm":"Tyler Liu"},{"req_id":"ARG-684","status":"Open","title":"Compliance Services Associate","aging":18,"function":"Professional/Managed Services","location":"Argentina","stage":"Sourcing/Screening","region":"ARG","hm":"Virginia Ragone"},{"req_id":"US-892","status":"Open","title":"Global Account Director","aging":17,"function":"Sales - Direct","location":"US-Remote","stage":"Sourcing/Screening","region":"US","hm":"Amy Ohm"},{"req_id":"APAC-149","status":"Open","title":"Senior NetSuite Administrator","aging":16,"function":"Finance/Accounting/Business Apps","location":"India","stage":"Department Interviews","region":"APAC","hm":"Francisco Acosta"},{"req_id":"SSA-387","status":"Open","title":"Technical Support Specialist","aging":16,"function":"Client Support","location":"Mexico","stage":"Department Interviews","region":"SSA","hm":"Gerardo Lugo Montfort"},{"req_id":"APAC-150","status":"Open","title":"Senior NetSuite Developer","aging":16,"function":"Finance/Accounting/Business Apps","location":"India","stage":"On Hold","region":"APAC","hm":"Francisco Acosta"},{"req_id":"APAC-151","status":"Open","title":"Service Cloud Administrator","aging":16,"function":"Finance/Accounting/Business Apps","location":"India","stage":"Sourcing/Screening","region":"APAC","hm":"Venu Martha"},{"req_id":"APAC-152","status":"Open","title":"Senior Service Cloud Developer","aging":16,"function":"Finance/Accounting/Business Apps","location":"India","stage":"Sourcing/Screening","region":"APAC","hm":"Venu Martha"},{"req_id":"APAC-153","status":"Open","title":"Senior NOC Analyst","aging":16,"function":"IT Operations/InfoSec","location":"India","stage":"","region":"APAC","hm":"Durgesh Jha"},{"req_id":"US-893","status":"Open","title":"Sr Director, Regulatory Intelligence","aging":16,"function":"Regulatory Analysis & Design","location":"US-Remote","stage":"","region":"US","hm":"Christiaan Van Der Valk"},{"req_id":"EUR-420","status":"Open","title":"SVP, Regulatory Intelligence","aging":13,"function":"Regulatory Analysis & Design","location":"Germany","stage":"","region":"EUR","hm":"Christiaan Van Der Valk"},{"req_id":"US-894","status":"Open","title":"Strategic Sales Engineer","aging":15,"function":"Sales Engineering","location":"US-Remote","stage":"","region":"US","hm":"David Parker"},{"req_id":"APAC-154","status":"Open","title":"Product Owner","aging":12,"function":"Product Management","location":"India","stage":"Sourcing/Screening","region":"APAC","hm":"Vaishali Dedhia"},{"req_id":"ARG-685","status":"Open","title":"Compliance Services Representative","aging":17,"function":"Professional/Managed Services","location":"Argentina","stage":"Sourcing/Screening","region":"ARG","hm":"Pilar Molina"},{"req_id":"ARG-686","status":"Open","title":"Automation Engineer","aging":8,"function":"Finance/Accounting/Business Apps","location":"Argentina","stage":"Intake Meeting","region":"ARG","hm":"Venu Martha"},{"req_id":"ARG-689","status":"Open","title":"Senior Automation Engineer","aging":8,"function":"Finance/Accounting/Business Apps","location":"Argentina","stage":"Intake Meeting","region":"ARG","hm":"Venu Martha"},{"req_id":"EUR-406","status":"Open","title":"Product Marketing Manager","aging":8,"function":"Corporate Marketing/Enablement","location":"UK","stage":"Intake Meeting","region":"EUR","hm":"Kelly Conner"},{"req_id":"EUR-407","status":"Open","title":"Sales Enablement Manager","aging":8,"function":"Sales - Direct","location":"UK","stage":"","region":"EUR","hm":"Tariq Sharif"}],
+  upcoming_hires: [
+    {start:'11/02/2026',title:'Accountant',function:'Finance/Accounting/Business Apps',location:'IN',hire_type:'External - New Hire',hm:'Prashant Sheth',recruiter:'Rahat'},
+    {start:'11/16/2026',title:'Team Lead, Network Operations Centre',function:'IT Operations/InfoSec',location:'IN',hire_type:'External - New Hire',hm:'Durgesh Jha',recruiter:'Helin'},
+    {start:'11/02/2026',title:'Solutions Consultant II',function:'Professional/Managed Services',location:'IN',hire_type:'External - New Hire',hm:'Liliana Vieira',recruiter:'Pratibha'},
+    {start:'11/16/2026',title:'Solutions Consultant II',function:'Professional/Managed Services',location:'IN',hire_type:'External - New Hire',hm:'Liliana Vieira',recruiter:'Pratibha'},
+    {start:'11/02/2026',title:'Solutions Consultant I',function:'Professional/Managed Services',location:'IN',hire_type:'External - New Hire',hm:'Vidit Tyagi',recruiter:'Pratibha'},
+    {start:'12/07/2026',title:'Senior Project Manager',function:'Professional/Managed Services',location:'IN',hire_type:'External - New Hire',hm:'Vidit Tyagi',recruiter:'Rahat'},
+    {start:'12/01/2026',title:'Senior Program Manager',function:'Product Development',location:'US',hire_type:'External - New Hire',hm:'',recruiter:'Emilia'},
+    {start:'12/01/2026',title:'Director, Partner & Value Enablement',function:'Corporate Marketing/Enablement',location:'',hire_type:'External - New Hire',hm:'',recruiter:'Giselle'},
+    {start:'11/16/2026',title:'Senior Embedded Account Executive',function:'Sales - Direct',location:'GB',hire_type:'Internal',hm:'',recruiter:'Giselle'},
+    {start:'11/02/2026',title:'Technical Account Manager',function:'Professional/Managed Services',location:'PT',hire_type:'External - New Hire',hm:'',recruiter:'Helin'},
+    {start:'11/02/2026',title:'Software Engineer',function:'Product Development',location:'PT',hire_type:'External - New Hire',hm:'',recruiter:'Adriana'},
+    {start:'11/16/2026',title:'Senior HR Advisor',function:'Talent',location:'FR',hire_type:'External - New Hire',hm:'',recruiter:'Adriana'},
+    {start:'11/02/2026',title:'Senior HR Advisor',function:'Talent',location:'FR',hire_type:'External - New Hire',hm:'',recruiter:'Adriana'},
+    {start:'11/16/2026',title:'Compliance Services Associate',function:'Professional/Managed Services',location:'PT',hire_type:'External - New Hire',hm:'',recruiter:'Adriana'},
+    {start:'11/02/2026',title:'Compliance Services Associate',function:'Professional/Managed Services',location:'US',hire_type:'External - New Hire',hm:'',recruiter:'Cassandra'},
+    {start:'11/02/2026',title:'Senior Enterprise Account Manager',function:'Sales - Direct',location:'US',hire_type:'External - New Hire',hm:'Anton Cashin',recruiter:'Cassandra'},
+    {start:'12/01/2026',title:'Strategic Account Executive',function:'Sales - Direct',location:'US',hire_type:'External - New Hire',hm:'',recruiter:'Cassandra'},
+    {start:'12/01/2026',title:'Renewals Manager',function:'Customer Success/Renewals',location:'US',hire_type:'External - New Hire',hm:'',recruiter:'Giselle'},
+    {start:'12/01/2026',title:'BDR II',function:'Business Development',location:'GB',hire_type:'External - New Hire',hm:'',recruiter:'Zeynep'},
+    {start:'11/16/2026',title:'Senior Accountant',function:'Finance/Accounting/Business Apps',location:'IN',hire_type:'External - New Hire',hm:'',recruiter:'Rahat'},
+    {start:'11/16/2026',title:'Accountant',function:'Finance/Accounting/Business Apps',location:'IN',hire_type:'External - New Hire',hm:'',recruiter:'Rahat'},
+    {start:'12/15/2026',title:'Senior DevOps Engineer',function:'Product Development',location:'AR',hire_type:'Internal',hm:'',recruiter:'Giselle'},
+    {start:'12/01/2026',title:'Technical Lead',function:'Product Development',location:'PT',hire_type:'External - New Hire',hm:'',recruiter:'Adriana'},
+    {start:'12/01/2026',title:'Triage Engineer',function:'Product Development',location:'PT',hire_type:'External - New Hire',hm:'',recruiter:'Adriana'},
+    {start:'12/01/2026',title:'SAP Software Developer III',function:'Professional/Managed Services',location:'BR',hire_type:'External - New Hire',hm:'',recruiter:'Kathelline'},
+    {start:'12/15/2026',title:'Compliance Services Associate',function:'Professional/Managed Services',location:'AR',hire_type:'External - New Hire',hm:'',recruiter:'Kathelline'},
+    {start:'12/15/2026',title:'Senior Director, Alliances',function:'Alliances',location:'US',hire_type:'External - New Hire',hm:'',recruiter:'Emilia'},
+    {start:'11/16/2026',title:'Product Manager',function:'Product Management',location:'IN',hire_type:'External - New Hire',hm:'',recruiter:'Rahat'},
+    {start:'11/16/2026',title:'Associate Product Manager',function:'Product Management',location:'IN',hire_type:'External - New Hire',hm:'',recruiter:'Rahat'},
+    {start:'12/01/2026',title:'Sales Enablement Manager',function:'Corporate Marketing/Enablement',location:'GB',hire_type:'External - New Hire',hm:'',recruiter:'Helin'},
+    {start:'01/05/2027',title:'Enterprise Account Executive',function:'Sales - Direct',location:'GB',hire_type:'External - New Hire',hm:'',recruiter:'Giselle'},
+    {start:'01/19/2027',title:'Tech Lead, TechOps & Infrastructure',function:'Product Development',location:'PT',hire_type:'External - New Hire',hm:'',recruiter:'Adriana'},
+  ],
+};
+
+// ── HELPERS ──
+function ragTag(a) {
+  if(a>90)return'<span class="tag tag-red">'+a+'d</span>';
+  if(a>=45)return'<span class="tag tag-amber">'+a+'d</span>';
+  return'<span class="tag tag-green">'+a+'d</span>';
+}
+function stageChip(s) {
+  if(!s)return'<span class="tag" style="background:var(--bg);color:var(--ink-3)">-</span>';
+  return'<span class="stage-chip">'+s+'</span>';
+}
+function getFuncAvgTTF(func) {
+  var fd=filteredData||DATA;
+  var f=fd.ttf_by_function.find(function(x){return x.function===func;});
+  return f?f.avg_ttf:fd.kpis.avg_ttf;
+}
+function overTTFBadge(aging,func) {
+  var avg=getFuncAvgTTF(func);
+  if(aging>avg*1.5)return'<span class="over-ttf">over TTF</span>';
+  if(aging>avg)return'<span class="near-ttf">near avg</span>';
+  return'';
+}
+
+// ── PAGE SWITCHING ──
+var pageTitles={p1:'Portfolio Health',p2:'Open Roles',p3:'Upcoming Starts',p4:'Time to Fill',p5:'FY27 Velocity'};
+function showPage(id,btn) {
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.nav-item').forEach(function(b){b.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+  if(btn)btn.classList.add('active');
+  document.getElementById('page-title').textContent=pageTitles[id]||'';
+  if(id==='p4'){
+    var fd=filteredData||DATA;
+    document.getElementById('ttf-avg-display').textContent=fd.kpis.avg_ttf+'d';
+    document.getElementById('ttf-avg-label').textContent='FY27 average'+(fd._scoped?' (filtered scope)':' across all functions');
+  }
+}
+
+// ── DRILL ──
+function drillFromKpi(type) {
+  var fd=filteredData||DATA;
+  var roles=fd.open_reqs, title='All active roles ('+fd.open_reqs.length+')';
+  showDrillRoles(roles,title);
+}
+function drillFromRag(rag) {
+  var fd=filteredData||DATA; var roles,title;
+  if(rag==='green'){roles=fd.open_reqs.filter(function(r){return r.aging<45;});title='On track: under 45 days ('+roles.length+')';}
+  else if(rag==='amber'){roles=fd.open_reqs.filter(function(r){return r.aging>=45&&r.aging<=90;});title='Watch: 45-90 days ('+roles.length+')';}
+  else{roles=fd.open_reqs.filter(function(r){return r.aging>90;});title='At risk: over 90 days ('+roles.length+')';}
+  showDrillRoles(roles,title);
+}
+function showDrillRoles(roles,title) {
+  document.getElementById('drill-roles-title').textContent=title;
+  var sorted=[].concat(roles).sort(function(a,b){return b.aging-a.aging;});
+  document.getElementById('drill-roles-tbody').innerHTML=sorted.map(function(r){
+    return'<tr><td><span class="tag tag-blue">'+r.req_id+'</span></td><td style="font-weight:500">'+r.title+'</td><td style="color:var(--ink-2);font-size:12px">'+(r.hm||'-')+'</td><td style="color:var(--ink-2);font-size:12px">'+r.function+'</td><td>'+stageChip(r.stage)+'</td><td>'+ragTag(r.aging)+overTTFBadge(r.aging,r.function)+'</td></tr>';
+  }).join('');
+  document.getElementById('drill-roles-card').style.display='';
+  document.getElementById('drill-roles-card').scrollIntoView({behavior:'smooth'});
+}
+function closeDrill(){document.getElementById('drill-roles-card').style.display='none';}
+
+// ── REGION CARDS ──
+var selectedRegion=null;
+function renderRegionCards() {
+  var fd=filteredData||DATA;
+  var regionData={};
+  fd.open_reqs.forEach(function(r){
+    if(!regionData[r.region])regionData[r.region]={total:0,green:0,amber:0,red:0};
+    regionData[r.region].total++;
+    if(r.aging>90)regionData[r.region].red++;
+    else if(r.aging>=45)regionData[r.region].amber++;
+    else regionData[r.region].green++;
+  });
+  var regions=['EUR','US','APAC','ARG','SSA','BRA','TRY'].filter(function(r){return regionData[r];});
+  document.getElementById('region-cards').innerHTML=regions.map(function(r){
+    var d=regionData[r];
+    return'<div class="region-card'+(selectedRegion===r?' selected':'')+ '" onclick="clickRegion(this.dataset.r)" data-r="'+r+'"><div class="region-card-num">'+d.total+'</div><div class="region-card-label">'+r+'</div><div class="region-card-rag"><span style="color:var(--green)">'+d.green+' green</span><span style="color:var(--amber)">'+d.amber+' amber</span><span style="color:var(--red)">'+d.red+' red</span></div></div>';
+  }).join('');
+}
+function clickRegion(region) {
+  if(selectedRegion===region){selectedRegion=null;document.getElementById('region-drill-panel').style.display='none';renderRegionCards();return;}
+  selectedRegion=region; renderRegionCards();
+  var fd=filteredData||DATA;
+  var roles=[].concat(fd.open_reqs.filter(function(r){return r.region===region;})).sort(function(a,b){return b.aging-a.aging;});
+  var byFunc={};
+  roles.forEach(function(r){byFunc[r.function]=(byFunc[r.function]||0)+1;});
+  var ttfR=DATA.ttf_by_region[region];
+  var ttfNote=ttfR?'<div style="margin-bottom:12px;padding:8px 12px;background:var(--brand-soft);border-radius:6px;font-size:12px;color:var(--brand)"><strong>Avg TTF '+region+':</strong> '+ttfR.avg+'d (n='+ttfR.n+' fills)</div>':'';
+  var funcRows=Object.entries(byFunc).sort(function(a,b){return b[1]-a[1];}).map(function(e){
+    return'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rule);font-size:12px"><span style="color:var(--ink-2)">'+e[0]+'</span><strong>'+e[1]+'</strong></div>';
+  }).join('');
+  var roleRows=roles.map(function(r){
+    return'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--rule)"><div><span class="tag tag-blue" style="font-size:10px">'+r.req_id+'</span><span style="font-size:12px;font-weight:500;margin-left:6px">'+r.title+'</span></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--ink-3)">'+(r.hm||'')+'</span>'+ragTag(r.aging)+'</div></div>';
+  }).join('');
+  document.getElementById('region-drill-title').textContent=region+' — '+roles.length+' active roles';
+  document.getElementById('region-drill-content').innerHTML=ttfNote+funcRows+'<div style="margin-top:16px;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:8px">All '+region+' roles</div>'+roleRows;
+  document.getElementById('region-drill-panel').style.display='';
+}
+function closeRegionDrill(){selectedRegion=null;renderRegionCards();document.getElementById('region-drill-panel').style.display='none';}
+
+// ── P1 ──
+function renderP1() {
+  var fd=filteredData||DATA; var k=fd.kpis;
+  document.getElementById('k-active').textContent=k.total_active;
+  document.getElementById('k-active-sub').textContent=k.total_open+' open · '+k.total_offered+' at offer';
+  document.getElementById('k-ttf').textContent=k.avg_ttf+'d';
+  document.getElementById('k-starts30').textContent=k.upcoming_starts_30d;
+  document.getElementById('k-starts60').textContent=k.upcoming_starts_60d;
+  document.getElementById('k-filled').textContent=k.total_filled_fy;
+  document.getElementById('rag-green').textContent=k.green;
+  document.getElementById('rag-amber').textContent=k.amber;
+  document.getElementById('rag-red').textContent=k.red;
+  renderRegionCards();
+  ['chart-stage','chart-over-ttf'].forEach(function(id){var c=Chart.getChart(id);if(c)c.destroy();});
+  var stages={};
+  fd.open_reqs.forEach(function(r){var s=r.stage||'No stage';stages[s]=(stages[s]||0)+1;});
+  delete stages['No stage'];
+  var stageColors={'Department Interviews':'#1a56db','Sourcing/Screening':'#6b7cff','Offered':'#0d7a4e','Intake Meeting':'#a05c00','Awaiting HM Feedback':'#c0272d','On Hold':'#8891b0'};
+  new Chart(document.getElementById('chart-stage'),{type:'doughnut',data:{labels:Object.keys(stages),datasets:[{data:Object.values(stages),backgroundColor:Object.keys(stages).map(function(s){return stageColors[s]||'#c5cde3';}),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11,family:'Inter'},padding:10,boxWidth:10}}}}});
+  var overTTF={};
+  fd.open_reqs.forEach(function(r){var avg=getFuncAvgTTF(r.function);if(r.aging>avg)overTTF[r.function]=(overTTF[r.function]||0)+1;});
+  var overFuncs=Object.entries(overTTF).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+  if(overFuncs.length){new Chart(document.getElementById('chart-over-ttf'),{type:'bar',data:{labels:overFuncs.map(function(e){return e[0].length>22?e[0].slice(0,20)+'...':e[0];}),datasets:[{data:overFuncs.map(function(e){return e[1];}),backgroundColor:'#c0272d',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10,family:'Inter'}}},y:{grid:{color:'#e4e7f0'},ticks:{font:{size:11,family:'Inter'}},beginAtZero:true}}}});}
+}
+
+// ── P2 ──
+function buildP2Filters() {
+  var fd=filteredData||DATA;
+  var depts=[...new Set(fd.open_reqs.map(function(r){return r.function;}))].sort();
+  document.getElementById('p2-dept-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">DEPT</span><span class="filter-chip active" onclick="setDeptFilter(\'all\',this)">All</span>'+depts.map(function(d){return'<span class="filter-chip" onclick="setDeptFilter(this.dataset.d,this)" data-d="'+d+'">'+d+'</span>';}).join('');
+  var regions=[...new Set(fd.open_reqs.map(function(r){return r.region;}))].sort();
+  document.getElementById('p2-region-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">REGION</span><span class="filter-chip active" onclick="setRegionFilter(\'all\',this)">All</span>'+regions.map(function(r){return'<span class="filter-chip" onclick="setRegionFilter(this.dataset.r,this)" data-r="'+r+'">'+r+'</span>';}).join('');
+}
+function setDeptFilter(dept,el){p2DeptFilter=dept;document.querySelectorAll('#p2-dept-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
+function setRagFilter(rag,el){p2RagFilter=rag;document.querySelectorAll('#p2-rag-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
+function setRegionFilter(region,el){p2RegionFilter=region;document.querySelectorAll('#p2-region-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
+function renderP2Table() {
+  var fd=filteredData||DATA;
+  var roles=fd.open_reqs;
+  if(p2DeptFilter!=='all')roles=roles.filter(function(r){return r.function===p2DeptFilter;});
+  if(p2RegionFilter!=='all')roles=roles.filter(function(r){return r.region===p2RegionFilter;});
+  if(p2RagFilter==='green')roles=roles.filter(function(r){return r.aging<45;});
+  else if(p2RagFilter==='amber')roles=roles.filter(function(r){return r.aging>=45&&r.aging<=90;});
+  else if(p2RagFilter==='red')roles=roles.filter(function(r){return r.aging>90;});
+  else if(p2RagFilter==='over_ttf')roles=roles.filter(function(r){return r.aging>getFuncAvgTTF(r.function);});
+  var sorted=[].concat(roles).sort(function(a,b){return b.aging-a.aging;});
+  document.getElementById('p2-roles-title').textContent=(p2DeptFilter!=='all'?p2DeptFilter:p2RegionFilter!=='all'?p2RegionFilter+' roles':'All active roles');
+  document.getElementById('p2-roles-count').textContent=sorted.length+' roles';
+  document.getElementById('p2-tbody').innerHTML=sorted.map(function(r){
+    var avgTTF=getFuncAvgTTF(r.function);
+    return'<tr><td><span class="tag tag-blue">'+r.req_id+'</span></td><td style="font-weight:500">'+r.title+'</td><td style="font-size:12px;color:var(--ink-2)">'+(r.hm||'-')+'</td><td style="font-size:12px;color:var(--ink-2)">'+r.function+'</td><td><span class="stage-chip">'+r.region+'</span></td><td>'+stageChip(r.stage)+'</td><td>'+ragTag(r.aging)+overTTFBadge(r.aging,r.function)+'</td><td style="font-family:DM Mono,monospace;font-size:11px;color:var(--ink-3)">'+avgTTF+'d</td><td>'+(r.status==='Offered'?'<span class="tag tag-green">Offered</span>':'<span class="tag" style="background:var(--bg);color:var(--ink-2)">Open</span>')+'</td></tr>';
+  }).join('');
+  var hmData={};
+  fd.open_reqs.filter(function(r){
+    if(p2DeptFilter!=='all'&&r.function!==p2DeptFilter)return false;
+    if(p2RegionFilter!=='all'&&r.region!==p2RegionFilter)return false;
+    return true;
+  }).forEach(function(r){
+    if(!r.hm)return;
+    if(!hmData[r.hm])hmData[r.hm]={open:0,offered:0,oldest:0,funcs:[]};
+    if(r.status==='Open')hmData[r.hm].open++;else hmData[r.hm].offered++;
+    hmData[r.hm].oldest=Math.max(hmData[r.hm].oldest,r.aging);
+    if(hmData[r.hm].funcs.indexOf(r.function)<0)hmData[r.hm].funcs.push(r.function);
+  });
+  var hmSorted=Object.entries(hmData).sort(function(a,b){return(b[1].open+b[1].offered)-(a[1].open+a[1].offered);});
+  document.getElementById('hm-count-note').textContent=hmSorted.length+' hiring managers';
+  document.getElementById('hm-tbody').innerHTML=hmSorted.map(function(e){var hm=e[0];var d=e[1];
+    return'<tr><td style="font-weight:500">'+hm+'</td><td><span class="hm-count">'+d.open+'</span></td><td style="color:var(--green);font-weight:600">'+(d.offered||'-')+'</td><td style="font-weight:600">'+(d.open+d.offered)+'</td><td>'+ragTag(d.oldest)+'</td><td style="font-size:11px;color:var(--ink-3)">'+d.funcs.join(', ')+'</td></tr>';
+  }).join('');
+}
+function renderP2(){buildP2Filters();renderP2Table();}
+
+// ── P3 ──
+function renderP3() {
+  var fd=filteredData||DATA;
+  var months={'Nov 2026':fd.upcoming_hires.filter(function(r){return r.start.startsWith('11/');}), 'Dec 2026':fd.upcoming_hires.filter(function(r){return r.start.startsWith('12/');}), 'Jan 2027':fd.upcoming_hires.filter(function(r){return r.start.startsWith('01/');})};
+  var monthLabels={'Nov 2026':'Nov 26','Dec 2026':'Dec 26','Jan 2027':'Jan 27'};
+  document.getElementById('starts-months-row').innerHTML=Object.entries(months).map(function(e){var month=e[0];var rows=e[1];
+    var funcCounts={};rows.forEach(function(r){funcCounts[r.function]=(funcCounts[r.function]||0)+1;});
+    return'<div class="starts-month"><div class="starts-month-head"><div class="starts-month-count">'+rows.length+'</div><div class="starts-month-label">'+(monthLabels[month]||month)+'</div></div><div class="starts-month-body">'+Object.entries(funcCounts).sort(function(a,b){return b[1]-a[1];}).map(function(fe){return'<div class="starts-func-row"><div class="starts-func-name">'+fe[0]+'</div><div class="starts-func-num">'+fe[1]+'</div></div>';}).join('')+'</div></div>';
+  }).join('');
+  var all=[].concat(fd.upcoming_hires).sort(function(a,b){return new Date(a.start)-new Date(b.start);});
+  document.getElementById('starts-tbody').innerHTML=all.map(function(r){
+    var d=new Date(r.start);
+    return'<tr><td style="font-family:DM Mono,monospace;font-size:12px">'+d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+'</td><td style="font-weight:500">'+r.title+'</td><td style="color:var(--ink-2);font-size:12px">'+r.function+'</td><td>'+(r.location||'-')+'</td><td><span class="stage-chip">'+r.hire_type.replace('External - ','')+'</span></td><td style="color:var(--ink-2)">'+(r.hm||'-')+'</td><td style="color:var(--ink-2)">'+r.recruiter+'</td></tr>';
+  }).join('');
+}
+
+// ── P4 ──
+function renderP4() {
+  var fd=filteredData||DATA; var avg=fd.kpis.avg_ttf; var max=110;
+  document.getElementById('ttf-bars').innerHTML=fd.ttf_by_function.map(function(d){
+    var pct=Math.min(d.avg_ttf/max*100,100);
+    var color=d.avg_ttf>60?'#c0272d':d.avg_ttf>avg?'#a05c00':'#1a56db';
+    return'<div class="ttf-bar-row"><div class="ttf-func-name">'+d.function+'</div><div class="ttf-bar-track"><div class="ttf-bar-fill" style="width:'+pct+'%;background:'+color+'"></div><div style="position:absolute;left:'+Math.min(avg/max*100,99)+'%;top:0;bottom:0;width:1.5px;background:rgba(0,0,0,.15)"></div></div><div class="ttf-bar-label" style="color:'+color+';font-weight:600">'+d.avg_ttf+'d</div><div class="ttf-bar-n">n='+d.n+'</div></div>';
+  }).join('');
+  var regionOrder=['US','EUR','APAC','ARG','SSA','BRA','TRY'];
+  document.getElementById('ttf-region-bars').innerHTML=regionOrder.filter(function(r){return DATA.ttf_by_region[r];}).map(function(r){
+    var d=DATA.ttf_by_region[r]; var pct=Math.min(d.avg/max*100,100);
+    var color=d.avg>avg*1.2?'#c0272d':d.avg>avg?'#a05c00':'#1a56db';
+    return'<div class="ttf-bar-row"><div class="ttf-func-name" style="width:50px">'+r+'</div><div class="ttf-bar-track"><div class="ttf-bar-fill" style="width:'+pct+'%;background:'+color+'"></div><div style="position:absolute;left:'+Math.min(avg/max*100,99)+'%;top:0;bottom:0;width:1.5px;background:rgba(0,0,0,.15)"></div></div><div class="ttf-bar-label" style="color:'+color+';font-weight:600">'+d.avg+'d</div><div class="ttf-bar-n">n='+d.n+'</div></div>';
+  }).join('');
+  var matrixFuncs=fd.ttf_by_function.map(function(d){return d.function;});
+  var matrixRegions=regionOrder.filter(function(r){return DATA.ttf_by_region[r];});
+  var th='<thead><tr><th>Function</th>'+matrixRegions.map(function(r){return'<th>'+r+'</th>';}).join('')+'</tr></thead><tbody>';
+  matrixFuncs.forEach(function(func){
+    th+='<tr><td>'+func+'</td>';
+    matrixRegions.forEach(function(region){
+      var cell=DATA.ttf_by_func_region[func]&&DATA.ttf_by_func_region[func][region];
+      if(cell&&cell.n>=2){var cls=cell.avg<avg?'fast':cell.avg<avg*1.5?'watch':'slow';th+='<td><div class="matrix-cell '+cls+'"><span class="matrix-avg">'+cell.avg+'d</span><span class="matrix-n">n='+cell.n+'</span></div></td>';}
+      else{th+='<td style="color:var(--ink-3);font-size:11px">-</td>';}
+    });
+    th+='</tr>';
+  });
+  document.getElementById('ttf-matrix').innerHTML=th+'</tbody>';
+}
+
+// ── P5 ──
+function renderP5() {
+  var fd=filteredData||DATA; var months=fd.monthly_fills;
+  document.getElementById('vel-months').innerHTML=months.map(function(m,i){
+    return'<div class="vel-month'+(i===4?' current':'')+'"><div class="vel-num">'+m.fills+'</div><div class="vel-label">'+m.month+'</div>'+(i===4?'<div class="vel-note">Month to date</div>':'')+'</div>';
+  }).join('');
+  ['chart-vel','chart-func-fills','chart-hire-type'].forEach(function(id){var c=Chart.getChart(id);if(c)c.destroy();});
+  new Chart(document.getElementById('chart-vel'),{type:'bar',data:{labels:months.map(function(m){return m.month;}),datasets:[{label:'Roles filled',data:months.map(function(m){return m.fills;}),backgroundColor:months.map(function(m,i){return i===4?'rgba(26,86,219,.4)':'#1a56db';}),borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12,family:'Inter'}}},y:{grid:{color:'#e4e7f0'},ticks:{font:{size:11,family:'Inter'}},beginAtZero:true}}}});
+  var funcFills={};
+  fd.ttf_by_function.forEach(function(d){funcFills[d.function]=d.n;});
+  var funcSorted=Object.entries(funcFills).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
+  new Chart(document.getElementById('chart-func-fills'),{type:'bar',data:{labels:funcSorted.map(function(e){return e[0];}),datasets:[{data:funcSorted.map(function(e){return e[1];}),backgroundColor:'#1a56db',borderRadius:4,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#e4e7f0'},ticks:{font:{size:11,family:'Inter'}},beginAtZero:true},y:{grid:{display:false},ticks:{font:{size:10,family:'Inter'}}}}}});
+  new Chart(document.getElementById('chart-hire-type'),{type:'doughnut',data:{labels:['External New Hire','Internal','Contractor Conversion','Intern Conversion'],datasets:[{data:[43,14,7,2],backgroundColor:['#1a56db','#0d7a4e','#a05c00','#6b7cff'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11,family:'Inter'},padding:10,boxWidth:10}}}}});
+}
+
+// ── RENDER ALL ──
+function renderAll(){renderP1();renderP2();renderP3();renderP4();renderP5();}
+
+// ── INIT ──
+document.getElementById('as-of-label').textContent=DATA.as_of;
+var nd=document.getElementById('notice-date');if(nd)nd.textContent=DATA.as_of;
+initAuth();
+</script>
+</body></html>
