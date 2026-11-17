@@ -884,6 +884,9 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
         <div class="form-group"><label>Headcount</label><input id="r-headcount" type="number" value="1" min="1"></div>
       </div>
       <div class="form-grid">
+        <div class="form-group"><label>Date Role Opened <span style="font-size:11px;color:var(--text-3);font-weight:400">(for days open calculation)</span></label><input id="r-open-date" type="date"></div>
+      </div>
+      <div class="form-grid">
         <div class="form-group"><label>Target Start Date</label><input id="r-start" type="date"></div>
         <div class="form-group"><label>Application Deadline</label><input id="r-deadline" type="date"></div>
       </div>
@@ -1260,44 +1263,6 @@ tr.row-cv-over td{background:var(--brand-light,#eff6ff)!important;outline:2px da
       <div class="form-actions">
         <button class="btn btn-outline" onclick="closeModal('modal-apply-role')">Cancel</button>
         <button class="btn btn-primary" onclick="submitApplication()">Apply to Role</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- TASK DETAIL MODAL -->
-<div class="modal-overlay" id="modal-task-detail">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="td-title">Task</div>
-      <button class="modal-close" onclick="closeModal('modal-task-detail')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="td-candidate-link" style="display:none;background:var(--brand-light);border:1px solid #bfdbfe;border-radius:var(--r);padding:10px 12px;font-size:12px;color:var(--brand-dark);margin-bottom:16px;font-weight:500"></div>
-      <div class="form-group"><label>Description</label><textarea id="td-desc" rows="3"></textarea></div>
-      <div class="form-grid">
-        <div class="form-group"><label>Status</label>
-          <select id="td-status">
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
-            <option value="done">Done</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Priority</label>
-          <select id="td-priority">
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group"><label>Due Date</label><input id="td-due" type="datetime-local"></div>
-      <div class="form-group"><label>Assigned To</label><select id="td-assignee"></select></div>
-      <div class="form-actions">
-        <button class="btn btn-outline" onclick="closeModal('modal-task-detail')">Cancel</button>
-        <button class="btn btn-primary" onclick="saveTaskDetail()">Save Changes</button>
       </div>
     </div>
   </div>
@@ -1858,6 +1823,19 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 // ── STATE ─────────────────────────────────────
 let currentUser   = null;
 let currentPage   = 'pipeline';
+
+// ELT scope helpers — returns null for full access, array of dept keywords for restricted users
+function userDeptScope() {
+  if (!currentUser) return null;
+  if (['admin','recruiter','coordinator'].includes(currentUser.role)) return null;
+  return currentUser.dept_scope || null;
+}
+function deptInScope(dept) {
+  var scope = userDeptScope();
+  if (!scope) return true;
+  if (!dept) return false;
+  return scope.some(function(s){ return dept.toLowerCase().includes(s.toLowerCase()); });
+}
 let pipelineData  = [];
 let candidatesData = [];
 let hmCurrentRoleId    = null;
@@ -2017,7 +1995,12 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
 }
 function daysSince(d) {
+  if (!d) return 0;
   return Math.floor((Date.now()-new Date(d))/86400000);
+}
+function roleDaysOpen(role) {
+  var d = role.open_date || role.created_at;
+  return daysSince(d);
 }
 function field(label,value) {
   return `<div><div style="font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${label}</div><div style="font-size:13px;font-weight:500">${value}</div></div>`;
@@ -2272,7 +2255,11 @@ function showApp() {
   var defaultPage = _defRole === 'manager' ? 'hm_roles'
     : (_defRole === 'fpa' || _defRole === 'fp_and_a' || _defRole === 'leadership' || _defRole === 'exec') ? 'reports'
     : 'home';
-  nav(defaultPage, document.getElementById(`nav-${defaultPage}`));
+  try {
+    var lastPage = localStorage.getItem('hiro_last_page');
+    if (lastPage && document.getElementById('nav-'+lastPage)) defaultPage = lastPage;
+  } catch(e) {}
+  nav(defaultPage, document.getElementById('nav-'+defaultPage));
   if(_defRole !== 'manager') loadSidebarCounts();
 }
 
@@ -2493,6 +2480,7 @@ function refreshCurrentPage() {
 // ── NAVIGATION ────────────────────────────────
 function nav(page, el) {
   currentPage = page;
+  try { localStorage.setItem('hiro_last_page', page); } catch(e) {}
   document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
   if(el) el.classList.add('active');
 
@@ -2998,7 +2986,7 @@ async function renderFpaDashboard() {
   // Vacancy cost estimate: avg days open × assumed avg daily cost
   var avgDailyBudgetImpact = 0; // We can only show structure, not actual budget without salary data
   var vacancyDays = openRoles.reduce(function(sum, r) {
-    var daysOpen = r.created_at ? Math.floor((today - new Date(r.created_at)) / 86400000) : 0;
+    var daysOpen = roleDaysOpen(r);
     return sum + daysOpen;
   }, 0);
   var avgDaysOpen = totalOpen ? Math.round(vacancyDays / totalOpen) : 0;
@@ -3016,7 +3004,7 @@ async function renderFpaDashboard() {
       var sal = locs[0].salary_annual || locs[0].salary_min || 0;
       if (sal) deptMap[d].totalSalaryAnnual += parseFloat(sal);
     }
-    var daysOpen = r.created_at ? Math.floor((today - new Date(r.created_at)) / 86400000) : 0;
+    var daysOpen = roleDaysOpen(r);
     deptMap[d].daysArr.push(daysOpen);
   });
   Object.keys(deptMap).forEach(function(d) {
@@ -3317,7 +3305,7 @@ async function renderDashboard() {
     });
   });
   myRoles.forEach(function(role) {
-    if (newAppsByRole[role.id] === 0 && daysSince(role.created_at) >= 7) {
+    if (newAppsByRole[role.id] === 0 && roleDaysOpen(role) >= 7) {
       alerts.push({
         type: 'role',
         roleId: role.id,
@@ -3336,7 +3324,7 @@ async function renderDashboard() {
   }
 
   function getPipelineHealth(role, apps) {
-    var daysOpen = daysSince(role.created_at);
+    var daysOpen = roleDaysOpen(role);
     var stages = {};
     apps.forEach(function(a){ stages[a.stage] = (stages[a.stage]||0)+1; });
     var stageCount = Object.keys(stages).length;
@@ -3348,7 +3336,7 @@ async function renderDashboard() {
   }
 
   function getAiSuggestion(role, apps) {
-    var daysOpen = daysSince(role.created_at);
+    var daysOpen = roleDaysOpen(role);
     var newAppsCount = newAppsByRole[role.id] || 0;
     var fourteenDaysAgo = new Date(Date.now() - 14*86400000);
     var newApps14 = recentAppsWeek.filter(function(a){
@@ -3394,7 +3382,7 @@ async function renderDashboard() {
 
   function buildRoleCard(role) {
     var apps = appsByRole[role.id] || [];
-    var daysOpen = daysSince(role.created_at);
+    var daysOpen = roleDaysOpen(role);
     var daysColor = daysOpen < 30 ? 'var(--green)' : daysOpen <= 60 ? 'var(--amber)' : 'var(--red)';
     var newAppsCount = newAppsByRole[role.id] || 0;
     var health = getPipelineHealth(role, apps);
@@ -5124,7 +5112,9 @@ async function renderRoles() {
   const {data:rawData,error}= await rolesQ;
   // Sort: Open → On Hold → Filled → Closed
   const statusOrder = {open:0, on_hold:1, filled:2, closed:3, cancelled:4};
-  const data = (rawData||[]).sort((a,b) => (statusOrder[a.status]??5) - (statusOrder[b.status]??5));
+  var data = (rawData||[]).sort((a,b) => (statusOrder[a.status]??5) - (statusOrder[b.status]??5));
+  // ELT dept scope: filter client-side so COO/CMO etc only see their area
+  if (userDeptScope()) { data = data.filter(r => deptInScope(r.department)); }
   if(error){console.error('Roles error:',error);document.getElementById('content').innerHTML=`<div class="card"><div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load roles</div><div class="empty-sub">${error.message}</div></div></div>`;return;}
   if(!data.length){
     document.getElementById('content').innerHTML=`<div class="card"><div class="empty"><div class="empty-icon">💼</div><div class="empty-title">No roles yet</div><div class="empty-sub">Create your first open role to start tracking candidates</div><div class="empty-action"><button class="btn btn-primary" onclick="openAddRoleModal()">+ Add Role</button></div></div></div>`;return;
@@ -5141,7 +5131,7 @@ async function renderRoles() {
     const statusLabel = {open:'Open',on_hold:'On Hold',filled:'Filled',cancelled:'Cancelled',closed:'Closed'};
     {
     const accent = statusAccent[r.status] || '#94a3b8';
-    const daysOpen = daysSince(r.created_at);
+    const daysOpen = roleDaysOpen(r);
     const appCount = r.applications?.[0]?.count || 0;
     const sal = fmtSalary(r);
     return `<div class="card" style="cursor:pointer;border-left:4px solid ${accent};transition:all .2s ease;position:relative;overflow:hidden" onclick="viewRoleDetail('${r.id}')" onmouseover="this.style.boxShadow='var(--shadow-lg)';this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='';this.style.transform=''">
@@ -5513,7 +5503,7 @@ async function viewRoleDetail(roleId) {
   document.addEventListener('click',function _closeMore(){document.querySelectorAll('[id^="role-more-menu-"]').forEach(m=>m.style.display='none');document.removeEventListener('click',_closeMore);});
 
   const fmtSal=r=>{if(!r.salary_min&&!r.salary_max)return'Not set';const c=r.salary_currency||'USD';const f=n=>n>=1000?(n/1000).toFixed(n%1000===0?0:1)+'k':n;return`${c} ${r.salary_min?f(r.salary_min):'?'}${r.salary_max?' – '+f(r.salary_max):'+'}`;};
-  const daysOpen=daysSince(role.created_at);
+  const daysOpen=roleDaysOpen(role);
   const activeApps=apps.filter(a=>!['hired','rejected','withdrawn'].includes(a.stage));
   const hiredApps=apps.filter(a=>a.stage==='hired');
   const statusStyle=role.status==='open'?'color:var(--green)':role.status==='on_hold'?'color:var(--amber)':role.status==='filled'?'color:var(--green-text)':'color:var(--text-3)';
@@ -8560,7 +8550,7 @@ async function renderReports_v1() {
 
   // ── RECENTLY ACTIVE ROLES (days open) ──
   const openRoles=rolesData.filter(r=>r.status==='open').map(r=>({
-    ...r,daysOpen:Math.floor((Date.now()-new Date(r.created_at))/(86400000))
+    ...r,daysOpen:roleDaysOpen(r)
   })).sort((a,b)=>b.daysOpen-a.daysOpen).slice(0,8);
   const roleAgeRows=openRoles.map(r=>`<tr>
     <td class="fw-600">${r.title}</td>
@@ -8745,9 +8735,9 @@ async function openCandidateDrawerLegacy(appId) {
     <div class="drawer-section">
       <div class="drawer-section-title">Actions</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="openTaskModal('${appId}','${c.first_name} ${c.last_name}','${app.roles?.title||''}')">✓ Add Task</button>
+        <button class="btn btn-outline btn-sm" onclick="openTaskModal('${appId}')">✓ Add Task</button>
         <button class="btn btn-outline btn-sm" style="color:var(--amber);border-color:var(--amber)" onclick="openOfferModal('${appId}','${c.first_name} ${c.last_name}')">💰 Record Offer</button>
-        <button class="btn btn-danger btn-sm" onclick="rejectApplication('${appId}')">✕ Reject</button>
+        <button class="btn btn-danger btn-sm" onclick="rejectApplication('${appId}','')">✕ Reject</button>
       </div>
     </div>`;
   loadDrawerApplications(c.id);
@@ -8878,13 +8868,68 @@ async function saveNotes(appId) {
   toast('Notes saved');
 }
 
-async function rejectApplication(appId) {
-  if(!confirm('Reject this application?')) return;
-  const {error}=await sb.from('applications').update({stage:'rejected'}).eq('id',appId);
-  if(error){toast('Error','err');return;}
-  await auditLog('reject','application',appId);
-  toast('Application rejected'); closeDrawer();
-  if(currentPage==='pipeline') renderPipeline();
+// ── REJECTION TRACKING ──
+var _rejectionAppId = null;
+var _rejectionRoleId = null;
+function openRejectionModal(appId, roleId) {
+  _rejectionAppId = appId;
+  _rejectionRoleId = roleId;
+  document.getElementById('rejection-reason-select').value = '';
+  document.getElementById('rejection-reason-notes').value = '';
+  openModal('modal-rejection-reason');
+}
+async function confirmRejection() {
+  var reason = document.getElementById('rejection-reason-select').value;
+  var notes = document.getElementById('rejection-reason-notes').value.trim();
+  if (!reason) { toast('Please select a rejection reason', 'err'); return; }
+  var updates = { stage: 'rejected', rejection_reason: reason, rejection_notes: notes || null, updated_at: new Date().toISOString() };
+  var { error } = await sb.from('applications').update(updates).eq('id', _rejectionAppId);
+  if (error) { toast('Could not save rejection — ' + error.message, 'err'); return; }
+  try { await auditLog('rejection', 'application', _rejectionAppId, { reason, notes }); } catch(e) {}
+  closeModal('modal-rejection-reason');
+  closeDrawer();
+  toast('Rejection recorded', 'ok');
+  if (typeof renderPipeline === 'function' && currentPage === 'pipeline') renderPipeline();
+  if (typeof renderRoles === 'function' && currentPage === 'roles') renderRoles();
+}
+async function rejectApplication(appId, roleId) {
+  if (!roleId) {
+    var {data:app} = await sb.from('applications').select('role_id').eq('id',appId).single();
+    roleId = app ? app.role_id : null;
+  }
+  openRejectionModal(appId, roleId);
+}
+
+// ── MARK FILLED WORKFLOW ──
+var _filledAppId = null;
+var _filledRoleId = null;
+var _filledCandName = null;
+function openMarkFilledModal(appId, roleId, candName) {
+  _filledAppId = appId; _filledRoleId = roleId; _filledCandName = candName || '';
+  document.getElementById('filled-start-date').value = '';
+  document.getElementById('filled-notes').value = '';
+  openModal('modal-mark-filled');
+}
+async function confirmMarkFilled() {
+  var startDate = document.getElementById('filled-start-date').value;
+  var notes = document.getElementById('filled-notes').value.trim();
+  if (!startDate) { toast('Please enter a start date', 'err'); return; }
+  var now = new Date().toISOString();
+  var { error: appErr } = await sb.from('applications').update({ stage: 'hired', start_date: startDate, updated_at: now }).eq('id', _filledAppId);
+  if (appErr) { toast('Could not update application — ' + appErr.message, 'err'); return; }
+  var { error: roleErr } = await sb.from('roles').update({ status: 'filled', filled_date: now, updated_at: now }).eq('id', _filledRoleId);
+  if (roleErr) { toast('Could not update role — ' + roleErr.message, 'err'); return; }
+  // Reject all other active candidates for this role
+  await sb.from('applications').update({ stage: 'rejected', rejection_reason: 'role_filled', updated_at: now })
+    .eq('role_id', _filledRoleId)
+    .not('id', 'eq', _filledAppId)
+    .not('stage', 'in', '(hired,rejected,withdrawn)');
+  try { await auditLog('filled', 'role', _filledRoleId, { app_id: _filledAppId, start_date: startDate, notes }); } catch(e) {}
+  closeModal('modal-mark-filled');
+  closeDrawer();
+  toast(_filledCandName ? _filledCandName + ' marked as hired' : 'Role marked as filled', 'ok');
+  if (typeof renderPipeline === 'function' && currentPage === 'pipeline') renderPipeline();
+  if (typeof renderRoles === 'function' && currentPage === 'roles') renderRoles();
 }
 
 // ── HM VIEWS ──────────────────────────────────
@@ -9438,11 +9483,12 @@ async function submitRole() {
     salary_currency:document.getElementById('r-currency').value||'USD',
     description:document.getElementById('r-desc').value.trim()||null,
     hiring_manager_id:document.getElementById('r-hm').value||null,
+    open_date:document.getElementById('r-open-date')?.value||new Date().toISOString().split('T')[0],
   }).select().single();
   if(error){toast('Error: '+error.message,'err');return;}
   await auditLog('create','role',role.id,{title});
   toast(`Role "${title}" added`); closeModal('modal-add-role');
-  ['r-title','r-dept','r-loc','r-sal-min','r-sal-max','r-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['r-title','r-dept','r-loc','r-sal-min','r-sal-max','r-desc','r-open-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   if(currentPage==='roles') renderRoles();
 }
 
@@ -10094,13 +10140,13 @@ async function renderBusinessPortal() {
   // ══ TAB: ROLE HEALTH ══════════════════════════
   if (_bpTab === 'role_health') {
     var totalOpen = visibleRoles.length;
-    var avgDaysOpen = visibleRoles.length ? Math.round(visibleRoles.reduce((s,r)=>s+Math.round((today-new Date(r.created_at))/86400000),0)/visibleRoles.length) : 0;
+    var avgDaysOpen = visibleRoles.length ? Math.round(visibleRoles.reduce((s,r)=>s+roleDaysOpen(r),0)/visibleRoles.length) : 0;
     var rolesInOffer = visibleRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
     var rolesPendingStart = visibleRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
-    var overdueRoles = visibleRoles.filter(r=>{ var d=Math.round((today-new Date(r.created_at))/86400000); return d>(r.tth_target_days||60)*1.2; }).length;
+    var overdueRoles = visibleRoles.filter(r=>{ var d=roleDaysOpen(r); return d>(r.tth_target_days||60)*1.2; }).length;
 
     var rows = visibleRoles.map(function(r) {
-      var daysOpen = Math.round((today - new Date(r.created_at)) / 86400000);
+      var daysOpen = roleDaysOpen(r);
       var rag = ragStatus(daysOpen, r.tth_target_days);
       var sc = stageCounts[r.id] || {};
       var activeTotal = ACTIVE_STAGES.reduce((s,st)=>s+(sc[st]||0),0);
@@ -10245,13 +10291,13 @@ async function renderBusinessPortal() {
 
     // KPIs
     var hrTotalOpen = hrScopedRoles.length;
-    var hrAvgDays = hrScopedRoles.length ? Math.round(hrScopedRoles.reduce((s,r)=>s+Math.round((today-new Date(r.created_at))/86400000),0)/hrScopedRoles.length) : 0;
-    var hrOverdue = hrScopedRoles.filter(r=>{ var d=Math.round((today-new Date(r.created_at))/86400000); return d>(r.tth_target_days||60)*1.2; }).length;
+    var hrAvgDays = hrScopedRoles.length ? Math.round(hrScopedRoles.reduce((s,r)=>s+roleDaysOpen(r),0)/hrScopedRoles.length) : 0;
+    var hrOverdue = hrScopedRoles.filter(r=>{ var d=roleDaysOpen(r); return d>(r.tth_target_days||60)*1.2; }).length;
     var hrInOffer = hrScopedRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
     var hrStarters = hrScopedRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
 
     var hrRows = hrScopedRoles.map(function(r) {
-      var daysOpen = Math.round((today - new Date(r.created_at)) / 86400000);
+      var daysOpen = roleDaysOpen(r);
       var rag = ragStatus(daysOpen, r.tth_target_days);
       var sc = stageCounts[r.id] || {};
       var offerCount = sc.offer||0;
@@ -10308,7 +10354,7 @@ async function renderBusinessPortal() {
     deptScopedRoles.forEach(r=>{
       var d=r.department||'Unknown';
       if (!deptMap[d]) deptMap[d]={open:0,overdue:0,inOffer:0,starters:0,totalDays:0,fpa:r.fp_and_a_partner||'—',elt:_DEPT_ELT[d]||'—'};
-      var days=Math.round((today-new Date(r.created_at))/86400000);
+      var days=roleDaysOpen(r);
       deptMap[d].open++;
       deptMap[d].totalDays+=days;
       if (days>(r.tth_target_days||60)*1.2) deptMap[d].overdue++;
@@ -10333,7 +10379,7 @@ async function renderBusinessPortal() {
     }).join('') || `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-3)">No data for current filters.</td></tr>`;
 
     var grandTotal = deptScopedRoles.length;
-    var grandOverdue = deptScopedRoles.filter(r=>{var d=Math.round((today-new Date(r.created_at))/86400000);return d>(r.tth_target_days||60)*1.2;}).length;
+    var grandOverdue = deptScopedRoles.filter(r=>{var d=roleDaysOpen(r);return d>(r.tth_target_days||60)*1.2;}).length;
     var grandOffer = deptScopedRoles.filter(r=>(stageCounts[r.id]?.offer||0)>0).length;
     var grandStarters = deptScopedRoles.filter(r=>(pendingStarters[r.id]||0)>0).length;
 
@@ -10468,7 +10514,7 @@ async function renderFpaOpenRolesReport() {
     var candidateCount = roleApps.length;
     var interviewCount = roleApps.filter(a=>['phone_screen','interview','final_interview','assessment'].includes(a.stage)).length;
     var offerCount     = roleApps.filter(a=>a.stage==='offer').length;
-    var daysOpen = r.created_at ? Math.floor((today - new Date(r.created_at)) / 86400000) : '—';
+    var daysOpen = roleDaysOpen(r);
     var isProject = r.is_project ? 'Yes' : 'No';
     return `<tr>
       <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#16a34a">Open</span></td>
@@ -10513,7 +10559,7 @@ async function renderFpaOpenRolesReport() {
     var csvRows = roles.map(r => {
       var hm = hmsMap[r.hiring_manager_id]||{};
       var roleApps = apps.filter(a=>a.role_id===r.id);
-      var daysOpen = r.created_at ? Math.floor((today-new Date(r.created_at))/86400000) : '';
+      var daysOpen = roleDaysOpen(r);
       return ['Open',r.department||'',r.location||'',r.job_code||'',r.title||'',hm.full_name||'',r.department_detail||'',daysOpen,roleApps.length,roleApps.filter(a=>['phone_screen','interview','final_interview','assessment'].includes(a.stage)).length,roleApps.filter(a=>a.stage==='offer').length,r.is_project?'Yes':'No'];
     });
     var csv = [hdrs,...csvRows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -11760,27 +11806,13 @@ async function loadTaskSelects() {
   if(sel) sel.innerHTML='<option value="">Unassigned</option>'+(profs||[]).map(p=>`<option value="${p.id}">${p.full_name}</option>`).join('');
 }
 
-var _currentTaskAppId = null;
-
-function openTaskModal(appId, candidateName, roleTitle) {
-  _currentTaskAppId = appId || null;
+function openTaskModal(appId) {
   loadTaskSelects().then(()=>{
+    // Pre-clear title; optionally store appId for future linking
     const titleEl = document.getElementById('t-title');
-    if (titleEl) {
-      if (candidateName && roleTitle) {
-        titleEl.value = 'Re: ' + candidateName + ' — ' + roleTitle + ' ';
-      } else if (candidateName) {
-        titleEl.value = 'Re: ' + candidateName + ' ';
-      } else {
-        titleEl.value = '';
-      }
-    }
+    if (titleEl) titleEl.value = '';
     const descEl = document.getElementById('t-desc');
     if (descEl) descEl.value = '';
-    const dueEl = document.getElementById('t-due');
-    if (dueEl) dueEl.value = '';
-    const sel = document.getElementById('t-assignee');
-    if (sel && currentUser) sel.value = currentUser.id;
     openModal('modal-add-task');
   });
 }
@@ -11795,58 +11827,11 @@ async function submitTask() {
     priority:document.getElementById('t-priority').value,
     due_date:document.getElementById('t-due').value?new Date(document.getElementById('t-due').value).toISOString():null,
     created_by:currentUser?.id||null,
-    application_id:_currentTaskAppId||null,
   }).select().single();
   if(error){toast('Error adding task','err');return;}
   await auditLog('create','task',task.id,{title});
-  _currentTaskAppId = null;
   toast('Task added'); closeModal('modal-add-task');
   document.getElementById('t-title').value=''; document.getElementById('t-desc').value='';
-  loadSidebarCounts();
-  if(currentPage==='tasks') renderTasks();
-}
-
-var _currentTaskId = null;
-
-async function openTaskDetail(taskId) {
-  _currentTaskId = taskId;
-  const {data:t,error} = await sb.from('tasks')
-    .select('*, applications(id, candidates(first_name,last_name), roles(title))')
-    .eq('id', taskId).single();
-  if(error||!t){toast('Could not load task','err');return;}
-  document.getElementById('td-title').textContent = t.title;
-  document.getElementById('td-desc').value = t.description||'';
-  document.getElementById('td-status').value = t.status;
-  document.getElementById('td-priority').value = t.priority||'normal';
-  document.getElementById('td-due').value = t.due_date ? new Date(t.due_date).toISOString().slice(0,16) : '';
-  const link = document.getElementById('td-candidate-link');
-  if(t.applications?.candidates) {
-    const c = t.applications.candidates;
-    link.style.display='block';
-    link.innerHTML='📋 Linked to: <strong>'+c.first_name+' '+c.last_name+'</strong>'+(t.applications.roles?' — '+t.applications.roles.title:'');
-  } else { link.style.display='none'; }
-  const {data:profs} = await sb.from('profiles').select('id,full_name').order('full_name');
-  const sel = document.getElementById('td-assignee');
-  sel.innerHTML='<option value="">Unassigned</option>'+(profs||[]).map(p=>`<option value="${p.id}"${p.id===t.assigned_to?' selected':''}>${p.full_name}</option>`).join('');
-  openModal('modal-task-detail');
-}
-
-async function saveTaskDetail() {
-  if(!_currentTaskId) return;
-  const status = document.getElementById('td-status').value;
-  const {error} = await sb.from('tasks').update({
-    description: document.getElementById('td-desc').value.trim()||null,
-    status,
-    priority: document.getElementById('td-priority').value,
-    due_date: document.getElementById('td-due').value ? new Date(document.getElementById('td-due').value).toISOString() : null,
-    assigned_to: document.getElementById('td-assignee').value||null,
-    completed_at: status==='done' ? new Date().toISOString() : null,
-  }).eq('id', _currentTaskId);
-  if(error){toast('Error saving task','err');return;}
-  await auditLog('update','task',_currentTaskId,{status});
-  toast('Task updated');
-  closeModal('modal-task-detail');
-  _currentTaskId = null;
   loadSidebarCounts();
   if(currentPage==='tasks') renderTasks();
 }
@@ -13675,11 +13660,6 @@ document.addEventListener('keydown',e=>{
     document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
     closeDrawer();
   }
-});
-
-document.addEventListener('click', function(e) {
-  var row = e.target.closest('.task-row');
-  if(row && row.dataset.taskId) openTaskDetail(row.dataset.taskId);
 });
 
 // ── GLOBAL SEARCH ─────────────────────────────
@@ -19159,12 +19139,12 @@ async function openCandidateFullPage(appId) {
   window._drawerCandidateName = fullName;
   var _isOfferStage = app.stage === 'offer';
   document.getElementById('topbar-actions').innerHTML =
-    '<button class="btn btn-outline btn-sm" onclick="openTaskModal(\'' + appId + '\',\'' + fullName.replace(/'/g,"\\'") + '\',\'' + (app.roles ? app.roles.title.replace(/'/g,"\\'") : '') + '\')">✓ Add Task</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openApplyModal(\'' + c.id + '\')">+ Apply to Role</button>' +
     '<button class="btn btn-outline btn-sm" onclick="openComposeModal(\'' + c.id + '\',\'' + (c.email||'') + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✉ Email</button>' +
     (_cfpRoleId ? '<button class="btn btn-outline btn-sm" onclick="openGenLinkModal(\'' + appId + '\',\'' + c.id + '\',\'' + _cfpRoleId + '\',\'' + _cfpJdId + '\')">🔗 Eval Link</button>' : '') +
     (_cfpRoleId ? '<button class="btn btn-primary btn-sm" onclick="openOfferModal(\'' + appId + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">📋 Offer Request</button>' : '') +
-    '<button class="btn btn-danger btn-sm" onclick="rejectApplication(\'' + appId + '\')">✕ Reject</button>' +
+    (_cfpRoleId && ['admin','recruiter'].includes(currentUser?.role) ? '<button class="btn btn-sm" style="background:var(--green);color:#fff;border:none" onclick="openMarkFilledModal(\'' + appId + '\',\'' + _cfpRoleId + '\',\'' + fullName.replace(/'/g,"\\'") + '\')">✓ Mark Filled</button>' : '') +
+    '<button class="btn btn-danger btn-sm" onclick="rejectApplication(\'' + appId + '\',\'' + (_cfpRoleId||'') + '\')">✕ Reject</button>' +
     ((currentUser?.role==='admin'||currentUser?.role==='manager') ? '<button class="btn btn-danger btn-sm" onclick="confirmDeleteCandidate()" style="background:var(--red-bg);color:var(--red-text);border:1px solid var(--red)">🗑 Delete</button>' : '');
 
   // EPP summary for left column
@@ -19333,7 +19313,6 @@ async function openCandidateFullPage(appId) {
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-comms" onclick="switchCfpTab(this,\'cfp-tab-comms\')">✉️ Comms</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-interviews" onclick="switchCfpTab(this,\'cfp-tab-interviews\')">📅 Interviews</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-evals" onclick="switchCfpTab(this,\'cfp-tab-evals\')">📋 Evaluations</button>';
-  rightCol += '<button class="cfp-tab" data-tab="cfp-tab-tasks" onclick="switchCfpTab(this,\'cfp-tab-tasks\');loadCfpTasks(\'' + appId + '\')">✓ Tasks</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-activity" onclick="switchCfpTab(this,\'cfp-tab-activity\')">⏱ Activity</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-apps" onclick="switchCfpTab(this,\'cfp-tab-apps\')">📁 Applications</button>';
   rightCol += '<button class="cfp-tab" data-tab="cfp-tab-notes" onclick="switchCfpTab(this,\'cfp-tab-notes\')">📝 Notes</button>';
@@ -19368,12 +19347,6 @@ async function openCandidateFullPage(appId) {
   // Evaluations pane
   rightCol += '<div id="cfp-tab-evals" class="cfp-tab-pane" style="display:none">';
   rightCol += '<div id="cfp-evals"><div class="loading"><div class="spinner"></div></div></div>';
-  rightCol += '</div>';
-
-  // Tasks pane
-  rightCol += '<div id="cfp-tab-tasks" class="cfp-tab-pane" style="display:none">';
-  rightCol += '<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-primary btn-sm" onclick="openTaskModal(\'' + appId + '\',\'' + fullName.replace(/'/g,"\\'") + '\',\'' + (app.roles ? app.roles.title.replace(/'/g,"\\'") : '') + '\')">+ Add Task</button></div>';
-  rightCol += '<div id="cfp-tasks-wrap"><div class="loading"><div class="spinner"></div></div></div>';
   rightCol += '</div>';
 
   // Activity pane
@@ -20296,47 +20269,6 @@ async function addNoteCfp(appId) {
   loadCfpNotes(appId);
 }
 
-async function loadCfpTasks(appId) {
-  var el = document.getElementById('cfp-tasks-wrap');
-  if (!el) return;
-  var {data, error} = await sb.from('tasks')
-    .select('*, profiles!assigned_to(full_name)')
-    .eq('application_id', appId)
-    .order('due_date',{ascending:true,nullsFirst:false});
-  if (error) { el.innerHTML = '<div class="text-muted">Could not load tasks</div>'; return; }
-  if (!data || !data.length) {
-    el.innerHTML = '<div class="empty" style="padding:32px;text-align:center"><div style="font-size:28px;margin-bottom:8px">✓</div><div style="font-weight:600;color:var(--text-2)">No tasks yet</div><div class="text-muted">Add a task using the button above</div></div>';
-    return;
-  }
-  el.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
-    '<thead><tr><th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Task</th>' +
-    '<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Assigned</th>' +
-    '<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Due</th>' +
-    '<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border)">Status</th>' +
-    '<th style="border-bottom:1px solid var(--border)"></th></tr></thead><tbody>' +
-    data.map(function(t) {
-      var overdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done';
-      var statusTag = t.status==='done' ? '<span class="tag tag-green">Done</span>' :
-        t.status==='in_progress' ? '<span class="tag tag-blue">In Progress</span>' :
-        overdue ? '<span class="tag tag-red">Overdue</span>' : '<span class="tag tag-gray">Open</span>';
-      return '<tr class="task-row" data-task-id="' + t.id + '" style="cursor:pointer;border-bottom:1px solid var(--border)">' +
-        '<td style="padding:10px 12px"><div style="font-weight:600;font-size:13px;' + (overdue?'color:var(--red)':'') + '">' + t.title + '</div>' +
-        (t.description ? '<div class="text-muted">' + t.description + '</div>' : '') + '</td>' +
-        '<td style="padding:10px 12px;font-size:13px">' + (t.profiles&&t.profiles.full_name?t.profiles.full_name:'—') + '</td>' +
-        '<td style="padding:10px 12px;font-size:13px;' + (overdue?'color:var(--red);font-weight:600':'') + '">' + (t.due_date?fmtDate(t.due_date):'—') + '</td>' +
-        '<td style="padding:10px 12px">' + statusTag + '</td>' +
-        '<td style="padding:10px 12px">' + (t.status!=='done'?'<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();quickDoneTask(\''+t.id+'\',\''+appId+'\')">✓ Done</button>':'') + '</td>' +
-        '</tr>';
-    }).join('') + '</tbody></table>';
-}
-
-async function quickDoneTask(taskId, appId) {
-  await sb.from('tasks').update({status:'done',completed_at:new Date().toISOString()}).eq('id',taskId);
-  toast('Task completed');
-  loadSidebarCounts();
-  loadCfpTasks(appId);
-}
-
 async function loadCfpEvaluations(candidateId) {
   var el = document.getElementById('cfp-evals');
   if (!el) return;
@@ -21221,7 +21153,7 @@ async function renderTasks() {
   document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
 
   var {data, error} = await sb.from('tasks')
-    .select('*, profiles!assigned_to(full_name), applications(id, candidates(first_name,last_name), roles(title))')
+    .select('*, profiles!assigned_to(full_name)')
     .order('due_date',{ascending:true,nullsFirst:false});
 
   if (error) {
@@ -21243,9 +21175,11 @@ async function renderTasks() {
   var _taskTab = 'assigned'; // 'assigned' | 'created' | 'all'
 
   function getFilteredByTab(rows, tab) {
-    if (tab === 'assigned') return rows.filter(function(t){ return t.assigned_to === profileId; });
-    if (tab === 'created') return rows.filter(function(t){ return t.created_by === profileId; });
-    return rows; // 'all' tab - admins see everything
+    if (!isAdmin) {
+      if (tab === 'assigned') return rows.filter(function(t){ return t.assigned_to === profileId; });
+      if (tab === 'created') return rows.filter(function(t){ return t.created_by === profileId; });
+    }
+    return rows; // 'all' or admin
   }
 
   var tabHtml = '<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:16px">' +
@@ -21301,24 +21235,19 @@ async function renderTasks() {
       var ownerBadge = isMine && isCreated ? '<span class="tag tag-blue" style="font-size:10px">Mine</span>'
         : isMine ? '<span class="tag tag-gray" style="font-size:10px">Assigned</span>'
         : isCreated ? '<span class="tag tag-purple" style="font-size:10px">Created</span>' : '';
-      var candLink = t.applications && t.applications.candidates
-        ? '<div class="text-muted" style="font-size:11px">👤 ' + t.applications.candidates.first_name + ' ' + t.applications.candidates.last_name + (t.applications.roles ? ' · ' + t.applications.roles.title : '') + '</div>'
-        : '';
-      return '<tr class="task-row" data-task-id="' + t.id + '" style="cursor:pointer">' +
+      return '<tr>' +
         '<td><div class="fw-600" style="' + (overdue ? 'color:var(--red)' : '') + '">' + t.title + '</div>' +
-        candLink +
-        (t.description && !candLink ? '<div class="text-muted">' + t.description + '</div>' : '') +
+        (t.description ? '<div class="text-muted">' + t.description + '</div>' : '') +
         (ownerBadge && !isAdmin ? '<div style="margin-top:3px">' + ownerBadge + '</div>' : '') +
         '</td>' +
         '<td>' + (t.profiles && t.profiles.full_name ? t.profiles.full_name : 'Unassigned') + '</td>' +
         '<td><span class="tag ' + pclass + '">' + (t.priority||'normal') + '</span></td>' +
         '<td>' + (t.due_date ? '<span style="' + (overdue ? 'color:var(--red);font-weight:600' : '') + '">' + fmtDate(t.due_date) + '</span>' : '—') + '</td>' +
-        '<td>' + (t.status==='done' ? '<span class="tag tag-green">Done</span>' : t.status==='in_progress' ? '<span class="tag tag-blue">In Progress</span>' : overdue ? '<span class="tag tag-red">Overdue</span>' : '<span class="tag tag-gray">Open</span>') + '</td>' +
-        '<td>' + (t.status!=='done' ? '<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();completeTask(\''+t.id+'\')">✓ Done</button>' : '') + '</td>' +
-        '</tr>';
+        '<td>' + (t.status==='done' ? '<span class="tag tag-green">Done</span>' : t.status==='in_progress' ? '<span class="tag tag-blue">In Progress</span>' : '<span class="tag tag-gray">Open</span>') + '</td>' +
+        '<td>' + (t.status !== 'done' ? '<button class="btn btn-sm btn-outline" onclick="completeTask(\'' + t.id + '\')">✓ Done</button>' : '') + '</td></tr>';
     }).join('');
     var tbody = document.getElementById('tasks-tbody');
-    if (tbody) tbody.innerHTML = tableRows || '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px">No tasks found</td></tr>';
+    if (tbody) tbody.innerHTML = tableRows || '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">No tasks found</td></tr>';
   }
 
   document.getElementById('content').innerHTML = filterHtml +
@@ -22468,7 +22397,7 @@ function _rtRender() {
   var stageLabelMap = {applied:'Applied',screening:'Screening',interview:'Dept Interview',offer:'Offered',offer_accepted:'Hired'};
 
   var rows = _rtAllRoles.filter(function(r) {
-    var days = daysSince(r.created_at);
+    var days = roleDaysOpen(r);
     var bucket = _rtAgingBucket(days).label;
     var recruiterName = (_rtProfiles[r.assigned_recruiter_id]?.full_name || _rtProfiles[r.assigned_recruiter_id]?.email || '');
     if (_rtFilters.status && r.status !== _rtFilters.status) return false;
@@ -22505,7 +22434,7 @@ function _rtRender() {
   var tdBase = 'padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top';
 
   var tbody = '<tbody>' + rows.map(function(r) {
-    var days = daysSince(r.created_at);
+    var days = roleDaysOpen(r);
     var bucket = _rtAgingBucket(days);
     var recruiter = _rtProfiles[r.assigned_recruiter_id];
     var recruiterName = recruiter ? (recruiter.full_name||recruiter.email) : '—';
@@ -22572,7 +22501,7 @@ async function renderHiringDashboard() {
   }
 
   var allRoles = (rolesRes.data || []).map(function(r) {
-    var days = r.created_at ? Math.floor((now - new Date(r.created_at)) / 86400000) : 0;
+    var days = roleDaysOpen(r);
     return Object.assign({}, r, { aging: days });
   });
 
@@ -23314,6 +23243,68 @@ initApp();
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-activity')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- REJECTION REASON MODAL -->
+<div class="modal-overlay" id="modal-rejection-reason" onclick="if(event.target===this)closeModal('modal-rejection-reason')">
+  <div class="modal" style="max-width:420px;width:90%">
+    <div class="modal-header">
+      <div class="modal-title">Record Rejection Reason</div>
+      <button class="modal-close" onclick="closeModal('modal-rejection-reason')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Reason <span style="color:var(--red)">*</span></label>
+        <select id="rejection-reason-select" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface)">
+          <option value="">— Select reason —</option>
+          <option value="salary">Salary / compensation mismatch</option>
+          <option value="skills">Skills / experience gap</option>
+          <option value="culture">Culture / values fit</option>
+          <option value="location">Location / relocation</option>
+          <option value="overqualified">Overqualified</option>
+          <option value="withdrew">Candidate withdrew</option>
+          <option value="offer_declined">Offer declined</option>
+          <option value="no_show">No show / unresponsive</option>
+          <option value="hm_decision">HM decision — no specific reason</option>
+          <option value="role_filled">Role filled by another candidate</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes <span style="color:var(--text-3);font-weight:400">(optional)</span></label>
+        <textarea id="rejection-reason-notes" rows="3" placeholder="Any additional context..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-rejection-reason')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmRejection()">Confirm Rejection</button>
+    </div>
+  </div>
+</div>
+
+<!-- MARK FILLED MODAL -->
+<div class="modal-overlay" id="modal-mark-filled" onclick="if(event.target===this)closeModal('modal-mark-filled')">
+  <div class="modal" style="max-width:420px;width:90%">
+    <div class="modal-header">
+      <div class="modal-title">Mark Role as Filled</div>
+      <button class="modal-close" onclick="closeModal('modal-mark-filled')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 12px;font-size:13px;color:var(--text-2)">This will mark the candidate as hired, the role as filled, and reject all other active candidates for this role.</p>
+      <div class="form-group">
+        <label>Start Date <span style="color:var(--red)">*</span></label>
+        <input type="date" id="filled-start-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface)">
+      </div>
+      <div class="form-group">
+        <label>Notes <span style="color:var(--text-3);font-weight:400">(optional)</span></label>
+        <textarea id="filled-notes" rows="2" placeholder="e.g. offer accepted, negotiated salary..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;background:var(--surface);resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-mark-filled')">Cancel</button>
+      <button class="btn btn-primary" style="background:var(--green);border-color:var(--green)" onclick="confirmMarkFilled()">✓ Confirm Hire</button>
     </div>
   </div>
 </div>
