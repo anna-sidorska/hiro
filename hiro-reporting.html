@@ -347,8 +347,8 @@ tr:hover td{background:#fafbfe}
         <div class="kpi" onclick="showPage('p5',document.querySelectorAll('.nav-item')[4])"><div class="kpi-val" id="k-filled">—</div><div class="kpi-label">Filled FY27</div><div class="kpi-sub">Jul → Nov 2026</div></div>
       </div>
       <div class="rag-row">
-        <div class="rag-pill green" style="cursor:pointer" onclick="drillFromRag('green')"><div class="rag-dot" style="background:#0d7a4e"></div><div><div class="rag-num" id="rag-green">—</div><div class="rag-text">On track · under 45 days</div></div></div>
-        <div class="rag-pill amber" style="cursor:pointer" onclick="drillFromRag('amber')"><div class="rag-dot" style="background:#a05c00"></div><div><div class="rag-num" id="rag-amber">—</div><div class="rag-text">Watch · 45–90 days</div></div></div>
+        <div class="rag-pill green" style="cursor:pointer" onclick="drillFromRag('green')"><div class="rag-dot" style="background:#0d7a4e"></div><div><div class="rag-num" id="rag-green">—</div><div class="rag-text">On track · 0–60 days</div></div></div>
+        <div class="rag-pill amber" style="cursor:pointer" onclick="drillFromRag('amber')"><div class="rag-dot" style="background:#a05c00"></div><div><div class="rag-num" id="rag-amber">—</div><div class="rag-text">Watch · 61–90 days</div></div></div>
         <div class="rag-pill red" style="cursor:pointer" onclick="drillFromRag('red')"><div class="rag-dot" style="background:#c0272d"></div><div><div class="rag-num" id="rag-red">—</div><div class="rag-text">At risk · over 90 days</div></div></div>
       </div>
       <div style="font-size:13px;font-weight:600;margin-bottom:12px">Pipeline by region <span style="font-size:11px;font-weight:400;color:var(--ink-3)">· click to see breakdown</span></div>
@@ -627,8 +627,8 @@ function filterDataForUser(user) {
   const upcoming_hires = DATA.upcoming_hires.filter(r => funcOk(r.function));
   const total_open = open_reqs.filter(r => r.status === 'Open').length;
   const total_offered = open_reqs.filter(r => r.status === 'Offered').length;
-  const green = open_reqs.filter(r => r.aging < 45).length;
-  const amber = open_reqs.filter(r => r.aging >= 45 && r.aging <= 90).length;
+  const green = open_reqs.filter(r => r.aging <= 60).length;
+  const amber = open_reqs.filter(r => r.aging > 60 && r.aging <= 90).length;
   const red = open_reqs.filter(r => r.aging > 90).length;
   const upcoming_starts_30d = upcoming_hires.filter(r => r.start.startsWith('11/')).length;
   const upcoming_starts_60d = upcoming_hires.filter(r => r.start.startsWith('11/') || r.start.startsWith('12/')).length;
@@ -685,7 +685,7 @@ const DATA = {
 // ── HELPERS ──
 function ragTag(a) {
   if(a>90)return'<span class="tag tag-red">'+a+'d</span>';
-  if(a>=45)return'<span class="tag tag-amber">'+a+'d</span>';
+  if(a>60)return'<span class="tag tag-amber">'+a+'d</span>';
   return'<span class="tag tag-green">'+a+'d</span>';
 }
 function stageChip(s) {
@@ -727,8 +727,8 @@ function drillFromKpi(type) {
 }
 function drillFromRag(rag) {
   var fd=filteredData||DATA; var roles,title;
-  if(rag==='green'){roles=fd.open_reqs.filter(function(r){return r.aging<45;});title='On track: under 45 days ('+roles.length+')';}
-  else if(rag==='amber'){roles=fd.open_reqs.filter(function(r){return r.aging>=45&&r.aging<=90;});title='Watch: 45-90 days ('+roles.length+')';}
+  if(rag==='green'){roles=fd.open_reqs.filter(function(r){return r.aging<=60;});title='On track: 0-60 days ('+roles.length+')';}
+  else if(rag==='amber'){roles=fd.open_reqs.filter(function(r){return r.aging>60&&r.aging<=90;});title='Watch: 61-90 days ('+roles.length+')';}
   else{roles=fd.open_reqs.filter(function(r){return r.aging>90;});title='At risk: over 90 days ('+roles.length+')';}
   showDrillRoles(roles,title);
 }
@@ -752,7 +752,7 @@ function renderRegionCards() {
     if(!regionData[r.region])regionData[r.region]={total:0,green:0,amber:0,red:0};
     regionData[r.region].total++;
     if(r.aging>90)regionData[r.region].red++;
-    else if(r.aging>=45)regionData[r.region].amber++;
+    else if(r.aging>60)regionData[r.region].amber++;
     else regionData[r.region].green++;
   });
   var regions=['EUR','US','APAC','ARG','SSA','BRA','TRY'].filter(function(r){return regionData[r];});
@@ -823,8 +823,8 @@ function renderP2Table() {
   var roles=fd.open_reqs;
   if(p2DeptFilter!=='all')roles=roles.filter(function(r){return r.function===p2DeptFilter;});
   if(p2RegionFilter!=='all')roles=roles.filter(function(r){return r.region===p2RegionFilter;});
-  if(p2RagFilter==='green')roles=roles.filter(function(r){return r.aging<45;});
-  else if(p2RagFilter==='amber')roles=roles.filter(function(r){return r.aging>=45&&r.aging<=90;});
+  if(p2RagFilter==='green')roles=roles.filter(function(r){return r.aging<=60;});
+  else if(p2RagFilter==='amber')roles=roles.filter(function(r){return r.aging>60&&r.aging<=90;});
   else if(p2RagFilter==='red')roles=roles.filter(function(r){return r.aging>90;});
   else if(p2RagFilter==='over_ttf')roles=roles.filter(function(r){return r.aging>getFuncAvgTTF(r.function);});
   var sorted=[].concat(roles).sort(function(a,b){return b.aging-a.aging;});
