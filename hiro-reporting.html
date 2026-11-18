@@ -811,11 +811,19 @@ function renderP1() {
 function buildP2Filters() {
   var fd=filteredData||DATA;
   var depts=[...new Set(fd.open_reqs.map(function(r){return r.function;}))].sort();
-  document.getElementById('p2-dept-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">DEPT</span><span class="filter-chip active" onclick="setDeptFilter(\'all\',this)">All</span>'+depts.map(function(d){return'<span class="filter-chip" onclick="setDeptFilter(this.dataset.d,this)" data-d="'+d+'">'+d+'</span>';}).join('');
+  var deptBar=document.getElementById('p2-dept-bar');
+  deptBar.innerHTML='<label for="p2-dept-select" style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">DEPT</label>';
+  var deptSelect=document.createElement('select');
+  deptSelect.id='p2-dept-select';
+  deptSelect.style.cssText='padding:7px 12px;border:1px solid var(--rule);border-radius:7px;background:var(--surface);color:var(--ink-2);font:inherit;font-size:12px;max-width:100%;min-width:240px;cursor:pointer';
+  [['all','All departments']].concat(depts.map(function(d){return[d,d];})).forEach(function(item){var option=document.createElement('option');option.value=item[0];option.textContent=item[1];deptSelect.appendChild(option);});
+  deptSelect.value=p2DeptFilter;
+  deptSelect.addEventListener('change',function(){setDeptFilter(this.value);});
+  deptBar.appendChild(deptSelect);
   var regions=[...new Set(fd.open_reqs.map(function(r){return r.region;}))].sort();
   document.getElementById('p2-region-bar').innerHTML='<span style="font-size:11px;color:var(--ink-3);font-weight:600;margin-right:4px">REGION</span><span class="filter-chip active" onclick="setRegionFilter(\'all\',this)">All</span>'+regions.map(function(r){return'<span class="filter-chip" onclick="setRegionFilter(this.dataset.r,this)" data-r="'+r+'">'+r+'</span>';}).join('');
 }
-function setDeptFilter(dept,el){p2DeptFilter=dept;document.querySelectorAll('#p2-dept-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
+function setDeptFilter(dept){p2DeptFilter=dept;renderP2Table();}
 function setRagFilter(rag,el){p2RagFilter=rag;document.querySelectorAll('#p2-rag-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
 function setRegionFilter(region,el){p2RegionFilter=region;document.querySelectorAll('#p2-region-bar .filter-chip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');renderP2Table();}
 function renderP2Table() {
