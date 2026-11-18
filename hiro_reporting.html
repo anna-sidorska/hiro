@@ -349,7 +349,7 @@ tr:hover td{background:#fafbfe}
       <div class="rag-row">
         <div class="rag-pill green" style="cursor:pointer" onclick="drillFromRag('green')"><div class="rag-dot" style="background:#0d7a4e"></div><div><div class="rag-num" id="rag-green">—</div><div class="rag-text">On track · 0–60 days</div></div></div>
         <div class="rag-pill amber" style="cursor:pointer" onclick="drillFromRag('amber')"><div class="rag-dot" style="background:#a05c00"></div><div><div class="rag-num" id="rag-amber">—</div><div class="rag-text">Watch · 61–90 days</div></div></div>
-        <div class="rag-pill red" style="cursor:pointer" onclick="drillFromRag('red')"><div class="rag-dot" style="background:#c0272d"></div><div><div class="rag-num" id="rag-red">—</div><div class="rag-text">At risk · 91+ days</div></div></div>
+        <div class="rag-pill red" style="cursor:pointer" onclick="drillFromRag('red')"><div class="rag-dot" style="background:#c0272d"></div><div><div class="rag-num" id="rag-red">—</div><div class="rag-text">At risk · over 90 days</div></div></div>
       </div>
       <div style="font-size:13px;font-weight:600;margin-bottom:12px">Pipeline by region <span style="font-size:11px;font-weight:400;color:var(--ink-3)">· click to see breakdown</span></div>
       <div class="region-cards" id="region-cards"></div>
@@ -622,7 +622,7 @@ function filterDataForUser(user) {
   function funcOk(f) { return !allowedFuncs || allowedFuncs.includes(f); }
   function regionOk(r) { return !allowedRegions || allowedRegions.includes(r); }
   const open_reqs = DATA.open_reqs.filter(r => funcOk(r.function) && regionOk(r.region));
-  const dept_rag = buildDeptRag(open_reqs);
+  const dept_rag = DATA.dept_rag.filter(d => funcOk(d.function));
   const ttf_by_function = DATA.ttf_by_function.filter(d => funcOk(d.function));
   const upcoming_hires = DATA.upcoming_hires.filter(r => funcOk(r.function));
   const total_open = open_reqs.filter(r => r.status === 'Open').length;
@@ -682,29 +682,6 @@ const DATA = {
   ],
 };
 
-// RAG thresholds: green 0–60, amber 61–90, red 91+ days.
-// Recalculate summaries from individual requisitions, not old hard-coded totals.
-function buildDeptRag(reqs) {
-  const grouped = new Map();
-  reqs.forEach(r => {
-    if (!grouped.has(r.function)) grouped.set(r.function, {function:r.function,total:0,green:0,amber:0,red:0,oldest:0});
-    const d = grouped.get(r.function);
-    d.total++;
-    d.oldest = Math.max(d.oldest, r.aging);
-    if (r.aging <= 60) d.green++;
-    else if (r.aging <= 90) d.amber++;
-    else d.red++;
-  });
-  return [...grouped.values()].sort((a,b) => b.total-a.total);
-}
-DATA.dept_rag = buildDeptRag(DATA.open_reqs);
-DATA.kpis.green = DATA.open_reqs.filter(r => r.aging <= 60).length;
-DATA.kpis.amber = DATA.open_reqs.filter(r => r.aging > 60 && r.aging <= 90).length;
-DATA.kpis.red = DATA.open_reqs.filter(r => r.aging > 90).length;
-DATA.kpis.total_open = DATA.open_reqs.filter(r => r.status === 'Open').length;
-DATA.kpis.total_offered = DATA.open_reqs.filter(r => r.status === 'Offered').length;
-DATA.kpis.total_active = DATA.open_reqs.length;
-
 // ── HELPERS ──
 function ragTag(a) {
   if(a>90)return'<span class="tag tag-red">'+a+'d</span>';
@@ -750,9 +727,9 @@ function drillFromKpi(type) {
 }
 function drillFromRag(rag) {
   var fd=filteredData||DATA; var roles,title;
-  if(rag==='green'){roles=fd.open_reqs.filter(function(r){return r.aging<=60;});title='On track: 0–60 days ('+roles.length+')';}
-  else if(rag==='amber'){roles=fd.open_reqs.filter(function(r){return r.aging>60&&r.aging<=90;});title='Watch: 61–90 days ('+roles.length+')';}
-  else{roles=fd.open_reqs.filter(function(r){return r.aging>90;});title='At risk: 91+ days ('+roles.length+')';}
+  if(rag==='green'){roles=fd.open_reqs.filter(function(r){return r.aging<=60;});title='On track: 0-60 days ('+roles.length+')';}
+  else if(rag==='amber'){roles=fd.open_reqs.filter(function(r){return r.aging>60&&r.aging<=90;});title='Watch: 61-90 days ('+roles.length+')';}
+  else{roles=fd.open_reqs.filter(function(r){return r.aging>90;});title='At risk: over 90 days ('+roles.length+')';}
   showDrillRoles(roles,title);
 }
 function showDrillRoles(roles,title) {
